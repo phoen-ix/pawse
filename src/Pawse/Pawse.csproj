@@ -11,7 +11,7 @@
     <RootNamespace>Pawse</RootNamespace>
     <AssemblyName>Pawse</AssemblyName>
     <Product>Pawse</Product>
-    <Version>0.3.5</Version>
+    <Version>0.1.7</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Embed the same paw icon the installer uses, so Pawse.exe (and its WPF
          windows / taskbar) show it instead of a generic exe icon. -->

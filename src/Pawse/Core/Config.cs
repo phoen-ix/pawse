@@ -13,7 +13,7 @@ namespace Pawse.Core;
 public sealed class Config
 {
     public GeneralCfg General { get; set; } = new();
-    public ChordCfg LockHotkey { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "Alt", "L" } };
+    public ChordCfg LockHotkey { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
     public UnlockCfg Unlock { get; set; } = new();
     public OverlayCfg Overlay { get; set; } = new();
     public SystemBlockCfg SystemBlock { get; set; } = new();
@@ -27,7 +27,7 @@ public sealed class Config
 
     public sealed class UnlockCfg
     {
-        public ChordCfg Chord { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "Shift", "U" } };
+        public ChordCfg Chord { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
         public PassphraseCfg Passphrase { get; set; } = new();
         public MouseHoldCfg MouseHold { get; set; } = new();
         public TimerCfg Timer { get; set; } = new();

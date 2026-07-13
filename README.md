@@ -27,7 +27,7 @@ Same app either way. `Pawse.exe` is self-contained (bundled + compressed);
 
 - **Left-click** the tray padlock to lock / unlock.
 - **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit.
-- Default **lock hotkey**: `Ctrl+Alt+L`. Default **unlock chord**: `Ctrl+Shift+U`.
+- Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on your chosen monitor (you can turn it
 off, move it, and set its opacity). The desktop stays visible around it.
@@ -36,7 +36,7 @@ off, move it, and set its opacity). The desktop stays visible around it.
 
 | Method | Default | Notes |
 | --- | --- | --- |
-| Keyboard chord | on (`Ctrl+Shift+U`) | Any combination you like. |
+| Keyboard chord | on (`Ctrl+L`) | Any combination you like. |
 | Passphrase | off | Type a word; a wrong key restarts it. |
 | Mouse hold | on | Hold the popup button (~1.2 s). |
 | Auto timer | off | Unlock automatically after N seconds. |

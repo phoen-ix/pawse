@@ -67,7 +67,7 @@ public partial class App : Application
         if (unlockRepaired)
             _tray.Notify("Pawse",
                 "Your saved config had no working unlock method, so the default unlock chord " +
-                "(Ctrl+Shift+U) was enabled to keep you from getting locked out.");
+                "(Ctrl+L) was enabled to keep you from getting locked out.");
 
         // OS-level Win+L guard (opt-in). Sweep first so a value left behind by a
         // crash-while-locked is reverted before any StartLocked engage re-applies it.
@@ -128,7 +128,7 @@ public partial class App : Application
         Log.Warn("config has no usable unlock method - enabling the default chord to prevent lockout");
         config.Unlock.Chord.Enabled = true;
         if (Keys.ParseChord(config.Unlock.Chord.Keys).Count == 0)
-            config.Unlock.Chord.Keys = new() { "Ctrl", "Shift", "U" };
+            config.Unlock.Chord.Keys = new() { "Ctrl", "L" };
         config.Save();
         return true;
     }

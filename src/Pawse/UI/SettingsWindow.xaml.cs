@@ -123,10 +123,10 @@ public partial class SettingsWindow : Window
             _cfg.Unlock.Chord.Enabled = true;
             bool reseeded = Keys.ParseChord(_cfg.Unlock.Chord.Keys).Count == 0;
             if (reseeded)
-                _cfg.Unlock.Chord.Keys = new List<string> { "Ctrl", "Shift", "U" };
+                _cfg.Unlock.Chord.Keys = new List<string> { "Ctrl", "L" };
             MessageBox.Show(this,
                 "At least one working unlock method is required, so the keyboard chord was enabled"
-                    + (reseeded ? " and set to Ctrl+Shift+U." : "."),
+                    + (reseeded ? " and set to Ctrl+L." : "."),
                 "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
