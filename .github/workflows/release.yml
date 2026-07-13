@@ -1,14 +1,47 @@
 name: release
 
+# Auto-versioned releases. Every push to main is inspected for Conventional
+# Commit messages and, when a release-worthy change is present, a new semver tag
+# is created and a built GitHub Release is published:
+#
+#   fix: ...                      -> patch   (v0.1.0 -> v0.1.1)
+#   feat: ...                     -> minor   (v0.1.0 -> v0.2.0)
+#   feat!: ...  /  BREAKING CHANGE-> major   (v0.1.0 -> v1.0.0)
+#   ci: / chore: / docs: / ...    -> no release
+#
+# The version is computed on Linux (the tag action is a container action) and the
+# app is built and published on Windows in a dependent job, so no PAT or
+# cross-workflow tag trigger is needed.
 on:
   push:
-    tags: [ 'v*' ]
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.tag.outputs.new_tag }}
+      new_version: ${{ steps.tag.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compute & create next version tag
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: false        # only fix/feat/breaking cut a release
+          release_branches: main
+          tag_prefix: v
+
+  build:
+    needs: version
+    if: needs.version.outputs.new_tag != ''
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -16,11 +49,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
-
-      - name: Compute version from tag
-        id: ver
-        shell: pwsh
-        run: echo "v=$('${{ github.ref_name }}'.TrimStart('v'))" >> $env:GITHUB_OUTPUT
 
       # No-install build: the whole .NET runtime is bundled and compressed
       # (~63 MB). Just download and run - nothing to install.
@@ -33,7 +61,7 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
           -p:DebugType=none
-          -p:Version=${{ steps.ver.outputs.v }}
+          -p:Version=${{ needs.version.outputs.new_version }}
           -o publish-full
 
       # Minimal build: a tiny launcher (~0.2 MB) that uses an already-installed
@@ -45,7 +73,7 @@ jobs:
           --self-contained false
           -p:PublishSingleFile=true
           -p:DebugType=none
-          -p:Version=${{ steps.ver.outputs.v }}
+          -p:Version=${{ needs.version.outputs.new_version }}
           -o publish-min
 
       # Zip each exe. Compress-Archive stores the file's leaf name inside the
@@ -55,25 +83,26 @@ jobs:
         run: |
           Copy-Item publish-full/Pawse.exe Pawse.exe
           Copy-Item publish-min/Pawse.exe  Pawse-min.exe
-          Compress-Archive -Path Pawse.exe     -DestinationPath "Pawse-${{ steps.ver.outputs.v }}.zip"     -Force
-          Compress-Archive -Path Pawse-min.exe -DestinationPath "Pawse-${{ steps.ver.outputs.v }}-min.zip" -Force
+          Compress-Archive -Path Pawse.exe     -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}.zip"     -Force
+          Compress-Archive -Path Pawse-min.exe -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}-min.zip" -Force
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ needs.version.outputs.new_tag }}
           files: |
-            Pawse-${{ steps.ver.outputs.v }}.zip
-            Pawse-${{ steps.ver.outputs.v }}-min.zip
+            Pawse-${{ needs.version.outputs.new_version }}.zip
+            Pawse-${{ needs.version.outputs.new_version }}-min.zip
           generate_release_notes: true
           body: |
-            **Pawse ${{ github.ref_name }}** - Windows keyboard lock.
+            **Pawse ${{ needs.version.outputs.new_tag }}** - Windows keyboard lock.
 
             Two downloads - pick one, unzip it, and run the exe inside:
 
             | File | Download size | Needs anything installed? |
             | --- | --- | --- |
-            | **`Pawse-${{ steps.ver.outputs.v }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
-            | **`Pawse-${{ steps.ver.outputs.v }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
+            | **`Pawse-${{ needs.version.outputs.new_version }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
+            | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
 
             Both are identical apps; the full build bundles the runtime, the `-min`
             build reuses one you install once. Windows may mark a downloaded zip as
