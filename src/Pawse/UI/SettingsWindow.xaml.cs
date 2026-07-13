@@ -57,10 +57,9 @@ public partial class SettingsWindow : Window
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
         ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
-        LblFilterStatus.Text = new KeyboardFilterGuard().IsAvailable()
-            ? "Browser / calculator / media-key blocking: the Keyboard Filter feature is available on this PC."
-            : "Blocking browser / calculator / media keys needs Windows Enterprise/Education/IoT with the "
-              + "Keyboard Filter feature and Pawse running as administrator - otherwise it's quietly ignored.";
+        LblFilterStatus.Text =
+            "Most of these are already blocked by the lock. This also engages the Windows Keyboard "
+            + "Filter to catch any that bypass the hook - that part needs Enterprise/Education/IoT + admin.";
 
         ChkLockHotkey.IsChecked = _cfg.LockHotkey.Enabled;
         TxtLockHotkey.Chord = _cfg.LockHotkey.Keys;

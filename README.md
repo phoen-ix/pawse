@@ -66,11 +66,11 @@ policy on lock and removes it on unlock. Needs no admin on a normal PC, but on
 enabling it prompts to **Restart as administrator** (also available in the tray menu,
 shown only when Pawse isn't already elevated).
 
-The **browser / calculator / media / volume keys** can reach Windows as `WM_APPCOMMAND`
-and bypass the hook, so Pawse can optionally block them via the Windows **Keyboard Filter**
-feature (**Settings → System keys**). That feature needs **Windows Enterprise / Education /
-IoT Enterprise** with the Keyboard Filter installed *and* Pawse **running as administrator**;
-on Home/Pro the toggle shows but is quietly ignored (a hint in Settings explains why).
+The **browser / calculator / media / volume keys** are already swallowed by the lock on any
+edition. The "Block browser / calculator / media keys" option (**Settings → System keys**)
+additionally engages the Windows **Keyboard Filter** to catch the few consumer keys that reach
+Windows as `WM_APPCOMMAND` and bypass the hook - that part needs **Windows Enterprise /
+Education / IoT** with the Keyboard Filter feature and Pawse running as administrator.
 
 Still out of reach: input to windows running **as administrator** (unless Pawse
 itself runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would
