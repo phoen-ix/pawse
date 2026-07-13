@@ -60,14 +60,14 @@ public sealed class PassphraseMatcher
         {
             _i++;
         }
-        else
+        else if (_resetOnWrong)
         {
-            // Wrong key: restart (and account for the wrong key itself being a
-            // fresh first letter). Without reset-on-wrong we still restart, which
-            // is the intuitive "type it cleanly" behavior.
-            _ = _resetOnWrong;
+            // Wrong key restarts progress, accounting for the wrong key itself being
+            // a fresh first letter.
             _i = (c == _text[0]) ? 1 : 0;
         }
+        // else: keep progress and ignore the wrong key (the user opted out of reset,
+        // so fat-fingering a key mid-phrase doesn't make them start over).
 
         if (_i >= _text.Length)
         {

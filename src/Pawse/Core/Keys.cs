@@ -108,4 +108,19 @@ public static class Keys
         if (vk == VK_SPACE) return ' ';
         return null;
     }
+
+    /// <summary>True if every character of the passphrase can actually be typed while
+    /// locked - only a-z, 0-9 and space register through the hook (see <see cref="TryVkToChar"/>),
+    /// so a passphrase with any other character could never complete. Empty text is not usable.</summary>
+    public static bool IsTypeablePassphrase(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        foreach (char ch in text)
+        {
+            char c = char.ToLowerInvariant(ch);
+            bool ok = (c is >= 'a' and <= 'z') || (c is >= '0' and <= '9') || c == ' ';
+            if (!ok) return false;
+        }
+        return true;
+    }
 }

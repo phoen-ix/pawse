@@ -139,19 +139,55 @@ Function EnsureDotnet
     Return
   ${EndIf}
   DetailPrint ".NET 8 Desktop Runtime (x64) not found."
-  nsExec::ExecToStack 'where winget'
+
+  ; Resolve winget's real path via System32's where.exe - both fully qualified so a
+  ; planted where.exe / winget.exe in the (possibly elevated) installer's folder can't run.
+  nsExec::ExecToStack '"$SYSDIR\where.exe" winget'
   Pop $0      ; exit code
-  Pop $2      ; output (ignored)
-  ${If} $0 == 0
-    DetailPrint "Installing .NET 8 Desktop Runtime via winget..."
-    nsExec::ExecToLog 'winget install --id Microsoft.DotNet.DesktopRuntime.8 -e --silent --accept-package-agreements --accept-source-agreements'
-    Pop $0
-    ${If} $0 != 0
-      Call DotnetManual
-    ${EndIf}
-  ${Else}
+  Pop $2      ; output: absolute path(s), one per line
+  ${If} $0 != 0
+    Call DotnetManual
+    Return
+  ${EndIf}
+  Push $2
+  Call FirstLine
+  Pop $3      ; $3 = absolute path to winget.exe
+  ${If} $3 == ""
+    Call DotnetManual
+    Return
+  ${EndIf}
+
+  DetailPrint "Installing .NET 8 Desktop Runtime via winget..."
+  nsExec::ExecToLog '"$3" install --id Microsoft.DotNet.DesktopRuntime.8 -e --silent --accept-package-agreements --accept-source-agreements'
+  Pop $0
+  ${If} $0 != 0
     Call DotnetManual
   ${EndIf}
+FunctionEnd
+
+; Pop a string, push its first line (up to the first CR/LF). Used to read one path
+; out of where.exe's output without trusting PATH search order.
+Function FirstLine
+  Exch $0
+  Push $1
+  Push $2
+  Push $3
+  StrCpy $1 ""
+  StrCpy $2 0
+  fl_loop:
+    StrCpy $3 $0 1 $2
+    StrCmp $3 "" fl_done
+    StrCmp $3 "$\r" fl_done
+    StrCmp $3 "$\n" fl_done
+    StrCpy $1 "$1$3"
+    IntOp $2 $2 + 1
+    Goto fl_loop
+  fl_done:
+  StrCpy $0 $1
+  Pop $3
+  Pop $2
+  Pop $1
+  Exch $0
 FunctionEnd
 
 Function DotnetManual
@@ -163,8 +199,8 @@ FunctionEnd
 Section "-Core" SEC_CORE
   SectionIn RO
   ; stop a running instance so the exe can be overwritten (tray app, no window)
-  nsExec::ExecToLog 'taskkill /F /IM Pawse.exe'
-  nsExec::ExecToLog 'taskkill /F /IM Pawse-min.exe'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse-min.exe'
 
   SetOutPath "$INSTDIR"
   File "pawse.ico"
@@ -233,7 +269,7 @@ FunctionEnd
 
 ; ---- uninstall ----
 Section "Uninstall"
-  nsExec::ExecToLog 'taskkill /F /IM Pawse.exe'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
   Delete "$INSTDIR\${EXE}"
   Delete "$INSTDIR\pawse.ico"
   Delete "$INSTDIR\LICENSE.txt"

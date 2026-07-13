@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.IO;
+using System.Threading;
 
 namespace Pawse.Core;
 
@@ -6,10 +8,17 @@ namespace Pawse.Core;
 /// Dead-simple file logger. Writes <c>pawse.log</c> NEXT TO THE EXE so it is
 /// trivial to find (the previous app buried it under %LOCALAPPDATA%). Falls back
 /// to %APPDATA%\Pawse only if the exe directory is not writable.
+///
+/// <para>Writing is done on a dedicated background thread: callers only enqueue a
+/// preformatted line, never touch the file. This matters because <see cref="Info"/>
+/// is called from <c>LockController.Engage/Disengage</c>, which run inline on the
+/// WH_KEYBOARD_LL hook callback - a blocking file write there could exceed the OS
+/// LowLevelHooksTimeout and get the hook silently removed.</para>
 /// </summary>
 public static class Log
 {
-    private static readonly object Gate = new();
+    private static readonly BlockingCollection<string> Queue = new(new ConcurrentQueue<string>());
+    private static Thread? _writer;
     private static string? _path;
 
     public static string? FilePath => _path;
@@ -24,6 +33,12 @@ public static class Log
                 File.Delete(_path);
         }
         catch { /* logging must never throw */ }
+
+        if (_writer == null)
+        {
+            _writer = new Thread(WriterLoop) { IsBackground = true, Name = "pawse-log" };
+            _writer.Start();
+        }
 
         Info(new string('=', 60));
         Info($"Pawse v{version} starting - log at {_path}");
@@ -75,8 +90,16 @@ public static class Log
 
     private static void Write(string level, string msg)
     {
+        // Timestamp at enqueue time so lines stay ordered even though the write is deferred.
         var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {level,-5} {msg}";
-        lock (Gate)
+        try { System.Diagnostics.Debug.WriteLine(line); } catch { /* ignore */ }
+        // Never touch the file on the caller's thread (may be the keyboard hook).
+        try { Queue.Add(line); } catch { /* adding disabled - ignore */ }
+    }
+
+    private static void WriterLoop()
+    {
+        foreach (var line in Queue.GetConsumingEnumerable())
         {
             try
             {
@@ -84,6 +107,5 @@ public static class Log
             }
             catch { /* logging must never throw */ }
         }
-        try { System.Diagnostics.Debug.WriteLine(line); } catch { /* ignore */ }
     }
 }

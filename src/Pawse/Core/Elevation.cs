@@ -4,9 +4,9 @@ using System.Security.Principal;
 namespace Pawse.Core;
 
 /// <summary>
-/// Admin-elevation helpers. The system-key guards (Win+L policy write on managed
-/// machines, and the Keyboard Filter for Ctrl+Alt+Del / media keys) need Pawse to
-/// run elevated; this lets the tray offer a one-click relaunch as administrator.
+/// Admin-elevation helpers. Blocking Win+L on managed/corporate machines needs the
+/// per-user policy key written elevated; this lets the app/tray offer a one-click
+/// relaunch as administrator.
 /// </summary>
 public static class Elevation
 {

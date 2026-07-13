@@ -144,9 +144,19 @@ public partial class OverlayWindow : Window
         }
     }
 
-    // Closing via Alt+F4 etc. should just hide (the app owns the lifecycle).
+    /// <summary>Set by App just before a real shutdown so <see cref="OnClosing"/> lets the
+    /// window actually close; otherwise a stray Alt+F4 only hides it (App owns the lifecycle).</summary>
+    public bool AllowClose { get; set; }
+
+    // Closing via Alt+F4 etc. should just HIDE, not destroy the window - a destroyed window
+    // would throw on the next ShowLocked/Configure call from OnLockedChanged.
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        if (!AllowClose)
+        {
+            e.Cancel = true;
+            HideLocked();
+        }
         base.OnClosing(e);
     }
 }

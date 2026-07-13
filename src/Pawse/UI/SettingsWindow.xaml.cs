@@ -109,16 +109,14 @@ public partial class SettingsWindow : Window
         _cfg.Overlay.Opacity = SldOpacity.Value;
         _cfg.Overlay.VerticalPercent = (int)Math.Round(SldVertical.Value);
 
-        // Guard against locking yourself out: require at least one *usable* unlock method,
-        // not merely an enabled one. An enabled chord with no keys (trivial now via Clear)
-        // or an enabled passphrase with no text never matches and would trap the keyboard.
-        bool chordUsable = _cfg.Unlock.Chord.Enabled && _cfg.Unlock.Chord.Keys.Count > 0;
-        bool passphraseUsable = _cfg.Unlock.Passphrase.Enabled && _cfg.Unlock.Passphrase.Text.Length > 0;
-        if (!chordUsable && !passphraseUsable &&
-            !_cfg.Unlock.MouseHold.Enabled && !_cfg.Unlock.Timer.Enabled)
+        // Guard against locking yourself out: require at least one *genuinely usable* unlock
+        // method for the whole config - a parseable chord, a fully-typeable passphrase,
+        // mouse-hold only when the overlay is shown AND the mouse isn't blocked, or a timer
+        // with a positive delay (see Config.HasUsableUnlock).
+        if (!_cfg.HasUsableUnlock())
         {
             _cfg.Unlock.Chord.Enabled = true;
-            bool reseeded = _cfg.Unlock.Chord.Keys.Count == 0;
+            bool reseeded = Keys.ParseChord(_cfg.Unlock.Chord.Keys).Count == 0;
             if (reseeded)
                 _cfg.Unlock.Chord.Keys = new List<string> { "Ctrl", "Shift", "U" };
             MessageBox.Show(this,

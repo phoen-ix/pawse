@@ -126,6 +126,22 @@ public sealed class Config
         }
     }
 
+    /// <summary>
+    /// True if at least one unlock method is genuinely usable given the whole config, so
+    /// locking can't strand the user. Mirrors what actually works while locked: a chord must
+    /// parse to >=1 key; a passphrase must be fully typeable (only a-z/0-9/space register
+    /// through the hook); mouse-hold needs the overlay shown AND the mouse not blocked (else
+    /// the hold button can't be clicked); the timer needs a positive delay.
+    /// </summary>
+    public bool HasUsableUnlock()
+    {
+        if (Unlock.Chord.Enabled && Keys.ParseChord(Unlock.Chord.Keys).Count > 0) return true;
+        if (Unlock.Passphrase.Enabled && Keys.IsTypeablePassphrase(Unlock.Passphrase.Text)) return true;
+        if (Unlock.MouseHold.Enabled && Overlay.Enabled && !General.BlockMouse) return true;
+        if (Unlock.Timer.Enabled && Unlock.Timer.Seconds > 0) return true;
+        return false;
+    }
+
     public string Summary() =>
         $"gui=tray lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +

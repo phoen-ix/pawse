@@ -17,6 +17,7 @@ public partial class App : Application
     private OverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _autoUnlock;
+    private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
 
     private static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
@@ -47,6 +48,7 @@ public partial class App : Application
         InstallExceptionHandlers();
 
         var config = Config.Load();
+        bool unlockRepaired = EnsureUsableUnlock(config);
         Log.Info("config: " + config.Summary());
 
         // If Block Win+L is on but this (managed) PC needs admin to apply it and we're
@@ -56,15 +58,19 @@ public partial class App : Application
         _controller = new LockController(config);
 
         _tray = new TrayIcon();
-        _tray.ToggleRequested += () => _controller!.Toggle();
+        _tray.ToggleRequested += () => { if (_canLock) _controller!.Toggle(); };
         _tray.SettingsRequested += OpenSettings;
         _tray.OpenConfigRequested += OpenConfigFile;
         _tray.RestartAsAdminRequested += RestartAsAdmin;
         _tray.QuitRequested += Shutdown;
 
-        // OS-level key guards (Win+L / Ctrl+Alt+Del / media keys), all opt-in.
-        // Sweep first so a value left behind by a crash-while-locked is reverted
-        // before any StartLocked engage re-applies it.
+        if (unlockRepaired)
+            _tray.Notify("Pawse",
+                "Your saved config had no working unlock method, so the default unlock chord " +
+                "(Ctrl+Shift+U) was enabled to keep you from getting locked out.");
+
+        // OS-level Win+L guard (opt-in). Sweep first so a value left behind by a
+        // crash-while-locked is reverted before any StartLocked engage re-applies it.
         _systemBlock = new SystemBlock(config, _tray.Notify);
         _systemBlock.Apply(locked: false, background: true);
 
@@ -74,14 +80,23 @@ public partial class App : Application
         _controller.LockedChanged += OnLockedChanged;
 
         _kbHook = new KeyboardHook(_controller);
-        if (!_kbHook.Install())
-            _tray.Notify("Pawse", "Could not install the keyboard hook - locking won't work.");
+        _canLock = _kbHook.Install();
+        if (_canLock)
+        {
+            _mouseHook = new MouseHook(_controller);
+            _mouseHook.Install();
 
-        _mouseHook = new MouseHook(_controller);
-        _mouseHook.Install();
-
-        if (config.General.StartLocked)
-            _controller.Engage("start");
+            if (config.General.StartLocked)
+                _controller.Engage("start");
+        }
+        else
+        {
+            // No keyboard hook = keys aren't swallowed AND no in-app keyboard unlock can
+            // fire. Refuse to "lock" rather than enter a state the user can't undo.
+            _tray.Notify("Pawse",
+                "Could not install the keyboard hook, so locking is disabled - a lock you " +
+                "couldn't undo would be worse. Try restarting Pawse.");
+        }
 
         Log.Info("startup complete");
     }
@@ -104,6 +119,20 @@ public partial class App : Application
         };
     }
 
+    /// <summary>If the loaded config has no usable unlock method (hand-edited pawse.json, or
+    /// all methods disabled/misconfigured), enable the default chord so a lock can always be
+    /// undone. Returns true if it repaired anything.</summary>
+    private static bool EnsureUsableUnlock(Config config)
+    {
+        if (config.HasUsableUnlock()) return false;
+        Log.Warn("config has no usable unlock method - enabling the default chord to prevent lockout");
+        config.Unlock.Chord.Enabled = true;
+        if (Keys.ParseChord(config.Unlock.Chord.Keys).Count == 0)
+            config.Unlock.Chord.Keys = new() { "Ctrl", "Shift", "U" };
+        config.Save();
+        return true;
+    }
+
     private void CreateOverlay(Config config)
     {
         _overlay = new OverlayWindow();
@@ -120,8 +149,7 @@ public partial class App : Application
             try
             {
                 _tray?.SetLocked(locked);
-                // Registry toggle runs inline; the Keyboard-Filter (WMI) work is
-                // dispatched off-thread inside Apply so this handler returns fast.
+                // The Win+L registry toggle runs inline inside Apply (fast).
                 _systemBlock?.Apply(locked, background: true, notify: true);
                 if (locked)
                 {
@@ -270,7 +298,7 @@ public partial class App : Application
         try { _systemBlock?.Apply(locked: false, background: false); } catch { /* ignore */ }
         _kbHook?.Dispose();
         _mouseHook?.Dispose();
-        try { _overlay?.Close(); } catch { /* ignore */ }
+        try { if (_overlay != null) { _overlay.AllowClose = true; _overlay.Close(); } } catch { /* ignore */ }
         _tray?.Dispose();
         _singleton?.Dispose();
     }
