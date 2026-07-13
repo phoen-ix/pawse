@@ -30,8 +30,8 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settings);
         menu.Items.Add(openCfg);
-        // Only offer elevation when we're not already elevated. Needed for the
-        // Win+L block on managed PCs (the DisableLockWorkstation policy key needs admin).
+        // Only offer elevation when we're not already elevated. Needed for the Win+L block
+        // on managed PCs and for the browser/calculator/media-key block (Keyboard Filter).
         if (!Core.Elevation.IsElevated())
             menu.Items.Add(new ToolStripMenuItem("Restart as administrator", null,
                 (_, _) => RestartAsAdminRequested?.Invoke()));

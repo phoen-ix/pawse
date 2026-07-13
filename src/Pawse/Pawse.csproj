@@ -29,4 +29,10 @@
     <NoWarn>WFAC010</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- WMI, used only for the Keyboard Filter block (browser/calculator/media keys) in
+         Core/KeyboardFilterGuard.cs. Windows-only at runtime; restores fine on Linux. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

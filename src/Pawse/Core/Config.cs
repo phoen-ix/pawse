@@ -67,13 +67,15 @@ public sealed class Config
     }
 
     /// <summary>
-    /// OS-level key suppression applied only while locked and reverted on unlock.
-    /// Default off. <c>WinLock</c> disables Win+L via the per-user DisableLockWorkstation
-    /// policy; on managed/corporate PCs the policy key is ACL-locked and needs Pawse elevated.
+    /// OS-level key suppression applied only while locked and reverted on unlock. Default off.
+    /// <c>WinLock</c> disables Win+L via the per-user DisableLockWorkstation policy (managed
+    /// PCs need Pawse elevated). <c>LaunchMediaKeys</c> blocks browser/calculator/media keys
+    /// via the Windows Keyboard Filter (Enterprise/Education/IoT + admin only).
     /// </summary>
     public sealed class SystemBlockCfg
     {
-        public bool WinLock { get; set; } // DisableLockWorkstation toggle
+        public bool WinLock { get; set; }         // DisableLockWorkstation toggle
+        public bool LaunchMediaKeys { get; set; } // browser/calc/media via Keyboard Filter
     }
 
     // ---- persistence ---------------------------------------------------------
@@ -147,5 +149,5 @@ public sealed class Config
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
-        $"sysblock=[win_l={SystemBlock.WinLock}]";
+        $"sysblock=[win_l={SystemBlock.WinLock} launch_media={SystemBlock.LaunchMediaKeys}]";
 }

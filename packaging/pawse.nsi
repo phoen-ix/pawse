@@ -261,14 +261,25 @@ FunctionEnd
 ; ---- uninstall ----
 Section "Uninstall"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
+  SetOutPath "$TEMP"   ; move CWD out of $INSTDIR so the folder can be removed
+
   Delete "$INSTDIR\${EXE}"
   Delete "$INSTDIR\pawse.ico"
   Delete "$INSTDIR\LICENSE.txt"
-  Delete "$INSTDIR\uninstall.exe"
-  RMDir  "$INSTDIR"
   Delete "$SMPROGRAMS\${APP}.lnk"
   Delete "$DESKTOP\${APP}.lnk"
-  DeleteRegValue HKCU  "${RUN_KEY}" "${APP}"
-  DeleteRegKey   SHCTX "${UNINST_KEY}"
+
+  DeleteRegValue HKCU "${RUN_KEY}" "${APP}"
+  ; Remove the Add/Remove Programs entry from whichever hive it was written to - SHCTX can
+  ; be wrong if MultiUser's mode detection is off, so clear both (HKLM is a no-op un-elevated).
+  DeleteRegKey HKCU "${UNINST_KEY}"
+  DeleteRegKey HKLM "${UNINST_KEY}"
+
+  ; Remove the uninstaller + folder. A running uninstall.exe can't delete itself, so if it's
+  ; still there hand off to a detached cmd that waits for us to exit, then cleans up.
+  Delete "$INSTDIR\uninstall.exe"
+  RMDir  "$INSTDIR"
+  IfFileExists "$INSTDIR\uninstall.exe" 0 +2
+    Exec '"$SYSDIR\cmd.exe" /c ping 127.0.0.1 -n 3 >nul & del /f /q "$INSTDIR\uninstall.exe" & rmdir "$INSTDIR"'
   ; user settings/log in %APPDATA%\Pawse are left in place on purpose
 SectionEnd

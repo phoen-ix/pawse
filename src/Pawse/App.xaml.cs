@@ -149,7 +149,8 @@ public partial class App : Application
             try
             {
                 _tray?.SetLocked(locked);
-                // The Win+L registry toggle runs inline inside Apply (fast).
+                // The Win+L registry toggle runs inline inside Apply; the Keyboard-Filter
+                // (WMI) work is dispatched off-thread inside Apply so this returns fast.
                 _systemBlock?.Apply(locked, background: true, notify: true);
                 if (locked)
                 {

@@ -56,6 +56,11 @@ public partial class SettingsWindow : Window
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
+        ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
+        LblFilterStatus.Text = new KeyboardFilterGuard().IsAvailable()
+            ? "Browser / calculator / media-key blocking: the Keyboard Filter feature is available on this PC."
+            : "Blocking browser / calculator / media keys needs Windows Enterprise/Education/IoT with the "
+              + "Keyboard Filter feature and Pawse running as administrator - otherwise it's quietly ignored.";
 
         ChkLockHotkey.IsChecked = _cfg.LockHotkey.Enabled;
         TxtLockHotkey.Chord = _cfg.LockHotkey.Keys;
@@ -87,6 +92,7 @@ public partial class SettingsWindow : Window
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
 
         _cfg.SystemBlock.WinLock = ChkWinLock.IsChecked == true;
+        _cfg.SystemBlock.LaunchMediaKeys = ChkLaunchMedia.IsChecked == true;
 
         _cfg.LockHotkey.Enabled = ChkLockHotkey.IsChecked == true;
         _cfg.LockHotkey.Keys = new List<string>(TxtLockHotkey.Chord);
