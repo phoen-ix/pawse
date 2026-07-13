@@ -37,7 +37,7 @@ public partial class App : Application
             }
             if (!acquired)
             {
-                MessageBox.Show("Pawse is already running - look for the padlock in the system tray.",
+                MessageBox.Show("Pawse is already running - look for the paw in the system tray.",
                     "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
                 Shutdown();
                 return;
