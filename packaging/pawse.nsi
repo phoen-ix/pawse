@@ -47,6 +47,7 @@ BrandingText "${APP} ${VERSION}${VARIANT}"
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
+!include "FileFunc.nsh"   ; ${GetSize} for the Add/Remove "Size" field
 
 ; ---- per-user / per-machine ----
 !define MULTIUSER_EXECUTIONLEVEL Highest
@@ -185,6 +186,9 @@ Section "-Core" SEC_CORE
   WriteRegStr   SHCTX "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr   SHCTX "${UNINST_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegStr   SHCTX "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
+  ; installed size (KB) so Add/Remove Programs shows a Size for Pawse
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  WriteRegDWORD SHCTX "${UNINST_KEY}" "EstimatedSize" $0
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoRepair" 1
 
