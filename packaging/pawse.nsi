@@ -75,6 +75,7 @@ Var RbMin
 !define MUI_FINISHPAGE_RUN_FUNCTION "LaunchApp"
 
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "..\LICENSE"
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !ifndef MINIMAL_ONLY
 Page custom BuildPageCreate BuildPageLeave
@@ -167,6 +168,7 @@ Section "-Core" SEC_CORE
 
   SetOutPath "$INSTDIR"
   File "pawse.ico"
+  File /oname=LICENSE.txt "..\LICENSE"
 !ifdef MINIMAL_ONLY
   File /oname=${EXE} "Pawse-min.exe"
 !else
@@ -234,6 +236,7 @@ Section "Uninstall"
   nsExec::ExecToLog 'taskkill /F /IM Pawse.exe'
   Delete "$INSTDIR\${EXE}"
   Delete "$INSTDIR\pawse.ico"
+  Delete "$INSTDIR\LICENSE.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir  "$INSTDIR"
   Delete "$SMPROGRAMS\${APP}.lnk"
