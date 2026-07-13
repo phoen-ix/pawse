@@ -1,13 +1,19 @@
 ; Pawse installer - NSIS script.
 ;
 ; Build locally on Windows (or with makensis) after downloading BOTH release exes
-; (Pawse.exe and Pawse-min.exe) into this folder:
+; (Pawse.exe and Pawse-min.exe) into this folder. One call builds TWO installers:
 ;
-;     makensis /DVERSION=0.1.1 pawse.nsi        ->  Pawse-Setup-0.1.1.exe
+;     makensis /DVERSION=0.1.1 pawse.nsi
+;         ->  Pawse-Setup-0.1.1.exe       (standard: bundles both, asks which)
+;         ->  Pawse-Setup-0.1.1-min.exe   (true minimal: only Pawse-min.exe)
 ;
-; One installer bundles both builds and asks which to deploy. The chosen exe is
-; installed as Pawse.exe. For the minimal build it ensures the .NET 8 Desktop
+; The standard installer bundles both builds and asks which to deploy; the chosen
+; exe is installed as Pawse.exe. The minimal installer only carries Pawse-min.exe
+; (no choice page). Either way, the minimal build ensures the .NET 8 Desktop
 ; Runtime (via winget, else points to the download page).
+;
+; The minimal installer is produced by the standard compile shelling out to
+; makensis with -DMINIMAL_ONLY (so makensis must be on PATH).
 
 Unicode true
 
@@ -21,9 +27,22 @@ Unicode true
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/8.0"
 
-Name "${APP} ${VERSION}"
-OutFile "Pawse-Setup-${VERSION}.exe"
-BrandingText "${APP} ${VERSION}"
+!ifdef MINIMAL_ONLY
+  !define VARIANT " (Minimal)"
+  !define OUTSUFFIX "-min"
+!else
+  !define VARIANT ""
+  !define OUTSUFFIX ""
+!endif
+
+Name "${APP} ${VERSION}${VARIANT}"
+OutFile "Pawse-Setup-${VERSION}${OUTSUFFIX}.exe"
+BrandingText "${APP} ${VERSION}${VARIANT}"
+
+; Standard compile also emits the true-minimal installer in the same run.
+!ifndef MINIMAL_ONLY
+  !execute 'makensis -DVERSION=${VERSION} -DMINIMAL_ONLY "${__FILE__}"' = 0
+!endif
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
@@ -39,9 +58,11 @@ BrandingText "${APP} ${VERSION}"
 !define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_VALUENAME "UninstallString"
 !include "MultiUser.nsh"
 
+!ifndef MINIMAL_ONLY
 Var BuildChoice   ; "full" | "min"
 Var RbFull
 Var RbMin
+!endif
 
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
@@ -54,7 +75,9 @@ Var RbMin
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
+!ifndef MINIMAL_ONLY
 Page custom BuildPageCreate BuildPageLeave
+!endif
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -65,7 +88,8 @@ Page custom BuildPageCreate BuildPageLeave
 
 !insertmacro MUI_LANGUAGE "English"
 
-; ---- custom "which build" page ----
+; ---- custom "which build" page (standard installer only) ----
+!ifndef MINIMAL_ONLY
 Function BuildPageCreate
   !insertmacro MUI_HEADER_TEXT "Choose build" "Pick which Pawse build to install."
   nsDialogs::Create 1018
@@ -92,6 +116,7 @@ Function BuildPageLeave
     StrCpy $BuildChoice "full"
   ${EndIf}
 FunctionEnd
+!endif
 
 Function un.onInit
   !insertmacro MULTIUSER_UNINIT
@@ -141,11 +166,15 @@ Section "-Core" SEC_CORE
 
   SetOutPath "$INSTDIR"
   File "pawse.ico"
+!ifdef MINIMAL_ONLY
+  File /oname=${EXE} "Pawse-min.exe"
+!else
   ${If} $BuildChoice == "min"
     File /oname=${EXE} "Pawse-min.exe"
   ${Else}
     File /oname=${EXE} "Pawse.exe"
   ${EndIf}
+!endif
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   ; Add/Remove Programs (SHCTX = HKLM for all-users, HKCU for current-user)
@@ -159,9 +188,13 @@ Section "-Core" SEC_CORE
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoRepair" 1
 
+!ifdef MINIMAL_ONLY
+  Call EnsureDotnet
+!else
   ${If} $BuildChoice == "min"
     Call EnsureDotnet
   ${EndIf}
+!endif
 SectionEnd
 
 Section "Start Menu shortcut" SEC_SM
@@ -179,7 +212,9 @@ SectionEnd
 
 ; placed after the sections so ${SEC_DESK} is defined
 Function .onInit
+!ifndef MINIMAL_ONLY
   StrCpy $BuildChoice "full"
+!endif
   !insertmacro MULTIUSER_INIT
   SectionSetFlags ${SEC_DESK} 0     ; Desktop shortcut off by default
 FunctionEnd

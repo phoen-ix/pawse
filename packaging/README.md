@@ -1,16 +1,18 @@
 # Pawse installer (NSIS)
 
-Builds `Pawse-Setup-<version>.exe` - a single installer that bundles **both**
-release builds and asks which to deploy:
+One `makensis` call builds **two** installers:
 
-- **Full** - self-contained `Pawse.exe` (~63 MB, runtime bundled, needs nothing).
-- **Minimal** - `Pawse-min.exe` (~0.2 MB); needs the **.NET 8 Desktop Runtime (x64)**,
-  which the installer installs via `winget` if it's missing (else points to the
-  download page).
+- **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
+  which to deploy:
+  - **Full** - self-contained `Pawse.exe` (~63 MB, runtime bundled, needs nothing).
+  - **Minimal** - `Pawse-min.exe` (~0.2 MB); needs the **.NET 8 Desktop Runtime (x64)**.
+- **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.5 MB) - carries only
+  `Pawse-min.exe`, no build-choice page. For people who know they want the small build.
 
-The installer also offers per-user vs per-machine install, optional Start Menu /
-Desktop shortcuts and start-at-login, and a "launch now" finish option. The chosen
-build is installed as `Pawse.exe`.
+Either way the minimal build ensures the .NET 8 Desktop Runtime via `winget` (else points
+to the download page). Both installers offer per-user vs per-machine install, optional
+Start Menu / Desktop shortcuts and start-at-login, and a "launch now" finish option; the
+installed exe is always named `Pawse.exe`.
 
 ## Build it
 
@@ -20,15 +22,17 @@ build is installed as `Pawse.exe`.
    this folder so it contains `Pawse.exe` **and** `Pawse-min.exe`:
    - `Pawse-<version>.zip`      -> `Pawse.exe`
    - `Pawse-<version>-min.zip`  -> `Pawse-min.exe`
-3. Compile (pass the release version):
+3. Compile (pass the release version; **makensis must be on PATH** - the standard
+   compile shells out to build the minimal one):
 
    ```
    makensis /DVERSION=<version> pawse.nsi
    ```
 
-   -> produces `Pawse-Setup-<version>.exe` in this folder.
-4. Hand that installer over to attach it to the same GitHub Release
-   (`gh release upload v<version> Pawse-Setup-<version>.exe`).
+   -> produces **both** `Pawse-Setup-<version>.exe` and `Pawse-Setup-<version>-min.exe`
+   in this folder.
+4. Hand both installers over to attach them to the same GitHub Release
+   (`gh release upload v<version> Pawse-Setup-<version>.exe Pawse-Setup-<version>-min.exe`).
 
 `Pawse.exe`, `Pawse-min.exe`, and `Pawse-Setup-*.exe` are git-ignored - only the
 sources (`pawse.nsi`, `pawse.ico`, `pawse-icon.py`) are tracked.
