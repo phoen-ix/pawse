@@ -1,0 +1,6 @@
+# Release binaries downloaded per build (not committed)
+Pawse.exe
+Pawse-min.exe
+
+# Installer output
+Pawse-Setup-*.exe
