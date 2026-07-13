@@ -56,12 +56,6 @@ public partial class SettingsWindow : Window
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
-        ChkSecureAttention.IsChecked = _cfg.SystemBlock.SecureAttention;
-        ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
-        LblFilterStatus.Text = new KeyboardFilterGuard().IsAvailable()
-            ? "Ctrl+Alt+Del and media-key blocking: the Keyboard Filter feature is available on this PC."
-            : "Ctrl+Alt+Del and media-key blocking need Windows Enterprise/Education/IoT with the Keyboard "
-              + "Filter feature and Pawse running as administrator - otherwise they're quietly ignored.";
 
         ChkLockHotkey.IsChecked = _cfg.LockHotkey.Enabled;
         TxtLockHotkey.Chord = _cfg.LockHotkey.Keys;
@@ -93,8 +87,6 @@ public partial class SettingsWindow : Window
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
 
         _cfg.SystemBlock.WinLock = ChkWinLock.IsChecked == true;
-        _cfg.SystemBlock.SecureAttention = ChkSecureAttention.IsChecked == true;
-        _cfg.SystemBlock.LaunchMediaKeys = ChkLaunchMedia.IsChecked == true;
 
         _cfg.LockHotkey.Enabled = ChkLockHotkey.IsChecked == true;
         _cfg.LockHotkey.Keys = new List<string>(TxtLockHotkey.Chord);

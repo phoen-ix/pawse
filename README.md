@@ -58,31 +58,19 @@ The global low-level keyboard hook swallows **all physical keys while locked**,
 including the F-keys and normal typing, and it clears any stuck modifier on lock
 (fixing the "Ctrl seems held → the browser zooms when I scroll" problem).
 
-A few system keys travel *around* that hook, so Pawse can optionally block each
-one **only while locked** - all off by default; turn them on under **Settings →
-System keys**:
-
-- **`Win+L`** - the hook can't stop it (winlogon locks the screen below the
-  hook), but Pawse toggles the per-user `DisableLockWorkstation` policy on lock
-  and removes it on unlock. Works on **every Windows edition**; needs no admin on
-  a normal PC, but on **managed / corporate** machines the policy key is ACL-locked
-  and needs elevation - use the tray's **Restart as administrator**.
-- **`Ctrl+Alt+Del`** and **consumer keys** (Calculator, browser, media, volume -
-  they reach Windows as `WM_APPCOMMAND` and bypass the hook entirely) can only be
-  blocked by the Windows **Keyboard Filter** feature, which Pawse drives via WMI
-  while locked. Needs **Windows Enterprise / Education / IoT Enterprise** with the
-  Keyboard Filter feature installed *and* Pawse **running as administrator** (tray
-  → **Restart as administrator**); on other editions they're quietly ignored (a
-  tray note explains why).
-
-If any of these need admin, the tray menu has a **Restart as administrator** entry
-(shown only when Pawse isn't already elevated) that relaunches with a UAC prompt.
+**`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
+so Pawse can optionally block it **only while locked** - off by default; turn it on
+under **Settings → System keys**. It toggles the per-user `DisableLockWorkstation`
+policy on lock and removes it on unlock. Needs no admin on a normal PC, but on
+**managed / corporate** machines the policy key is ACL-locked and needs elevation -
+enabling it prompts to **Restart as administrator** (also available in the tray menu,
+shown only when Pawse isn't already elevated).
 
 Still out of reach: input to windows running **as administrator** (unless Pawse
-itself runs elevated), and - on Home/Pro - `Ctrl+Alt+Del` and vendor-driver
-hotkeys, which would need a signed kernel driver (out of scope). If Pawse is
-killed while locked, it sweeps any leftover `DisableLockWorkstation` /
-Keyboard-Filter state on next start, so nothing stays blocked.
+itself runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would
+need a signed kernel driver (out of scope). If Pawse is killed while locked, it
+sweeps any leftover `DisableLockWorkstation` state on next start, so nothing stays
+blocked.
 
 ## Privacy
 

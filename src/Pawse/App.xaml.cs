@@ -196,6 +196,9 @@ public partial class App : Application
         config.Save();
         _controller.RebuildMatchers();
         Autostart.SetEnabled(config.General.Autostart);
+        // If Block Win+L was just enabled but this PC needs admin to apply it, offer to
+        // relaunch elevated (same prompt as startup). On Yes we hand off and stop here.
+        if (RelaunchElevatedIfWinLockNeedsIt(config)) return;
         // Apply/revert the OS-level guards to match the new settings + current state.
         _systemBlock?.Apply(_controller.IsLocked, background: true, notify: true);
 

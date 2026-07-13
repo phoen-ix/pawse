@@ -26,11 +26,4 @@
     <NoWarn>WFAC010</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- WMI, used only for the optional Keyboard Filter blocks (Ctrl+Alt+Del /
-         media keys) in Core/KeyboardFilterGuard.cs. Windows-only at runtime; the
-         reference restores fine on Linux for the type-check build. -->
-    <PackageReference Include="System.Management" Version="8.0.0" />
-  </ItemGroup>
-
 </Project>

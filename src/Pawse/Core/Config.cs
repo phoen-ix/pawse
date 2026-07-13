@@ -68,15 +68,12 @@ public sealed class Config
 
     /// <summary>
     /// OS-level key suppression applied only while locked and reverted on unlock.
-    /// All default off. <c>WinLock</c> works on any edition without admin;
-    /// <c>SecureAttention</c> and <c>LaunchMediaKeys</c> need the Windows Keyboard
-    /// Filter feature (Enterprise/Education/IoT) and Pawse running elevated.
+    /// Default off. <c>WinLock</c> disables Win+L via the per-user DisableLockWorkstation
+    /// policy; on managed/corporate PCs the policy key is ACL-locked and needs Pawse elevated.
     /// </summary>
     public sealed class SystemBlockCfg
     {
-        public bool WinLock { get; set; }         // DisableLockWorkstation toggle
-        public bool SecureAttention { get; set; } // Ctrl+Alt+Del via Keyboard Filter
-        public bool LaunchMediaKeys { get; set; } // browser/calc/media via Keyboard Filter
+        public bool WinLock { get; set; } // DisableLockWorkstation toggle
     }
 
     // ---- persistence ---------------------------------------------------------
@@ -134,6 +131,5 @@ public sealed class Config
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
-        $"sysblock=[win_l={SystemBlock.WinLock} ctrl_alt_del={SystemBlock.SecureAttention} " +
-        $"launch_media={SystemBlock.LaunchMediaKeys}]";
+        $"sysblock=[win_l={SystemBlock.WinLock}]";
 }

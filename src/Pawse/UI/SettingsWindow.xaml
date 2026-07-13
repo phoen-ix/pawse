@@ -56,10 +56,7 @@
                 <TextBlock Text="System keys (while locked)" Style="{StaticResource Header}" />
                 <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
                 <TextBlock Style="{StaticResource Hint}"
-                           Text="Works on every Windows edition, no admin. Disables Win+L only while Pawse is locked; restored on unlock." />
-                <CheckBox x:Name="ChkSecureAttention" Content="Block Ctrl+Alt+Del" />
-                <CheckBox x:Name="ChkLaunchMedia" Content="Block browser / calculator / media keys" />
-                <TextBlock x:Name="LblFilterStatus" Style="{StaticResource Hint}" />
+                           Text="Disables Win+L only while Pawse is locked; restored on unlock. Most PCs need no admin; managed/corporate PCs will prompt to restart Pawse as administrator." />
 
                 <TextBlock Text="Lock hotkey" Style="{StaticResource Header}" />
                 <CheckBox x:Name="ChkLockHotkey" Content="Lock with a keyboard shortcut" />
