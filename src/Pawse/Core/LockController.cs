@@ -13,6 +13,12 @@ namespace Pawse.Core;
 public sealed class LockController
 {
     private readonly HashSet<int> _pressed = new();
+
+    /// <summary>Raw (side-specific) VKs whose key-DOWN we passed to the foreground
+    /// while unlocked and haven't seen released. If we lock mid-combo (e.g. the Ctrl
+    /// of a Ctrl+L lock hotkey), these keys are still "held" by the app, so we let
+    /// their key-UPs through while locked to avoid a stuck modifier.</summary>
+    private readonly HashSet<int> _leakedDown = new();
     private ChordMatcher? _unlockChord;
     private ChordMatcher? _lockHotkey;
     private PassphraseMatcher? _passphrase;
@@ -75,11 +81,24 @@ public sealed class LockController
                     return true;
                 }
             }
+            // Block every key-down (no typing / shortcuts). But if this key's DOWN
+            // leaked to the foreground before we locked (e.g. the Ctrl of a Ctrl+L
+            // lock hotkey), let its key-UP through so the system sees the release -
+            // otherwise that modifier stays stuck (its real up would be swallowed here).
+            if (!isDown && _leakedDown.Remove(vk))
+                return false;
             return true;
         }
 
         if (!SuppressLockHotkey && _lockHotkey != null && _lockHotkey.Feed(_pressed, nv, isDown))
+        {
             Engage("hotkey");
+            return true; // swallow the completing key so it doesn't leak to the app
+        }
+
+        // Unlocked pass-through: remember which physical keys the app has seen go
+        // down, so we can release them if we lock mid-combo (see _leakedDown).
+        if (isDown) _leakedDown.Add(vk); else _leakedDown.Remove(vk);
         return false;
     }
 
@@ -108,6 +127,7 @@ public sealed class LockController
         Log.Info($"UNLOCK ({source})");
         Input.ClearModifiers();
         _pressed.Clear();
+        _leakedDown.Clear();
         RaiseLocked(false);
     }
 
