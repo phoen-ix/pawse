@@ -10,7 +10,7 @@ This is a native Windows app (C# / .NET 8, WPF + a WinForms tray).
 ## Install
 
 Grab one zip from the [latest release](https://github.com/phoen-ix/pawse/releases),
-unzip it, and run the exe inside - no installer, no admin. A padlock appears in the
+unzip it, and run the exe inside - no installer, no admin. A paw appears in the
 system tray.
 
 | Download | Size | Needs anything installed? |
@@ -25,7 +25,7 @@ Same app either way. `Pawse.exe` is self-contained (bundled + compressed);
 
 ## Use
 
-- **Left-click** the tray padlock to lock / unlock.
+- **Left-click** the tray paw to lock / unlock.
 - **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit.
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
