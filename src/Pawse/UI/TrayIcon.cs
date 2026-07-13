@@ -31,7 +31,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(settings);
         menu.Items.Add(openCfg);
         // Only offer elevation when we're not already elevated. Needed for the
-        // system-key blocks (Win+L policy on managed PCs, Ctrl+Alt+Del / media keys).
+        // Win+L block on managed PCs (the DisableLockWorkstation policy key needs admin).
         if (!Core.Elevation.IsElevated())
             menu.Items.Add(new ToolStripMenuItem("Restart as administrator", null,
                 (_, _) => RestartAsAdminRequested?.Invoke()));
@@ -40,7 +40,7 @@ public sealed class TrayIcon : IDisposable
 
         _ni = new NotifyIcon
         {
-            Icon = IconFactory.Padlock(false),
+            Icon = IconFactory.Paw(false),
             Text = "Pawse - unlocked",
             Visible = true,
             ContextMenuStrip = menu,
@@ -57,7 +57,7 @@ public sealed class TrayIcon : IDisposable
     {
         _toggle.Text = locked ? "Unlock" : "Lock now";
         _ni.Text = locked ? "Pawse - locked" : "Pawse - unlocked";
-        _ni.Icon = IconFactory.Padlock(locked);
+        _ni.Icon = IconFactory.Paw(locked);
         Core.Log.Info($"tray set_locked({locked})");
     }
 
