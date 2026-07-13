@@ -13,6 +13,9 @@
     <Product>Pawse</Product>
     <Version>0.3.5</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Embed the same paw icon the installer uses, so Pawse.exe (and its WPF
+         windows / taskbar) show it instead of a generic exe icon. -->
+    <ApplicationIcon>../../packaging/pawse.ico</ApplicationIcon>
 
     <!-- Lets this Windows-desktop (WPF/WinForms) project compile on Linux CI/dev
          boxes for type-checking. The runnable exe is still built on Windows. -->
