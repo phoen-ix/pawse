@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Pawse</RootNamespace>
+    <AssemblyName>Pawse</AssemblyName>
+    <Product>Pawse</Product>
+    <Version>0.3.5</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Lets this Windows-desktop (WPF/WinForms) project compile on Linux CI/dev
+         boxes for type-checking. The runnable exe is still built on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- We set PerMonitorV2 DPI awareness in app.manifest (WPF needs process-level
+         awareness for the overlay's physical-pixel placement). The WinForms analyzer
+         flags the manifest DPI settings, but since we boot through WPF and never call
+         SetHighDpiMode there is no conflict - suppress that one warning. -->
+    <NoWarn>WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WMI, used only for the optional Keyboard Filter blocks (Ctrl+Alt+Del /
+         media keys) in Core/KeyboardFilterGuard.cs. Windows-only at runtime; the
+         reference restores fine on Linux for the type-check build. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

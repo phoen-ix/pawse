@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.log
+
+# Editors
+.idea/
+.vscode/
+
+# Local build artifacts downloaded from CI
+dist/

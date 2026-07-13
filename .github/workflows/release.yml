@@ -1,0 +1,82 @@
+name: release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compute version from tag
+        id: ver
+        shell: pwsh
+        run: echo "v=$('${{ github.ref_name }}'.TrimStart('v'))" >> $env:GITHUB_OUTPUT
+
+      # No-install build: the whole .NET runtime is bundled and compressed
+      # (~63 MB). Just download and run - nothing to install.
+      - name: Publish standalone (no install, compressed)
+        shell: pwsh
+        run: >
+          dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:Version=${{ steps.ver.outputs.v }}
+          -o publish-full
+
+      # Minimal build: a tiny launcher (~0.2 MB) that uses an already-installed
+      # .NET 8 Desktop Runtime.
+      - name: Publish minimal (needs .NET Desktop Runtime)
+        shell: pwsh
+        run: >
+          dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -p:DebugType=none
+          -p:Version=${{ steps.ver.outputs.v }}
+          -o publish-min
+
+      # Zip each exe. Compress-Archive stores the file's leaf name inside the
+      # archive, so users extract a plainly-named Pawse.exe / Pawse-min.exe.
+      - name: Stage & zip assets
+        shell: pwsh
+        run: |
+          Copy-Item publish-full/Pawse.exe Pawse.exe
+          Copy-Item publish-min/Pawse.exe  Pawse-min.exe
+          Compress-Archive -Path Pawse.exe     -DestinationPath "Pawse-${{ steps.ver.outputs.v }}.zip"     -Force
+          Compress-Archive -Path Pawse-min.exe -DestinationPath "Pawse-${{ steps.ver.outputs.v }}-min.zip" -Force
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            Pawse-${{ steps.ver.outputs.v }}.zip
+            Pawse-${{ steps.ver.outputs.v }}-min.zip
+          generate_release_notes: true
+          body: |
+            **Pawse ${{ github.ref_name }}** - Windows keyboard lock.
+
+            Two downloads - pick one, unzip it, and run the exe inside:
+
+            | File | Download size | Needs anything installed? |
+            | --- | --- | --- |
+            | **`Pawse-${{ steps.ver.outputs.v }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
+            | **`Pawse-${{ steps.ver.outputs.v }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
+
+            Both are identical apps; the full build bundles the runtime, the `-min`
+            build reuses one you install once. Windows may mark a downloaded zip as
+            blocked - if the exe won't start, right-click the zip → **Properties →
+            Unblock** before extracting. The tray padlock is your control; the
+            config and log are written next to the exe.

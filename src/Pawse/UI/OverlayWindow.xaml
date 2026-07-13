@@ -1,0 +1,44 @@
+<Window x:Class="Pawse.UI.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Pawse"
+        Width="460" Height="240"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        ShowActivated="False">
+    <Border CornerRadius="18" Padding="26" BorderThickness="1" BorderBrush="#40FFFFFF">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#F21C1C28" Offset="0" />
+                <GradientStop Color="#F2101018" Offset="1" />
+            </LinearGradientBrush>
+        </Border.Background>
+        <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="🐾  Keyboard locked"
+                       Foreground="White" FontSize="24" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock x:Name="HintText"
+                       Foreground="#B8FFFFFF" FontSize="13" TextAlignment="Center"
+                       TextWrapping="Wrap" Margin="0,10,0,0" />
+
+            <Grid x:Name="HoldArea" Height="44" Margin="0,18,0,0">
+                <Border CornerRadius="10" Background="#2E6CF0" />
+                <Border x:Name="HoldFill" CornerRadius="10" Background="#7AA5FF"
+                        HorizontalAlignment="Left" Width="0" />
+                <Border x:Name="HoldButton" Background="Transparent" Cursor="Hand">
+                    <TextBlock Text="Hold to unlock" Foreground="White" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+
+            <TextBlock x:Name="CountdownText"
+                       Foreground="#90FFFFFF" FontSize="12" TextAlignment="Center"
+                       Margin="0,12,0,0" />
+        </StackPanel>
+    </Border>
+</Window>

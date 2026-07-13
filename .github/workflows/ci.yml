@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Pawse/Pawse.csproj
+
+      - name: Build (Release)
+        run: dotnet build src/Pawse/Pawse.csproj -c Release --no-restore
+
+      - name: Format check
+        continue-on-error: true
+        run: dotnet format src/Pawse/Pawse.csproj --verify-no-changes --severity warn

@@ -1,0 +1,39 @@
+name: build-artifact
+
+# Builds a runnable Pawse.exe on Windows for feature branches and uploads it as a
+# downloadable CI artifact (no public release). Handy for testing a branch before
+# it is merged/tagged.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ 'feat/**' ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      # Same recipe as the release "standalone" build: the whole .NET runtime is
+      # bundled and compressed (~63 MB) - just download and run, nothing to install.
+      - name: Publish standalone (compressed, no install)
+        shell: pwsh
+        run: >
+          dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -o publish-full
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Pawse-exe
+          path: publish-full/Pawse.exe
+          if-no-files-found: error
