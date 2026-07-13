@@ -1,19 +1,15 @@
-; Pawse installer - NSIS script.
+; Pawse installer - NSIS script. The MINIMAL_ONLY define picks which installer to build:
 ;
-; Build locally on Windows (or with makensis) after downloading BOTH release exes
-; (Pawse.exe and Pawse-min.exe) into this folder. One call builds TWO installers:
+;   makensis /DVERSION=<v> pawse.nsi                 -> Pawse-Setup-<v>.exe      (standard)
+;   makensis /DVERSION=<v> /DMINIMAL_ONLY pawse.nsi  -> Pawse-Setup-<v>-min.exe  (true minimal)
 ;
-;     makensis /DVERSION=0.1.1 pawse.nsi
-;         ->  Pawse-Setup-0.1.1.exe       (standard: bundles both, asks which)
-;         ->  Pawse-Setup-0.1.1-min.exe   (true minimal: only Pawse-min.exe)
+; build.bat <v>  (or ./build.sh <v>) runs both in one step. Run it from THIS folder
+; after downloading BOTH release exes (Pawse.exe and Pawse-min.exe) into it.
 ;
-; The standard installer bundles both builds and asks which to deploy; the chosen
-; exe is installed as Pawse.exe. The minimal installer only carries Pawse-min.exe
-; (no choice page). Either way, the minimal build ensures the .NET 8 Desktop
-; Runtime (via winget, else points to the download page).
-;
-; The minimal installer is produced by the standard compile shelling out to
-; makensis with -DMINIMAL_ONLY (so makensis must be on PATH).
+; The standard installer bundles both builds and asks which to deploy (the chosen exe
+; installs as Pawse.exe); the minimal installer carries only Pawse-min.exe (no choice
+; page). Either way the minimal build ensures the .NET 8 Desktop Runtime (via winget,
+; else points to the download page).
 
 Unicode true
 
@@ -38,11 +34,6 @@ Unicode true
 Name "${APP} ${VERSION}${VARIANT}"
 OutFile "Pawse-Setup-${VERSION}${OUTSUFFIX}.exe"
 BrandingText "${APP} ${VERSION}${VARIANT}"
-
-; Standard compile also emits the true-minimal installer in the same run.
-!ifndef MINIMAL_ONLY
-  !execute 'makensis -DVERSION=${VERSION} -DMINIMAL_ONLY "${__FILE__}"' = 0
-!endif
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"

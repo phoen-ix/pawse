@@ -1,6 +1,6 @@
 # Pawse installer (NSIS)
 
-One `makensis` call builds **two** installers:
+`build.bat <version>` (or `./build.sh <version>`) builds **two** installers:
 
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
@@ -22,20 +22,21 @@ installed exe is always named `Pawse.exe`.
    this folder so it contains `Pawse.exe` **and** `Pawse-min.exe`:
    - `Pawse-<version>.zip`      -> `Pawse.exe`
    - `Pawse-<version>-min.zip`  -> `Pawse-min.exe`
-3. Compile (pass the release version; **makensis must be on PATH** - the standard
-   compile shells out to build the minimal one):
+3. Build **both** installers from this folder (each script just runs `makensis` twice:
+   the standard build and the `-DMINIMAL_ONLY` build):
 
    ```
-   makensis /DVERSION=<version> pawse.nsi
+   build.bat <version>       (Windows)      e.g.  build.bat 0.1.4
+   ./build.sh <version>      (Linux/macOS)
    ```
 
-   -> produces **both** `Pawse-Setup-<version>.exe` and `Pawse-Setup-<version>-min.exe`
-   in this folder.
+   -> produces `Pawse-Setup-<version>.exe` and `Pawse-Setup-<version>-min.exe` here.
+   (Or run the two `makensis` lines by hand - see the top of `pawse.nsi`.)
 4. Hand both installers over to attach them to the same GitHub Release
    (`gh release upload v<version> Pawse-Setup-<version>.exe Pawse-Setup-<version>-min.exe`).
 
 `Pawse.exe`, `Pawse-min.exe`, and `Pawse-Setup-*.exe` are git-ignored - only the
-sources (`pawse.nsi`, `pawse.ico`, `pawse-icon.py`) are tracked.
+sources (`pawse.nsi`, `build.bat`, `build.sh`, `pawse.ico`, `pawse-icon.py`) are tracked.
 
 ## Icon
 
