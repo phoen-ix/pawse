@@ -11,3 +11,6 @@ publish/
 
 # Local build artifacts downloaded from CI
 dist/
+
+# Installers handed over for release upload (dropped in the repo root, then deleted)
+Pawse-Setup-*.exe
