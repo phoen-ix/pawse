@@ -71,10 +71,13 @@
     color:#1a1327; background:linear-gradient(180deg,#f7efe4,#e9dcc8); padding:13px 20px; border-radius:12px; font-weight:600;
     border:1px solid rgba(255,255,255,.4); box-shadow:0 10px 26px rgba(0,0,0,.35); transition:transform .18s ease, box-shadow .18s ease; cursor:default}
   .btn:hover{transform:translateY(-2px); box-shadow:0 16px 34px rgba(0,0,0,.42)}
+  .btn[aria-disabled="true"]:hover{transform:none}
   .btn .k{opacity:.55}
-  .ghlink{display:inline-flex; align-items:center; gap:8px; color:var(--soft); text-decoration:none; font-family:var(--mono); font-size:13px; letter-spacing:.04em; border-bottom:1px solid transparent; padding-bottom:2px; transition:color .18s, border-color .18s}
-  .ghlink:hover{color:var(--ink); border-color:var(--line)}
-  .ghlink svg{width:17px; height:17px}
+  .btn .di{width:15px; height:15px; display:block}
+  .btn .di svg{width:100%; height:100%; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+  .btn.ghost{background:none; color:var(--soft); border:1px solid var(--line); box-shadow:none}
+  .btn.ghost:hover{color:var(--ink); border-color:rgba(139,108,240,.5)}
+  .btn.ghost .gh{width:16px; height:16px}
 
   /* animated paw-print trail (a cat walked across) */
   .track{position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden}
@@ -160,11 +163,15 @@
     <p class="tag reveal" style="animation-delay:.2s">A cat-proof keyboard lock for Windows.</p>
     <p class="lede reveal" style="animation-delay:.28s">One click - or a hotkey - freezes the keyboard so a cat walking across it can't close your work, fire off shortcuts, or leave a modifier <b>stuck</b>. The days of your cat <b>force-pushing to main</b> are over. Unlock it deliberately: a chord, a passphrase, a hold-to-unlock button, or an auto-timer.</p>
     <div class="cta reveal" style="animation-delay:.36s">
-      <span class="btn"><span class="k">$</span> Download &nbsp;·&nbsp; soon</span>
-      <a class="ghlink" href="https://github.com/phoen-ix/pawse" rel="noopener">
-        <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub · at launch
-      </a>
+      <!-- disabled until public launch; wire Download -> releases and GitHub -> repo then -->
+      <span class="btn" aria-disabled="true">
+        <span class="di" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
+        Download <span class="k">·&nbsp;soon</span>
+      </span>
+      <span class="btn ghost" aria-disabled="true">
+        <svg class="gh" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub <span class="k">·&nbsp;soon</span>
+      </span>
     </div>
   </section>
 
@@ -192,8 +199,8 @@
         <h3>Fully local</h3><p>No network connections - no telemetry, no update checks, no phone-home. Your keystrokes never leave the machine.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M5 9l7-7 7 7"/><path d="M5 15h14"/></svg></span>
-        <h3>Tiny, no install</h3><p>A single self-contained exe - runtime baked in, no dependencies to chase. (Or a ~0.2 MB launcher that reuses a once-installed .NET 8 runtime.) Unzip and run as a normal user.</p></div>
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
+        <h3>Installer or portable</h3><p>Run the installer for a normal setup - Start-menu entry, optional run-at-login, clean uninstall. Or take the portable route: a single self-contained exe (runtime baked in) you just unzip and run - plus a ~0.2 MB launcher that reuses an installed .NET 8 runtime.</p></div>
     </div>
   </section>
 

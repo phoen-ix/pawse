@@ -1,0 +1,6 @@
+# Deployment tooling: kept on the server, NOT in the public repo (host IP / topology).
+/docker-compose.yml
+/nginx.conf
+/og.png.py
+/README.md
+/traefik/
