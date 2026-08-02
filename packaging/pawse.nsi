@@ -76,6 +76,8 @@ Var RbMin
 
 Var PawseRunning     ; "1" | "0" - set by ${UN}PawseIsRunning, shared by both halves
 Var RealPrivileges   ; account type as Windows reports it, before we fib to MultiUser
+Var PrevInstDir      ; a previous install's folder, when its settings need carrying over
+Var DotnetFound      ; "1" | "0" - set by DotnetPresent
 
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
@@ -167,14 +169,47 @@ Function LaunchApp
 FunctionEnd
 
 ; ---- ensure .NET 8 Desktop Runtime for the minimal build ----
+; Sets $DotnetFound. Asks the .NET host where it lives rather than assuming: a runtime
+; installed anywhere but the default folder used to read as "missing" and trigger a
+; download of something already on the machine.
+Function DotnetPresent
+  Push $0
+  Push $1
+  Push $2
+  StrCpy $DotnetFound "0"
+
+  ; This installer is 32-bit, so a plain HKLM read is redirected into WOW6432Node while
+  ; the x64 runtime records itself in the native view.
+  SetRegView 64
+  ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64" "InstallLocation"
+  SetRegView default
+  ${If} $0 == ""
+    StrCpy $0 "$PROGRAMFILES64\dotnet"   ; nothing recorded - fall back to the usual spot
+  ${EndIf}
+
+  FindFirst $1 $2 "$0\shared\Microsoft.WindowsDesktop.App\8.*"
+  FindClose $1
+  ${If} $2 != ""
+    StrCpy $DotnetFound "1"
+    DetailPrint ".NET 8 Desktop Runtime found ($2 in $0)."
+  ${EndIf}
+
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
 Function EnsureDotnet
-  FindFirst $0 $1 "$PROGRAMFILES64\dotnet\shared\Microsoft.WindowsDesktop.App\8.*"
-  FindClose $0
-  ${If} $1 != ""
-    DetailPrint ".NET 8 Desktop Runtime found ($1)."
+  Call DotnetPresent
+  ${If} $DotnetFound == "1"
     Return
   ${EndIf}
   DetailPrint ".NET 8 Desktop Runtime (x64) not found."
+
+  ; Ask first. This pulls roughly 55 MB down and installs it machine-wide; doing that
+  ; unannounced because someone picked the small build is not a decision Setup gets to make.
+  ; /SD IDYES so a scripted /S deploy still provisions the runtime without a prompt.
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), which isn't installed on this PC.$\n$\nDownload and install it now? That's about 55 MB, fetched and installed machine-wide by winget.$\n$\nChoose No to handle it yourself - the minimal build won't start until the runtime is present." /SD IDYES IDNO dn_manual
 
   ; Resolve winget's real path via System32's where.exe - both fully qualified so a
   ; planted where.exe / winget.exe in the (possibly elevated) installer's folder can't run.
@@ -198,7 +233,19 @@ Function EnsureDotnet
   Pop $0
   ${If} $0 != 0
     Call DotnetManual
+    Return
   ${EndIf}
+  ; Trust but verify - winget can report success without the runtime we actually need
+  ; being on disk afterwards.
+  Call DotnetPresent
+  ${If} $DotnetFound != "1"
+    DetailPrint "winget reported success but no .NET 8 Desktop Runtime is present."
+    Call DotnetManual
+  ${EndIf}
+  Return
+
+ dn_manual:
+  Call DotnetManual
 FunctionEnd
 
 ; Pop a string, push its first line (up to the first CR/LF). Used to read one path
@@ -230,7 +277,7 @@ Function DotnetManual
   ; /SD IDNO: NSIS does NOT suppress message boxes in silent mode, so without a silent
   ; default a /S install on a machine with no winget would block here forever on a dialog
   ; nobody can see.
-  MessageBox MB_YESNO|MB_ICONEXCLAMATION "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), which isn't installed and couldn't be installed automatically.$\n$\nOpen the download page now?" /SD IDNO IDNO +2
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), and it isn't installed on this PC.$\n$\nOpen the download page now? Pawse will finish installing either way, but the minimal build won't start until the runtime is there." /SD IDNO IDNO +2
   ExecShell "open" "${DOTNET_URL}"
 FunctionEnd
 
@@ -436,6 +483,22 @@ Section "-Core" SEC_CORE
   ; only ever by force if the user picks that. Aborts before any file is written.
   Call EnsurePawseClosed
 
+  ; Note where a previous install lives before the registry below is rewritten. Pawse keeps
+  ; pawse.json next to its exe (falling back to %APPDATA%\Pawse when that folder isn't
+  ; writable), so an install landing in a NEW folder would start from defaults. The
+  ; %APPDATA% fallback already covers per-machine installs; this covers the rest - a
+  ; portable copy being adopted, or an install that moved between the two modes.
+  StrCpy $PrevInstDir ""
+  ReadRegStr $0 HKCU "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 == ""
+    ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+  ${EndIf}
+  ${If} $0 != ""
+  ${AndIf} $0 != "$INSTDIR"
+  ${AndIf} ${FileExists} "$0\pawse.json"
+    StrCpy $PrevInstDir $0
+  ${EndIf}
+
   SetOutPath "$INSTDIR"
   File "pawse.ico"
   File /oname=LICENSE.txt "..\LICENSE"
@@ -448,6 +511,13 @@ Section "-Core" SEC_CORE
     File /oname=${EXE} "Pawse.exe"
   ${EndIf}
 !endif
+
+  ; Bring the old settings along, but never over a config that's already here.
+  ${If} $PrevInstDir != ""
+  ${AndIfNot} ${FileExists} "$INSTDIR\pawse.json"
+    DetailPrint "Carrying settings over from $PrevInstDir"
+    CopyFiles /SILENT "$PrevInstDir\pawse.json" "$INSTDIR"
+  ${EndIf}
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   ; Add/Remove Programs (SHCTX = HKLM for all-users, HKCU for current-user)
@@ -503,6 +573,33 @@ Function .onInit
   ${AndIf} $RealPrivileges != "Power"
     StrCpy $MultiUser.Privileges "Admin"
   ${EndIf}
+
+  ; Upgrade in place. Making per-user the default (v0.3.1) means a machine already carrying
+  ; a per-machine Pawse would otherwise get a SECOND copy in %LOCALAPPDATA% - two installs,
+  ; two Add/Remove entries, and whichever the Run key last pointed at starting at login. If
+  ; there's no per-user install but there is a per-machine one, match it. This must come
+  ; after the fib above: MultiUser.InstallMode.AllUsers checks $MultiUser.Privileges.
+  ; The mode page still appears, just preselected on all-users, and ElevateForAllUsers asks
+  ; for the rights when the user moves past it.
+  ReadRegStr $0 HKCU "${UNINST_KEY}" "UninstallString"
+  ${If} $0 == ""
+    ReadRegStr $0 HKLM "${UNINST_KEY}" "UninstallString"
+    ${If} $0 != ""
+      Call MultiUser.InstallMode.AllUsers
+    ${EndIf}
+  ${EndIf}
+
+  ; Silent runs never see the mode page, so nothing would ever elevate them. Fail loudly
+  ; rather than half-install into Program Files with a token that can't write there - a
+  ; deployment script upgrading a machine-wide install is expected to run elevated.
+  ${If} ${Silent}
+  ${AndIf} $MultiUser.InstallMode == "AllUsers"
+  ${AndIf} $RealPrivileges != "Admin"
+  ${AndIf} $RealPrivileges != "Power"
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+
   SectionSetFlags ${SEC_DESK} 0     ; Desktop shortcut off by default
 FunctionEnd
 
