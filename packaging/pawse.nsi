@@ -46,7 +46,9 @@ BrandingText "${APP} ${VERSION}${VARIANT}"
 !define MULTIUSER_INSTALLMODE_COMMANDLINE
 !define MULTIUSER_USE_PROGRAMFILES64
 !define MULTIUSER_INSTALLMODE_INSTDIR "${APP}"
-!define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY "${APP}"
+; Previous-install detection must read the key -Core actually writes (and the
+; uninstaller deletes) - a bare "${APP}" here would probe a key nobody creates.
+!define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY "${UNINST_KEY}"
 !define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_VALUENAME "UninstallString"
 !include "MultiUser.nsh"
 
@@ -238,10 +240,10 @@ Section "Desktop shortcut" SEC_DESK
   CreateShortcut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXE}" "" "$INSTDIR\pawse.ico" 0
 SectionEnd
 
-Section "Start Pawse at login" SEC_AUTO
-  ; same HKCU Run value the app's own Settings toggle uses
-  WriteRegStr HKCU "${RUN_KEY}" "${APP}" '"$INSTDIR\${EXE}"'
-SectionEnd
+; No "start at login" section: under an elevated per-machine install it would write the
+; *admin's* HKCU Run key, not the target user's (the same reason LaunchApp shells through
+; Explorer). The app itself owns autostart - Settings → "Start Pawse at login" writes the
+; same Run value as the signed-in user (Core/Autostart.cs).
 
 ; placed after the sections so ${SEC_DESK} is defined
 Function .onInit
@@ -255,7 +257,6 @@ FunctionEnd
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC_SM}   "Add a Pawse shortcut to the Start Menu."
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DESK} "Add a Pawse shortcut to the Desktop."
-  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_AUTO} "Start Pawse automatically when you sign in."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; ---- uninstall ----
@@ -266,8 +267,32 @@ Section "Uninstall"
   Delete "$INSTDIR\${EXE}"
   Delete "$INSTDIR\pawse.ico"
   Delete "$INSTDIR\LICENSE.txt"
+  ; App-generated files (the app writes config + log next to the exe) - removed so
+  ; $INSTDIR can actually be deleted below. The %APPDATA%\Pawse fallback (used only
+  ; when $INSTDIR isn't writable, e.g. per-machine installs) is left in place.
+  Delete "$INSTDIR\pawse.json"
+  Delete "$INSTDIR\pawse.json.bad"
+  Delete "$INSTDIR\pawse.json.tmp"
+  Delete "$INSTDIR\pawse.log"
   Delete "$SMPROGRAMS\${APP}.lnk"
   Delete "$DESKTOP\${APP}.lnk"
+
+  ; Restore Win+L if Pawse still holds it (killed or uninstalled while locked -
+  ; otherwise the policy value would disable Win+L for this user forever).
+  ; Mirrors Core/WorkstationLock.cs: marker 0|1 = pre-Pawse value, 2 = was absent.
+  ; Known limitation: an elevated per-machine uninstall reads the *admin's* HKCU,
+  ; same as the RUN_KEY cleanup below; per-user installs are fully cleaned.
+  ClearErrors
+  ReadRegDWORD $0 HKCU "Software\Pawse" "PrevDisableLockWorkstation"
+  ${IfNot} ${Errors}
+    ${If} $0 == 2
+      DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Policies\System" "DisableLockWorkstation"
+    ${Else}
+      WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Policies\System" "DisableLockWorkstation" $0
+    ${EndIf}
+    DeleteRegValue HKCU "Software\Pawse" "PrevDisableLockWorkstation"
+  ${EndIf}
+  DeleteRegKey /ifempty HKCU "Software\Pawse"
 
   DeleteRegValue HKCU "${RUN_KEY}" "${APP}"
   ; Remove the Add/Remove Programs entry from whichever hive it was written to - SHCTX can
@@ -281,5 +306,4 @@ Section "Uninstall"
   RMDir  "$INSTDIR"
   IfFileExists "$INSTDIR\uninstall.exe" 0 +2
     Exec '"$SYSDIR\cmd.exe" /c ping 127.0.0.1 -n 3 >nul & del /f /q "$INSTDIR\uninstall.exe" & rmdir "$INSTDIR"'
-  ; user settings/log in %APPDATA%\Pawse are left in place on purpose
 SectionEnd
