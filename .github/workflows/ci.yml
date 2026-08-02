@@ -6,22 +6,45 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore src/Pawse/Pawse.csproj
+        run: dotnet restore Pawse.sln
 
       - name: Build (Release)
-        run: dotnet build src/Pawse/Pawse.csproj -c Release --no-restore
+        run: dotnet build Pawse.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --no-build
 
       - name: Format check
-        continue-on-error: true
-        run: dotnet format src/Pawse/Pawse.csproj --verify-no-changes --severity warn
+        run: dotnet format Pawse.sln --verify-no-changes --severity warn
+
+      # The exact self-contained single-file publish release.yml runs (minus the
+      # version), so a publish-only break is caught here instead of shipping as a
+      # broken release after merge.
+      - name: Publish smoke (self-contained single file)
+        shell: pwsh
+        run: >
+          dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -o publish-smoke
