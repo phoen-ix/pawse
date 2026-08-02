@@ -38,25 +38,37 @@ public partial class OverlayWindow : Window
     public void Configure(Config cfg)
     {
         _cfg = cfg;
-        Opacity = Math.Clamp(cfg.Overlay.Opacity, 0.2, 1.0);
+        Opacity = Math.Clamp(cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         HintText.Text = BuildHint(cfg);
-        HoldArea.Visibility = cfg.Unlock.MouseHold.Enabled ? Visibility.Visible : Visibility.Collapsed;
-        CountdownText.Visibility = cfg.Unlock.Timer.Enabled ? Visibility.Visible : Visibility.Collapsed;
+        // With mouse blocking on, the hook swallows clicks before WPF sees them -
+        // showing the hold button then would be advertising a control that cannot
+        // work (and teaching the user that Pawse is broken).
+        bool holdUsable = cfg.Unlock.MouseHold.Enabled && !cfg.General.BlockMouse;
+        HoldArea.Visibility = holdUsable ? Visibility.Visible : Visibility.Collapsed;
+        AutoUnlockText.Visibility = cfg.Unlock.Timer.Enabled ? Visibility.Visible : Visibility.Collapsed;
         if (cfg.Unlock.Timer.Enabled)
-            CountdownText.Text = $"Auto-unlocks after {cfg.Unlock.Timer.Seconds}s";
+            AutoUnlockText.Text = $"Auto-unlocks after {cfg.Unlock.Timer.Seconds}s";
     }
 
     private static string BuildHint(Config cfg)
     {
+        // Every method named here must actually work in the current config - a hint
+        // pointing at a dead unlock path is worse than none (the user trusts it and
+        // concludes Pawse is broken, or worse, feels locked out).
         var parts = new List<string>();
         if (cfg.Unlock.Chord.Enabled && cfg.Unlock.Chord.Keys.Count > 0)
             parts.Add($"press {Keys.ChordToText(cfg.Unlock.Chord.Keys)}");
-        if (cfg.Unlock.Passphrase.Enabled && cfg.Unlock.Passphrase.Text.Length > 0)
-            parts.Add($"type “{cfg.Unlock.Passphrase.Text}”");
-        if (cfg.Unlock.MouseHold.Enabled)
+        // Never print the actual phrase - the overlay is by definition on screen for
+        // anyone to read while the machine is locked. Only advertise it if every
+        // character can register through the hook (a-z, 0-9, space).
+        if (cfg.Unlock.Passphrase.Enabled && Keys.IsTypeablePassphrase(cfg.Unlock.Passphrase.Text))
+            parts.Add("type your passphrase");
+        if (cfg.Unlock.MouseHold.Enabled && !cfg.General.BlockMouse)
             parts.Add("hold the button below");
-        return parts.Count > 0
-            ? "To unlock: " + string.Join(", or ", parts) + "."
+        if (parts.Count > 0)
+            return "To unlock: " + string.Join(", or ", parts) + ".";
+        return cfg.Unlock.Timer.Enabled && cfg.Unlock.Timer.Seconds > 0
+            ? "Unlocks automatically."
             : "To unlock: use the tray icon.";
     }
 

@@ -52,6 +52,9 @@
                 <CheckBox x:Name="ChkBlockMouse" Content="Also block the mouse while locked" />
                 <TextBlock Style="{StaticResource Hint}"
                            Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
+                <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
+                <TextBlock Style="{StaticResource Hint}"
+                           Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />
 
                 <TextBlock Text="System keys (while locked)" Style="{StaticResource Header}" />
                 <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
@@ -85,6 +88,7 @@
                 <TextBlock Text="Unlock - passphrase" Style="{StaticResource Header}" />
                 <CheckBox x:Name="ChkPassphrase" Content="Unlock by typing a passphrase" />
                 <TextBox x:Name="TxtPassphrase" />
+                <TextBlock x:Name="LblPassphraseWarn" Style="{StaticResource Warn}" />
                 <CheckBox x:Name="ChkResetWrong" Content="A wrong key restarts the passphrase" Margin="22,2,0,2" />
 
                 <TextBlock Text="Unlock - mouse hold" Style="{StaticResource Header}" />
@@ -111,7 +115,7 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
                     <TextBlock Text="Opacity" VerticalAlignment="Center" Width="70" />
-                    <Slider x:Name="SldOpacity" Minimum="0.3" Maximum="1.0" Width="200"
+                    <Slider x:Name="SldOpacity" Maximum="1.0" Width="200"
                             TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="22,6,0,2">

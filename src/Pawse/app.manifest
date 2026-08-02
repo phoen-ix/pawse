@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!-- Win32 SxS identity only - not the product version (that lives in the csproj
+       <Version>, injected by CI at release time). -->
   <assemblyIdentity version="1.0.0.0" name="Pawse.app" />
 
   <!-- Run as the invoking user: a WH_KEYBOARD_LL hook does not need admin.

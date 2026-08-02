@@ -20,7 +20,8 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         _cfg = cfg;
-        VersionLabel.Text = "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
+        VersionLabel.Text = "v" + App.Version;
+        SldOpacity.Minimum = Config.OverlayCfg.MinOpacity;
         LoadMonitors();
         LoadFromConfig();
 
@@ -32,6 +33,9 @@ public partial class SettingsWindow : Window
         TxtLockHotkey.ChordChanged += (_, _) => UpdateWarnings();
         TxtChord.RecordBlocked += (_, _) => ShowBlocked(LblChordWarn);
         TxtLockHotkey.RecordBlocked += (_, _) => ShowBlocked(LblLockHotkeyWarn);
+        TxtPassphrase.TextChanged += (_, _) => UpdateWarnings();
+        ChkPassphrase.Checked += (_, _) => UpdateWarnings();
+        ChkPassphrase.Unchecked += (_, _) => UpdateWarnings();
         UpdateWarnings();
     }
 
@@ -54,6 +58,7 @@ public partial class SettingsWindow : Window
         ChkStartLocked.IsChecked = _cfg.General.StartLocked;
         ChkAutostart.IsChecked = Autostart.IsEnabled();
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
+        ChkTrayDoubleClick.IsChecked = _cfg.General.TrayDoubleClickUnlock;
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
         ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
@@ -80,7 +85,7 @@ public partial class SettingsWindow : Window
         ChkOverlay.IsChecked = _cfg.Overlay.Enabled;
         int count = Math.Max(1, CmbMonitor.Items.Count);
         CmbMonitor.SelectedIndex = Math.Clamp(_cfg.Overlay.Monitor, 0, count - 1);
-        SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, 0.3, 1.0);
+        SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         SldVertical.Value = Math.Clamp(_cfg.Overlay.VerticalPercent, 0, 100);
     }
 
@@ -89,6 +94,7 @@ public partial class SettingsWindow : Window
         _cfg.General.StartLocked = ChkStartLocked.IsChecked == true;
         _cfg.General.Autostart = ChkAutostart.IsChecked == true;
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
+        _cfg.General.TrayDoubleClickUnlock = ChkTrayDoubleClick.IsChecked == true;
 
         _cfg.SystemBlock.WinLock = ChkWinLock.IsChecked == true;
         _cfg.SystemBlock.LaunchMediaKeys = ChkLaunchMedia.IsChecked == true;
@@ -118,12 +124,8 @@ public partial class SettingsWindow : Window
         // method for the whole config - a parseable chord, a fully-typeable passphrase,
         // mouse-hold only when the overlay is shown AND the mouse isn't blocked, or a timer
         // with a positive delay (see Config.HasUsableUnlock).
-        if (!_cfg.HasUsableUnlock())
+        if (_cfg.EnsureUsableUnlockFallback(out bool reseeded))
         {
-            _cfg.Unlock.Chord.Enabled = true;
-            bool reseeded = Keys.ParseChord(_cfg.Unlock.Chord.Keys).Count == 0;
-            if (reseeded)
-                _cfg.Unlock.Chord.Keys = new List<string> { "Ctrl", "L" };
             MessageBox.Show(this,
                 "At least one working unlock method is required, so the keyboard chord was enabled"
                     + (reseeded ? " and set to Ctrl+L." : "."),
@@ -152,6 +154,27 @@ public partial class SettingsWindow : Window
     {
         SetWarn(LblChordWarn, TxtChord.IsModifiersOnly);
         SetWarn(LblLockHotkeyWarn, TxtLockHotkey.IsModifiersOnly);
+
+        // Only a-z, 0-9 and space can register through the hook while locked, so any
+        // other character makes the passphrase impossible to type. Warn while editing -
+        // silently saving a passphrase that can never fire teaches the user it works.
+        string phrase = (TxtPassphrase.Text ?? "").Trim();
+        bool on = ChkPassphrase.IsChecked == true;
+        if (on && phrase.Length == 0)
+        {
+            LblPassphraseWarn.Text = "The passphrase is empty - this unlock method won't do anything.";
+            LblPassphraseWarn.Visibility = Visibility.Visible;
+        }
+        else if (on && !Keys.IsTypeablePassphrase(phrase))
+        {
+            LblPassphraseWarn.Text = "Only letters, digits and spaces can be typed while locked - " +
+                                     "this passphrase could never unlock. Remove the other characters.";
+            LblPassphraseWarn.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            LblPassphraseWarn.Visibility = Visibility.Collapsed;
+        }
     }
 
     private static void SetWarn(System.Windows.Controls.TextBlock label, bool modifiersOnly)

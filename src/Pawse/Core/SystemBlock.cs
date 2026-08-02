@@ -54,7 +54,14 @@ public sealed class SystemBlock
                     "Blocking Win+L was denied by Windows on this PC - run Pawse as administrator " +
                     "(tray menu → Restart as administrator).");
         }
-        else WorkstationLock.Restore();
+        else if (!WorkstationLock.Restore() && notify)
+        {
+            // A silent failure here leaves the USER unable to lock their own PC -
+            // that must never be just a log line.
+            NotifyOnce("winl-restore",
+                "Windows denied re-enabling Win+L (it was blocked by an earlier Pawse run). " +
+                "Restart Pawse as administrator (tray menu) to restore it - until then Win+L stays off.");
+        }
 
         // Keyboard Filter - WMI, possibly slow, off-thread.
         var enable = locked ? EnabledFilterIds() : Array.Empty<string>();
@@ -75,6 +82,9 @@ public sealed class SystemBlock
             {
                 // A newer Apply has superseded us - don't fight it.
                 if (gen != System.Threading.Interlocked.Read(ref _generation)) return;
+                // Pure revert with no marker = Pawse never enabled anything: don't
+                // touch rules another tool may have set (and skip the WMI probe).
+                if (enableIds.Length == 0 && !HasWekfMarker()) return;
                 if (!_kf.IsAvailable())
                 {
                     if (notify && enableIds.Length > 0)
@@ -86,14 +96,62 @@ public sealed class SystemBlock
                     return;
                 }
                 // Disable-then-enable, in order, so the final state is exact even if a
-                // previous toggle is still settling.
+                // previous toggle is still settling. The marker is written BEFORE
+                // enabling and cleared only after a full revert: WEKF rules are
+                // persistent machine-wide state, so a crash-while-locked leaves them
+                // on, and only the marker lets the next start know Pawse owes a
+                // revert (a non-elevated restart can't even read WEKF to find out).
+                if (enableIds.Length > 0) SetWekfMarker(true);
                 _kf.Set(disableIds, enabled: false);
                 _kf.Set(enableIds, enabled: true);
+                if (enableIds.Length == 0) SetWekfMarker(false);
             }
         }
 
         if (background) System.Threading.Tasks.Task.Run(Work);
         else Work();
+    }
+
+    // Same HKCU key WorkstationLock uses for its ownership marker.
+    private const string OwnerKey = @"Software\Pawse";
+    private const string WekfMarkerName = "WekfLeftOn";
+
+    private static void SetWekfMarker(bool on)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(OwnerKey);
+            if (on) key?.SetValue(WekfMarkerName, 1, Microsoft.Win32.RegistryValueKind.DWord);
+            else key?.DeleteValue(WekfMarkerName, throwOnMissingValue: false);
+        }
+        catch (Exception ex) { Log.Warn("wekf marker: " + ex.Message); }
+    }
+
+    private static bool HasWekfMarker()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(OwnerKey);
+            return key?.GetValue(WekfMarkerName) is int i && i == 1;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Call once at startup, after the sweep. An elevated run that died while locked
+    /// leaves the Keyboard Filter rules enabled machine-wide; a non-elevated restart's
+    /// sweep silently can't touch them (<see cref="KeyboardFilterGuard.IsAvailable"/> is
+    /// false without admin), so media/volume keys would stay dead with nothing pointing
+    /// at Pawse. If the marker says we owe a revert and we can't perform it, say so.
+    /// (When elevated, the sweep itself reverts and clears the marker.)
+    /// </summary>
+    public void WarnIfUnsweepableLeftovers()
+    {
+        if (!HasWekfMarker() || Elevation.IsElevated()) return;
+        NotifyOnce("kf-leftover",
+            "A previous Pawse run (as administrator) left browser/media keys blocked and " +
+            "this run can't undo that without admin. Restart Pawse as administrator " +
+            "(tray menu) to restore them.");
     }
 
     private void NotifyOnce(string key, string message)

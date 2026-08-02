@@ -1,5 +1,9 @@
 using System.Runtime.InteropServices;
 
+// shcore.dll is not a KnownDLL: restrict every DllImport's probing to System32 so a
+// DLL planted next to a (user-writable) copy of the exe can never be picked up.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace Pawse.Core;
 
 /// <summary>Win32 interop for the global hooks, input injection and overlay placement.</summary>
@@ -47,6 +51,42 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetWindowsHookExW(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    // ---- Hook-thread message pump (see HookThread) ---------------------------
+    public const int WM_QUIT = 0x0012;
+    public const int WM_TIMER = 0x0113;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSG
+    {
+        public IntPtr hwnd;
+        public uint message;
+        public nuint wParam;
+        public nint lParam;
+        public uint time;
+        public POINT pt;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int GetMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr DispatchMessageW(ref MSG lpMsg);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostThreadMessageW(uint idThread, uint msg, nuint wParam, nint lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern nuint SetTimer(IntPtr hWnd, nuint nIDEvent, uint uElapse, IntPtr lpTimerFunc);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    /// <summary>High bit set = key physically down right now. Used to heal
+    /// <c>_pressed</c> after key-ups lost to a secure desktop (Win+L, UAC).</summary>
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

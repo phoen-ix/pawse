@@ -36,7 +36,8 @@
                 </Border>
             </Grid>
 
-            <TextBlock x:Name="CountdownText"
+            <!-- Static "Auto-unlocks after Ns" note (it does not tick down). -->
+            <TextBlock x:Name="AutoUnlockText"
                        Foreground="#90FFFFFF" FontSize="12" TextAlignment="Center"
                        Margin="0,12,0,0" />
         </StackPanel>

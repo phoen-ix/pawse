@@ -16,6 +16,13 @@ public static class Input
         (ushort)Keys.VK_LWIN,    (ushort)Keys.VK_RWIN,
     };
 
+    private static readonly HashSet<int> ModifierVks = new();
+    static Input() { foreach (var m in Modifiers) ModifierVks.Add(m); }
+
+    /// <summary>True for the exact (side-specific) VKs <see cref="ClearModifiers"/>
+    /// injects - the only events the hook's PAWSE_MAGIC pass-through may honor.</summary>
+    public static bool IsClearedModifier(int vk) => ModifierVks.Contains(vk);
+
     /// <summary>Inject key-up for all modifiers, tagged so our own hook ignores them.</summary>
     public static void ClearModifiers()
     {

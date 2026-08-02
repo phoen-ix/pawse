@@ -11,18 +11,40 @@ public partial class App : Application
     private Mutex? _singleton;
     private LockController? _controller;
     private SystemBlock? _systemBlock;
-    private KeyboardHook? _kbHook;
-    private MouseHook? _mouseHook;
+    private HookThread? _hooks;
     private TrayIcon? _tray;
     private OverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _autoUnlock;
     private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
 
-    private static string Version =>
+    internal static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
     private void OnStartup(object sender, StartupEventArgs e)
+    {
+        // OnStartup runs on the dispatcher, so without this guard a throw below would be
+        // swallowed by the DispatcherUnhandledException handler and - because ShutdownMode
+        // is OnExplicitShutdown - leave a headless process with no tray icon, no hook and
+        // no way to quit short of Task Manager. Startup failures must exit, not linger.
+        try
+        {
+            StartupCore(e);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("fatal startup failure - exiting", ex);
+            try
+            {
+                MessageBox.Show("Pawse could not start and will close.\n\n" + ex.Message,
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { /* ignore */ }
+            Shutdown(1);
+        }
+    }
+
+    private void StartupCore(StartupEventArgs e)
     {
         _singleton = new Mutex(true, @"Local\Pawse-single-instance-2b8f9c", out bool created);
         if (!created)
@@ -57,12 +79,12 @@ public partial class App : Application
 
         _controller = new LockController(config);
 
-        _tray = new TrayIcon();
+        _tray = new TrayIcon { DoubleClickUnlock = config.General.TrayDoubleClickUnlock };
         _tray.ToggleRequested += () => { if (_canLock) _controller!.Toggle(); };
         _tray.SettingsRequested += OpenSettings;
         _tray.OpenConfigRequested += OpenConfigFile;
         _tray.RestartAsAdminRequested += RestartAsAdmin;
-        _tray.QuitRequested += Shutdown;
+        _tray.QuitRequested += QuitWithConfirm;
 
         if (unlockRepaired)
             _tray.Notify("Pawse",
@@ -71,21 +93,28 @@ public partial class App : Application
 
         // OS-level Win+L guard (opt-in). Sweep first so a value left behind by a
         // crash-while-locked is reverted before any StartLocked engage re-applies it.
+        // The sweep only reverts Pawse's own leftovers (WorkstationLock's ownership
+        // marker) - an admin-set DisableLockWorkstation is left alone.
         _systemBlock = new SystemBlock(config, _tray.Notify);
-        _systemBlock.Apply(locked: false, background: true);
+        _systemBlock.Apply(locked: false, background: true, notify: true);
+        _systemBlock.WarnIfUnsweepableLeftovers();
+
+        // A moved/renamed portable folder leaves the Run entry pointing at nothing;
+        // re-point it at this exe (never resurrects an entry the user removed).
+        Autostart.Repair();
 
         if (config.Overlay.Enabled)
             CreateOverlay(config);
 
         _controller.LockedChanged += OnLockedChanged;
 
-        _kbHook = new KeyboardHook(_controller);
-        _canLock = _kbHook.Install();
+        // Both hooks live on a dedicated pumping thread: callbacks stay serviced
+        // (and keys stay swallowed) no matter how busy this UI thread is, and the
+        // thread re-registers the hooks periodically in case the OS removed them.
+        _hooks = new HookThread(_controller);
+        _canLock = _hooks.Start();
         if (_canLock)
         {
-            _mouseHook = new MouseHook(_controller);
-            _mouseHook.Install();
-
             if (config.General.StartLocked)
                 _controller.Engage("start");
         }
@@ -124,11 +153,8 @@ public partial class App : Application
     /// undone. Returns true if it repaired anything.</summary>
     private static bool EnsureUsableUnlock(Config config)
     {
-        if (config.HasUsableUnlock()) return false;
+        if (!config.EnsureUsableUnlockFallback(out _)) return false;
         Log.Warn("config has no usable unlock method - enabling the default chord to prevent lockout");
-        config.Unlock.Chord.Enabled = true;
-        if (Keys.ParseChord(config.Unlock.Chord.Keys).Count == 0)
-            config.Unlock.Chord.Keys = new() { "Ctrl", "L" };
         config.Save();
         return true;
     }
@@ -142,8 +168,9 @@ public partial class App : Application
 
     private void OnLockedChanged(bool locked)
     {
-        // We're on the UI thread already (hook callback), but defer the actual UI
-        // work so the hook callback returns immediately - a slow callback is killed.
+        // Raised on whichever thread flipped the state - usually the hook thread.
+        // BeginInvoke both marshals to the UI thread and returns immediately, so
+        // the hook callback never waits on UI work.
         Dispatcher.BeginInvoke((Action)(() =>
         {
             try
@@ -194,6 +221,9 @@ public partial class App : Application
         {
             if (_settingsWindow != null)
             {
+                // Activate() alone does not surface a minimized window.
+                if (_settingsWindow.WindowState == WindowState.Minimized)
+                    _settingsWindow.WindowState = WindowState.Normal;
                 _settingsWindow.Activate();
                 return;
             }
@@ -203,6 +233,13 @@ public partial class App : Application
             {
                 _settingsWindow = null;
                 _controller!.SuppressLockHotkey = false;
+            };
+            // Suppression exists to protect chord capture; a minimized Settings window
+            // captures nothing, so give the lock hotkey back while it's minimized.
+            _settingsWindow.StateChanged += (_, _) =>
+            {
+                if (_settingsWindow != null)
+                    _controller!.SuppressLockHotkey = _settingsWindow.WindowState != WindowState.Minimized;
             };
             // Suppress the lock hotkey while Settings is open so re-binding it (which
             // means pressing the current one) can't lock the machine mid-capture.
@@ -224,6 +261,17 @@ public partial class App : Application
         var config = _controller!.Config;
         config.Save();
         _controller.RebuildMatchers();
+        // Re-arm the auto-unlock timer against the NEW settings if we're locked right
+        // now: without this, a timer disabled mid-lock still fires at its old deadline
+        // (a surprise unlock), and a timer enabled mid-lock never arms at all - which
+        // with mouse-block + timer-only unlock is a genuine lockout. The countdown
+        // restarts from the full new duration; the overlay text says as much.
+        if (_controller.IsLocked)
+        {
+            StopAutoUnlock();
+            StartAutoUnlock();
+        }
+        _tray!.DoubleClickUnlock = config.General.TrayDoubleClickUnlock;
         Autostart.SetEnabled(config.General.Autostart);
         // If Block Win+L was just enabled but this PC needs admin to apply it, offer to
         // relaunch elevated (same prompt as startup). On Yes we hand off and stop here.
@@ -271,6 +319,21 @@ public partial class App : Application
         return false;   // declined / UAC cancelled → keep running un-elevated
     }
 
+    private void QuitWithConfirm()
+    {
+        // Quitting removes the lock. While locked that deserves one deliberate click -
+        // the overlay's hold-button friction shouldn't be undone by a stray hit on the
+        // tray menu. (Reaching this menu needs a live mouse, so the dialog is usable.)
+        if (_controller?.IsLocked == true)
+        {
+            var choice = MessageBox.Show(
+                "Pawse is locked. Quit Pawse and release the keyboard?",
+                "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (choice != MessageBoxResult.Yes) return;
+        }
+        Shutdown();
+    }
+
     private void RestartAsAdmin()
     {
         // Launch an elevated copy; if the user approves UAC, hand off by shutting
@@ -297,10 +360,11 @@ public partial class App : Application
         // Disengage's UI-thread dispatch may not run before we exit, so revert the
         // OS-level guards synchronously here (delete the policy value, disable WEKF).
         try { _systemBlock?.Apply(locked: false, background: false); } catch { /* ignore */ }
-        _kbHook?.Dispose();
-        _mouseHook?.Dispose();
+        try { _hooks?.Stop(); } catch { /* ignore */ }
         try { if (_overlay != null) { _overlay.AllowClose = true; _overlay.Close(); } } catch { /* ignore */ }
         _tray?.Dispose();
         _singleton?.Dispose();
+        Log.Info("shutdown complete");
+        Log.Shutdown();
     }
 }

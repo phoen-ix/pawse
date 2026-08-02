@@ -64,8 +64,6 @@ public sealed class ChordBox : TextBox
     public bool IsModifiersOnly =>
         _chord.Count > 0 && _chord.All(static n => n is "Ctrl" or "Shift" or "Alt" or "Win");
 
-    public bool IsCapturing => _capturing;
-
     private void SetChord(IEnumerable<string> value)
     {
         // Canonicalize aliases ("Control"->"Ctrl", "Super"->"Win") and drop unknowns so the

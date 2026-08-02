@@ -11,7 +11,9 @@
     <RootNamespace>Pawse</RootNamespace>
     <AssemblyName>Pawse</AssemblyName>
     <Product>Pawse</Product>
-    <Version>0.1.7</Version>
+    <!-- Placeholder only: CI injects the real version via -p:Version (release.yml).
+         Local builds show an obviously-dev v0.0.0 instead of a stale-looking number. -->
+    <Version>0.0.0-dev</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Embed the same paw icon the installer uses, so Pawse.exe (and its WPF
          windows / taskbar) show it instead of a generic exe icon. -->
@@ -21,6 +23,10 @@
          boxes for type-checking. The runnable exe is still built on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The code parses/formats with invariant culture throughout; dropping the ICU
+         bundle takes a chunk out of the self-contained single-file build. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
 
     <!-- We set PerMonitorV2 DPI awareness in app.manifest (WPF needs process-level
          awareness for the overlay's physical-pixel placement). The WinForms analyzer
@@ -33,6 +39,10 @@
     <!-- WMI, used only for the Keyboard Filter block (browser/calculator/media keys) in
          Core/KeyboardFilterGuard.cs. Windows-only at runtime; restores fine on Linux. -->
     <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pawse.Tests" />
   </ItemGroup>
 
 </Project>

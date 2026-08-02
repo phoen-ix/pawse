@@ -13,15 +13,25 @@ namespace Pawse.Core;
 /// lock and delete it on unlock, so the behaviour is fully reverted.</para>
 ///
 /// <para>Lives in HKCU ⇒ no admin, no reboot, effective on the next lock attempt.
-/// While the feature is on Pawse owns this value - <see cref="Restore"/> deletes
-/// it. If Pawse is killed while locked the value persists, so App sweeps it on
-/// startup (see <see cref="SystemBlock"/>).</para>
+/// Ownership is tracked via a marker under <c>HKCU\Software\Pawse</c> that records
+/// the pre-Pawse state and is written <em>before</em> the policy value is touched:
+/// <see cref="Restore"/> only ever reverts what Pawse itself set, so a value an
+/// admin or the user put there deliberately is never deleted. The marker survives
+/// a crash-while-locked, which is what lets the unconditional startup sweep (see
+/// <see cref="SystemBlock"/>) repair exactly our own leftovers and nothing else.
+/// The uninstaller reads the same marker (see packaging/pawse.nsi).</para>
 /// </summary>
 public static class WorkstationLock
 {
     private const string PolicyKey =
         @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string ValueName = "DisableLockWorkstation";
+
+    // Pre-Pawse state of the policy value: 0|1 = it existed with that value, 2 = it
+    // was absent. Present only while Pawse holds the policy value.
+    private const string OwnerKey = @"Software\Pawse";
+    private const string MarkerName = "PrevDisableLockWorkstation";
+    private const int MarkerAbsent = 2;
 
     /// <summary>
     /// Disable Win+L / the Lock command. Returns false if the write was denied -
@@ -32,6 +42,16 @@ public static class WorkstationLock
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(PolicyKey);
+            if (key?.GetValue(ValueName) is int cur && cur == 1)
+                return true; // already blocked (admin policy, or our own re-apply) - nothing to record or write
+
+            // Record the prior state FIRST: a crash after this point leaves the marker
+            // in place, so Restore() (startup sweep / uninstaller) can still revert.
+            using (var own = Registry.CurrentUser.CreateSubKey(OwnerKey))
+                own?.SetValue(MarkerName,
+                    key?.GetValue(ValueName) is int prev ? prev : MarkerAbsent,
+                    RegistryValueKind.DWord);
+
             key?.SetValue(ValueName, 1, RegistryValueKind.DWord);
             Log.Info("win+l: DisableLockWorkstation=1 (lock suppressed)");
             return true;
@@ -67,29 +87,37 @@ public static class WorkstationLock
         catch (Exception ex) { Log.Warn("win+l elevation probe: " + ex.Message); return false; }
     }
 
-    /// <summary>Re-enable Win+L / the Lock command (deletes the policy value).</summary>
-    public static void Restore()
+    /// <summary>
+    /// Put the policy value back to its pre-Pawse state - but only when the marker says
+    /// Pawse set it. Without a marker this is a no-op, so the unconditional callers (the
+    /// startup sweep, every unlock, exit) can never delete a value they don't own.
+    /// Returns false when Pawse owes a revert but the write was denied (ACL-locked
+    /// Policies key, no longer elevated) - the user's own Win+L is still disabled then,
+    /// and the caller must say so out loud rather than bury it in the log.
+    /// </summary>
+    public static bool Restore()
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(PolicyKey, writable: true);
-            if (key?.GetValue(ValueName) != null)
-            {
-                key.DeleteValue(ValueName, throwOnMissingValue: false);
-                Log.Info("win+l: DisableLockWorkstation removed (lock restored)");
-            }
-        }
-        catch (Exception ex) { Log.Error("win+l restore", ex); }
-    }
+            int? prev = null;
+            using (var own = Registry.CurrentUser.OpenSubKey(OwnerKey))
+                if (own?.GetValue(MarkerName) is int m) prev = m;
+            if (prev == null) return true; // not ours - never touch a value we didn't set
 
-    /// <summary>True when the policy value is currently set to 1.</summary>
-    public static bool IsSuppressed()
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(PolicyKey);
-            return key?.GetValue(ValueName) is int i && i == 1;
+            using (var key = Registry.CurrentUser.OpenSubKey(PolicyKey, writable: true))
+            {
+                if (prev == MarkerAbsent) key?.DeleteValue(ValueName, throwOnMissingValue: false);
+                else key?.SetValue(ValueName, prev.Value, RegistryValueKind.DWord);
+            }
+            using (var own = Registry.CurrentUser.OpenSubKey(OwnerKey, writable: true))
+                own?.DeleteValue(MarkerName, throwOnMissingValue: false);
+            Log.Info("win+l: restored pre-Pawse DisableLockWorkstation state (lock restored)");
+            return true;
         }
-        catch (Exception ex) { Log.Error("win+l read", ex); return false; }
+        catch (Exception ex)
+        {
+            Log.Error("win+l restore", ex);
+            return false;
+        }
     }
 }

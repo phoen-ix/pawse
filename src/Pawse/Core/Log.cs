@@ -20,8 +20,7 @@ public static class Log
     private static readonly BlockingCollection<string> Queue = new(new ConcurrentQueue<string>());
     private static Thread? _writer;
     private static string? _path;
-
-    public static string? FilePath => _path;
+    private static string? _baseDir;
 
     public static void Init(string version)
     {
@@ -62,25 +61,57 @@ public static class Log
 
     /// <summary>
     /// A path for <paramref name="filename"/> next to the exe, or under
-    /// %APPDATA%\Pawse if the exe directory can't be written to.
+    /// %APPDATA%\Pawse if the exe directory can't be written to. The writability
+    /// probe runs once per process - Config calls this on every save/load, and the
+    /// answer can't meaningfully change mid-run.
     /// </summary>
-    public static string ResolvePath(string filename)
+    public static string ResolvePath(string filename) =>
+        Path.Combine(_baseDir ??= ResolveBaseDir(), filename);
+
+    private static string ResolveBaseDir()
     {
+        // An existing pawse.json decides first: the writability probe depends on the
+        // process token, so an elevated relaunch from e.g. Program Files would
+        // otherwise resolve a DIFFERENT directory than the run that launched it -
+        // and silently start from defaults, dropping the very settings (Win+L block)
+        // that motivated elevating. Wherever the config already lives, that's home.
         var exeDir = ExeDir();
+        var appDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Pawse");
+        try
+        {
+            if (File.Exists(Path.Combine(exeDir, "pawse.json"))) return exeDir;
+            if (File.Exists(Path.Combine(appDataDir, "pawse.json"))) return appDataDir;
+        }
+        catch { /* fall through to the probe */ }
+
         try
         {
             var probe = Path.Combine(exeDir, ".pawse-write-test");
             File.WriteAllText(probe, "");
             File.Delete(probe);
-            return Path.Combine(exeDir, filename);
+            return exeDir;
         }
         catch
         {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dir = Path.Combine(appData, "Pawse");
-            try { Directory.CreateDirectory(dir); } catch { /* ignore */ }
-            return Path.Combine(dir, filename);
+            try { Directory.CreateDirectory(appDataDir); } catch { /* ignore */ }
+            return appDataDir;
         }
+    }
+
+    /// <summary>
+    /// Drain the queue before the process ends. The writer is a background thread, so
+    /// without this the last lines - shutdown, exactly the ones a support log needs -
+    /// are killed mid-queue. Bounded by a timeout: exiting matters more than logging.
+    /// </summary>
+    public static void Shutdown()
+    {
+        try
+        {
+            Queue.CompleteAdding(); // Write() already ignores add-after-complete
+            _writer?.Join(TimeSpan.FromSeconds(2));
+        }
+        catch { /* logging must never throw */ }
     }
 
     public static void Info(string msg) => Write("INFO", msg);

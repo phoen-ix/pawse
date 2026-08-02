@@ -4,8 +4,10 @@ namespace Pawse.Core;
 
 /// <summary>
 /// Global low-level keyboard hook. MUST be installed from a thread that pumps
-/// messages (we install it on the WPF UI thread, whose dispatcher is the pump),
-/// so the callback runs on the UI thread and may touch the tray/overlay directly.
+/// messages - the dedicated <see cref="HookThread"/>, so callbacks are serviced
+/// even while the UI thread is busy (a delayed callback passes the key through
+/// unswallowed and eventually gets the hook removed by the OS). The callback
+/// therefore runs OFF the UI thread and must not touch tray/overlay directly.
 /// If the process dies the OS removes the hook automatically → fail-open.
 /// </summary>
 public sealed class KeyboardHook : IDisposable
@@ -20,17 +22,26 @@ public sealed class KeyboardHook : IDisposable
         _proc = Proc;
     }
 
-    public bool Install()
+    public bool Install(bool quiet = false)
     {
         IntPtr hMod = NativeMethods.GetModuleHandleW(null);
         _hook = NativeMethods.SetWindowsHookExW(NativeMethods.WH_KEYBOARD_LL, _proc, hMod, 0);
         if (_hook == IntPtr.Zero)
         {
-            Log.Error($"keyboard hook install FAILED (err={Marshal.GetLastWin32Error()})");
+            if (!quiet) Log.Error($"keyboard hook install FAILED (err={Marshal.GetLastWin32Error()})");
             return false;
         }
-        Log.Info("keyboard hook installed");
+        if (!quiet) Log.Info("keyboard hook installed");
         return true;
+    }
+
+    /// <summary>Unhook + hook again, from the owning thread. The OS removes LL hooks
+    /// it deems slow without telling anyone; this makes removal self-healing.</summary>
+    public bool Reinstall()
+    {
+        if (_hook != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(_hook);
+        _hook = IntPtr.Zero;
+        return Install(quiet: true);
     }
 
     private IntPtr Proc(int nCode, IntPtr wParam, IntPtr lParam)

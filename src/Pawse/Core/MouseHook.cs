@@ -6,6 +6,9 @@ namespace Pawse.Core;
 /// Optional global low-level mouse hook. Off by default. When enabled and locked
 /// it swallows all mouse input. Note: with mouse-blocking ON, the overlay's
 /// hold-to-unlock button cannot receive clicks, so use a keyboard unlock method.
+/// Blocks only the legacy mouse stream: native touch/pen input reaches
+/// pointer-aware apps via WM_POINTER, which no LL mouse hook sees - a documented
+/// limitation (README, "What it can and can't block").
 /// </summary>
 public sealed class MouseHook : IDisposable
 {
@@ -19,34 +22,34 @@ public sealed class MouseHook : IDisposable
         _proc = Proc;
     }
 
-    public bool Install()
+    public bool Install(bool quiet = false)
     {
         IntPtr hMod = NativeMethods.GetModuleHandleW(null);
         _hook = NativeMethods.SetWindowsHookExW(NativeMethods.WH_MOUSE_LL, _proc, hMod, 0);
         if (_hook == IntPtr.Zero)
         {
-            Log.Error($"mouse hook install FAILED (err={Marshal.GetLastWin32Error()})");
+            if (!quiet) Log.Error($"mouse hook install FAILED (err={Marshal.GetLastWin32Error()})");
             return false;
         }
-        Log.Info("mouse hook installed");
+        if (!quiet) Log.Info("mouse hook installed");
         return true;
+    }
+
+    /// <summary>See <see cref="KeyboardHook.Reinstall"/>.</summary>
+    public bool Reinstall()
+    {
+        if (_hook != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(_hook);
+        _hook = IntPtr.Zero;
+        return Install(quiet: true);
     }
 
     private IntPtr Proc(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        // No PAWSE_MAGIC exception here: Pawse never injects mouse input, so honoring
+        // the (public, constant) tag would only hand any local process a click-through
+        // hole in the lock. While locked with BlockMouse, everything is swallowed.
         if (nCode >= 0 && _controller.IsLocked && _controller.Config.General.BlockMouse)
-        {
-            try
-            {
-                var s = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
-                if (s.dwExtraInfo != NativeMethods.PAWSE_MAGIC)
-                    return 1;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("mouse hook proc", ex);
-            }
-        }
+            return 1;
         return NativeMethods.CallNextHookEx(_hook, nCode, wParam, lParam);
     }
 
