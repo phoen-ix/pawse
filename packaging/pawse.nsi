@@ -22,6 +22,11 @@ Unicode true
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/8.0"
+; Both names are hard-coded in the app too - change them here and in
+; src/Pawse/App.xaml.cs (mutex) / src/Pawse/Core/QuitSignal.cs (event) together.
+!define MUTEX_NAME "Local\Pawse-single-instance-2b8f9c"
+!define QUIT_EVENT "Local\Pawse-quit-2b8f9c"
+!define ERROR_ACCESS_DENIED 5
 
 !ifdef MINIMAL_ONLY
   !define VARIANT " (Minimal)"
@@ -58,6 +63,9 @@ Var RbFull
 Var RbMin
 !endif
 
+Var PawseRunning     ; "1" | "0" - set by ${UN}PawseIsRunning, shared by both halves
+Var RealPrivileges   ; account type as Windows reports it, before we fib to MultiUser
+
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
 !define MUI_UNICON "pawse.ico"
@@ -69,6 +77,9 @@ Var RbMin
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\LICENSE"
+; Elevate the moment "anyone who uses this computer" is actually chosen - see
+; ElevateForAllUsers. The define is consumed by the page macro below.
+!define MULTIUSER_PAGE_CUSTOMFUNCTION_LEAVE ElevateForAllUsers
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !ifndef MINIMAL_ONLY
 Page custom BuildPageCreate BuildPageLeave
@@ -115,6 +126,17 @@ FunctionEnd
 
 Function un.onInit
   !insertmacro MULTIUSER_UNINIT
+  ; A machine-wide Pawse lives under Program Files with its ARP entry in HKLM - neither is
+  ; removable without admin. "highest" hands a standard user their own token and no prompt,
+  ; so say what's needed up front instead of failing one delete at a time and leaving a
+  ; half-removed install behind. (Now reachable by non-admins too, since they can choose a
+  ; machine-wide install - see ElevateForAllUsers.)
+  ${If} $MultiUser.InstallMode == "AllUsers"
+  ${AndIf} $MultiUser.Privileges != "Admin"
+  ${AndIf} $MultiUser.Privileges != "Power"
+    MessageBox MB_OK|MB_ICONSTOP|MB_TOPMOST|MB_SETFOREGROUND "Pawse was installed for everyone on this computer, so removing it needs administrator rights.$\n$\nRight-click uninstall.exe in the Pawse folder and choose 'Run as administrator'." /SD IDOK
+    Quit
+  ${EndIf}
 FunctionEnd
 
 Function LaunchApp
@@ -184,16 +206,214 @@ Function FirstLine
 FunctionEnd
 
 Function DotnetManual
-  MessageBox MB_YESNO|MB_ICONEXCLAMATION "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), which isn't installed and couldn't be installed automatically.$\n$\nOpen the download page now?" IDNO +2
+  ; /SD IDNO: NSIS does NOT suppress message boxes in silent mode, so without a silent
+  ; default a /S install on a machine with no winget would block here forever on a dialog
+  ; nobody can see.
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), which isn't installed and couldn't be installed automatically.$\n$\nOpen the download page now?" /SD IDNO IDNO +2
   ExecShell "open" "${DOTNET_URL}"
 FunctionEnd
+
+; ---- running instance: detect, ask, close cleanly ----
+; Pawse is a tray app with no window, so nothing here can send it a WM_CLOSE: plain
+; taskkill does nothing, and taskkill /F skips App.OnExit - the only code that reverts the
+; Win+L policy value and the Keyboard Filter rules. So we ask the app to quit itself over a
+; named event (src/Pawse/Core/QuitSignal.cs) and force it only if the user says to.
+;
+; Defined as a macro and instantiated twice because NSIS has no other way to share code
+; between the installer and the uninstaller (the latter needs "un." on every function).
+!macro PAWSE_CLOSE_FUNCS UN ACTION
+
+; Sets $PawseRunning to "1" or "0".
+Function ${UN}PawseIsRunning
+  Push $0
+  Push $1
+  StrCpy $PawseRunning "0"
+
+  ; 1) The app's single-instance mutex. Exact, and it still finds an instance whose exe
+  ;    was renamed (a portable copy) - no image-name check can do that. Local\ is
+  ;    per-session, which is the session whose files we're about to touch.
+  ;    "Access denied" means the mutex is there but owned by a token we can't open
+  ;    (Pawse running elevated while we aren't) - that is still a running Pawse.
+  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "${MUTEX_NAME}") p .r0 ?e'
+  Pop $1
+  ${If} $0 != 0
+    System::Call 'kernel32::CloseHandle(p r0)'
+    StrCpy $PawseRunning "1"
+    Goto pir_done
+  ${ElseIf} $1 = ${ERROR_ACCESS_DENIED}
+    StrCpy $PawseRunning "1"
+    Goto pir_done
+  ${EndIf}
+
+  ; 2) Image names. Catches an instance in another user's session (visible only when we're
+  ;    elevated) and any case where the mutex probe above was refused.
+  Push "Pawse.exe"
+  Call ${UN}PawseImageRunning
+  Pop $1
+  ${If} $1 == "1"
+    StrCpy $PawseRunning "1"
+    Goto pir_done
+  ${EndIf}
+  Push "Pawse-min.exe"
+  Call ${UN}PawseImageRunning
+  Pop $1
+  ${If} $1 == "1"
+    StrCpy $PawseRunning "1"
+  ${EndIf}
+
+ pir_done:
+  Pop $1
+  Pop $0
+FunctionEnd
+
+; Pop an image name, push "1" if tasklist reports a process with it.
+Function ${UN}PawseImageRunning
+  Exch $0     ; image name
+  Push $1
+  Push $2
+  ; /TIMEOUT so a wedged tasklist (it can crawl on a loaded box) can't stall the install.
+  nsExec::ExecToStack /TIMEOUT=10000 '"$SYSDIR\tasklist.exe" /NH /FO CSV /FI "IMAGENAME eq $0"'
+  Pop $1      ; exit code - 0 even when nothing matched
+  Pop $2      ; output
+  ; A match is a CSV row: "Pawse.exe","1234",... The no-match line is
+  ; "INFO: No tasks are running ...", which is translated on localised Windows but is
+  ; never quoted - so test the first character instead of matching English text.
+  StrCpy $2 $2 1
+  ${If} $1 == 0
+  ${AndIf} $2 == '"'
+    StrCpy $0 "1"
+  ${Else}
+    StrCpy $0 "0"
+  ${EndIf}
+  Pop $2
+  Pop $1
+  Exch $0
+FunctionEnd
+
+; Ask Pawse to quit, then wait up to ~10s for it to actually go. Leaves $PawseRunning set.
+Function ${UN}PawseRequestQuit
+  Push $0
+  Push $1
+  ; EVENT_MODIFY_STATE = 0x0002. The app arms this event at startup. Setting an event is
+  ; a WRITE, and Windows' integrity policy forbids writing "up" - so an un-elevated
+  ; installer cannot signal an elevated Pawse. That case reports access denied rather
+  ; than a missing channel, and is worth saying out loud because taskkill will fail too.
+  System::Call 'kernel32::OpenEventW(i 0x0002, i 0, w "${QUIT_EVENT}") p .r0 ?e'
+  Pop $1
+  ${If} $0 != 0
+    System::Call 'kernel32::SetEvent(p r0)'
+    System::Call 'kernel32::CloseHandle(p r0)'
+    DetailPrint "Asked Pawse to close..."
+  ${ElseIf} $1 = ${ERROR_ACCESS_DENIED}
+    DetailPrint "Pawse is running with higher privileges - it cannot be asked to close."
+  ${Else}
+    ; No channel - either it just exited, or it's a build from before the channel existed.
+    DetailPrint "Pawse offers no quit channel (build older than this installer)."
+  ${EndIf}
+
+  StrCpy $1 0
+ prq_loop:
+  Call ${UN}PawseIsRunning
+  ${If} $PawseRunning == "0"
+    ; The app releases its mutex in OnExit, a moment before the process actually dies and
+    ; its exe stops being mapped. Let that finish, or the File overwrite below can still
+    ; lose a race we just declared won.
+    Sleep 500
+    DetailPrint "Pawse closed."
+    Goto prq_done
+  ${EndIf}
+  ${If} $1 >= 20
+    Goto prq_done
+  ${EndIf}
+  Sleep 500
+  IntOp $1 $1 + 1
+  Goto prq_loop
+ prq_done:
+  Pop $1
+  Pop $0
+FunctionEnd
+
+Function ${UN}PawseForceClose
+  Push $0
+  ; Pawse-min.exe is by definition a portable copy living somewhere we don't manage - but
+  ; it holds the same single-instance mutex, so it IS the Pawse in the way, and leaving it
+  ; alive just means the file write below fails instead.
+  DetailPrint "Force-closing Pawse..."
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
+  Pop $0
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse-min.exe'
+  Pop $0
+  Pop $0
+FunctionEnd
+
+; Called before anything is written or deleted, so aborting here leaves the machine
+; exactly as it was.
+Function ${UN}EnsurePawseClosed
+  Call ${UN}PawseIsRunning
+  ${If} $PawseRunning == "0"
+    Return
+  ${EndIf}
+
+  ; /SD answers for silent runs (/S, and the QuietUninstallString): try a clean quit, then
+  ; force it. A silent caller must never block on a dialog, and a scripted uninstall that
+  ; suddenly started failing here would be a regression.
+  MessageBox MB_YESNOCANCEL|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse is running and has to close before ${ACTION} can continue.$\n$\nYes - close Pawse now. It shuts down cleanly and hands back the keyboard.$\nNo - leave it to me; I'll quit it from the tray.$\nCancel - stop and change nothing." /SD IDYES IDYES epc_ask IDNO epc_retry
+  Abort "Cancelled - Pawse is still running."
+
+ epc_ask:
+  Call ${UN}PawseRequestQuit
+  ${If} $PawseRunning == "0"
+    Return
+  ${EndIf}
+
+ epc_retry:
+  Call ${UN}PawseIsRunning
+  ${If} $PawseRunning == "0"
+    Return
+  ${EndIf}
+  MessageBox MB_ABORTRETRYIGNORE|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse is still running.$\n$\nRetry - I've quit it from the tray (right-click the paw, then Quit); check again.$\nIgnore - force it closed. Pawse won't get to undo its Win+L and media-key blocks; it repairs those the next time it starts.$\nAbort - stop and change nothing." /SD IDIGNORE IDRETRY epc_retry IDIGNORE epc_force
+  Abort "Cancelled - Pawse is still running."
+
+ epc_force:
+  Call ${UN}PawseForceClose
+  Call ${UN}PawseIsRunning
+  ${If} $PawseRunning == "0"
+    Return
+  ${EndIf}
+
+  ; taskkill was refused - nearly always because Pawse was restarted as administrator from
+  ; its tray menu and we are not elevated. Offer to run just the kill behind a UAC prompt;
+  ; there is no elevated way to send the polite quit signal, so this stays a force-close.
+  ; /SD IDNO so a silent run never raises a UAC prompt nobody is there to answer.
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse is running as administrator, so it can't be closed from here.$\n$\nClose it using administrator rights? Pawse won't get to undo its Win+L and media-key blocks; it repairs those the next time it starts." /SD IDNO IDNO epc_stuck
+  ClearErrors
+  ExecShellWait "runas" "$SYSDIR\taskkill.exe" "/F /IM Pawse.exe" SW_HIDE
+  ${IfNot} ${Errors}
+    ExecShellWait "runas" "$SYSDIR\taskkill.exe" "/F /IM Pawse-min.exe" SW_HIDE
+  ${EndIf}
+  Call ${UN}PawseIsRunning
+  ${If} $PawseRunning == "0"
+    Return
+  ${EndIf}
+
+ epc_stuck:
+  ; Still there: UAC declined, no admin available, or it is in another user's session.
+  ; /SD IDCANCEL so a silent run stops rather than bouncing between force and retry.
+  MessageBox MB_RETRYCANCEL|MB_ICONSTOP|MB_TOPMOST|MB_SETFOREGROUND "Pawse could not be closed.$\n$\nQuit it from the tray, or re-run this as administrator, then Retry." /SD IDCANCEL IDRETRY epc_retry
+  Abort "Pawse could not be closed."
+FunctionEnd
+
+!macroend
+
+!insertmacro PAWSE_CLOSE_FUNCS ""    "Setup"
+!insertmacro PAWSE_CLOSE_FUNCS "un." "the uninstaller"
 
 ; ---- sections ----
 Section "-Core" SEC_CORE
   SectionIn RO
-  ; stop a running instance so the exe can be overwritten (tray app, no window)
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse-min.exe'
+  ; Close any running instance so the exe can be overwritten - cleanly if it will, and
+  ; only ever by force if the user picks that. Aborts before any file is written.
+  Call EnsurePawseClosed
 
   SetOutPath "$INSTDIR"
   File "pawse.ico"
@@ -251,7 +471,43 @@ Function .onInit
   StrCpy $BuildChoice "full"
 !endif
   !insertmacro MULTIUSER_INIT
+  ; Stock MultiUser doesn't just disable the per-machine option for non-admins, it skips
+  ; the whole page (MultiUser.nsh:444-447) - so a standard user who knows an admin password
+  ; could never install machine-wide. Remember what we really are, then claim Admin purely
+  ; so the choice renders; ElevateForAllUsers does the real elevating if it's picked.
+  ; RequestExecutionLevel is "highest", so a genuine admin is already elevated by here and
+  ; this is a no-op for them.
+  StrCpy $RealPrivileges $MultiUser.Privileges
+  ${If} $RealPrivileges != "Admin"
+  ${AndIf} $RealPrivileges != "Power"
+    StrCpy $MultiUser.Privileges "Admin"
+  ${EndIf}
   SectionSetFlags ${SEC_DESK} 0     ; Desktop shortcut off by default
+FunctionEnd
+
+; Called by MULTIUSER_PAGE_INSTALLMODE's leave handler, after MultiUser has applied the
+; choice. If a non-admin picked all-users, hand the install to an elevated copy of
+; ourselves rather than marching on toward Program Files with a token that can't write it.
+Function ElevateForAllUsers
+  ${If} $MultiUser.InstallMode != "AllUsers"
+    Return
+  ${EndIf}
+  ${If} $RealPrivileges == "Admin"
+  ${OrIf} $RealPrivileges == "Power"
+    Return                        ; already elevated at launch - nothing to do
+  ${EndIf}
+
+  ; /AllUsers is honoured by MultiUser's command-line handling, and the elevated instance
+  ; really is an admin, so it never comes back through here (no elevation loop).
+  ClearErrors
+  ExecShell "runas" "$EXEPATH" "/AllUsers"
+  ${IfNot} ${Errors}
+    Quit                          ; the elevated copy takes over
+  ${EndIf}
+
+  ; UAC declined, or no admin account available.
+  Call MultiUser.InstallMode.CurrentUser
+  MessageBox MB_OK|MB_ICONINFORMATION|MB_TOPMOST|MB_SETFOREGROUND "Administrator rights weren't granted, so Pawse will be installed for you only." /SD IDOK
 FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -261,7 +517,10 @@ FunctionEnd
 
 ; ---- uninstall ----
 Section "Uninstall"
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Pawse.exe'
+  ; Ask Pawse to close before deleting anything. This matters more here than on install:
+  ; a forced kill leaves the Keyboard Filter rules enabled with no Pawse left to sweep
+  ; them on next start (the Win+L value below is recoverable from the marker; WEKF is not).
+  Call un.EnsurePawseClosed
   SetOutPath "$TEMP"   ; move CWD out of $INSTDIR so the folder can be removed
 
   Delete "$INSTDIR\${EXE}"

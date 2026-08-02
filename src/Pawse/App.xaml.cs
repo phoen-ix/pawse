@@ -9,6 +9,7 @@ namespace Pawse;
 public partial class App : Application
 {
     private Mutex? _singleton;
+    private IDisposable? _quitChannel;
     private LockController? _controller;
     private SystemBlock? _systemBlock;
     private HookThread? _hooks;
@@ -68,6 +69,17 @@ public partial class App : Application
 
         Log.Init(Version);
         InstallExceptionHandlers();
+
+        // Let the installer/uninstaller ask us to bow out cleanly instead of force-killing
+        // us - only OnExit reverts the Win+L and media-key blocks. This deliberately skips
+        // QuitWithConfirm's "you're locked" prompt: the user already agreed in the
+        // installer, and a second dialog stuck behind it would just look like a hang.
+        _quitChannel = QuitSignal.Listen(() =>
+            Dispatcher.BeginInvoke((Action)(() =>
+            {
+                Log.Info("quit requested over the quit channel (installer/uninstaller)");
+                Shutdown();
+            })));
 
         var config = Config.Load();
         bool unlockRepaired = EnsureUsableUnlock(config);
@@ -356,6 +368,9 @@ public partial class App : Application
     private void OnExit(object sender, ExitEventArgs e)
     {
         Log.Info("shutting down");
+        // Stop listening first - we're already on our way out, and a second request
+        // arriving mid-teardown would only re-enter Shutdown.
+        try { _quitChannel?.Dispose(); } catch { /* ignore */ }
         try { _controller?.Disengage("shutdown"); } catch { /* ignore */ }
         // Disengage's UI-thread dispatch may not run before we exit, so revert the
         // OS-level guards synchronously here (delete the policy value, disable WEKF).

@@ -14,7 +14,10 @@ Two ways to install, both from the [latest release](https://github.com/phoen-ix/
 
 - **Installer** - run `Pawse-Setup-<version>.exe` (built from [`packaging/`](packaging/)).
   Installs per-user by default (no admin), offers Start Menu/Desktop shortcuts, and
-  uninstalls cleanly from Windows' "Installed apps".
+  uninstalls cleanly from Windows' "Installed apps" - or machine-wide if you'd rather
+  (it asks for administrator rights only if that's what you pick). If Pawse is running,
+  installing or uninstalling asks before closing it and lets the app shut itself down
+  properly, so its Win+L and media-key blocks are always undone.
 - **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
 
 A paw appears in the system tray either way.
@@ -94,7 +97,9 @@ itself runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would
 need a signed kernel driver (out of scope). If Pawse is killed while locked, it
 sweeps its own leftover `DisableLockWorkstation` state on next start (the
 uninstaller does the same), so nothing Pawse blocked stays blocked - while a
-block it didn't set is never touched.
+block it didn't set is never touched. That sweep is the safety net, not the normal
+path: the installer and uninstaller ask Pawse to quit and let it undo its own
+blocks, and only force it if you tell them to.
 
 ## Privacy
 

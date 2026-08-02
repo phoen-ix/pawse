@@ -11,8 +11,56 @@
 
 Either way the minimal build ensures the .NET 8 Desktop Runtime via `winget` (else points
 to the download page). Both installers offer per-user vs per-machine install, optional
-Start Menu / Desktop shortcuts and start-at-login, and a "launch now" finish option; the
-installed exe is always named `Pawse.exe`.
+Start Menu / Desktop shortcuts, and a "launch now" finish option; the installed exe is
+always named `Pawse.exe`. (Start-at-login is *not* offered here - an elevated per-machine
+install would write the admin's `HKCU`. The app owns that setting; see the comment above
+`Function .onInit` in `pawse.nsi`.)
+
+## Per-user vs per-machine, and elevation
+
+`RequestExecutionLevel highest` (via `MULTIUSER_EXECUTIONLEVEL Highest`) means an
+administrator is already elevated before the wizard appears — so a machine-wide install
+never needs to elevate mid-flight.
+
+Stock `MultiUser.nsh` doesn't merely grey out the per-machine option for a standard user,
+it **skips the whole page**, so someone who knows an admin password could never install
+machine-wide. The script works around that: `.onInit` records the real account type in
+`$RealPrivileges` and then tells MultiUser it is `Admin` purely so the choice renders. If
+all-users is actually picked, `ElevateForAllUsers` (the page's leave hook) re-launches the
+installer with `ExecShell "runas" "$EXEPATH" "/AllUsers"` and quits; the elevated copy is a
+genuine admin, so it never re-enters that path. Declining UAC falls back to a per-user
+install and says so.
+
+The uninstaller does **not** self-elevate — it detects a machine-wide install run without
+admin and tells the user to run `uninstall.exe` as administrator, rather than failing one
+delete at a time and leaving a half-removed install.
+
+Silent runs never elevate: `/S` with a non-admin token simply installs per-user.
+
+## Closing a running Pawse
+
+Pawse is a tray app with no window, so nothing can send it a `WM_CLOSE`: plain `taskkill`
+does nothing, and `taskkill /F` skips `App.OnExit` - the only code that reverts the Win+L
+policy value and the Keyboard Filter rules. Both installers therefore:
+
+1. Detect a running instance (the single-instance mutex, plus `tasklist` on both exe names
+   so another session or a renamed portable copy is still found).
+2. Ask, then signal a named event that the app listens on (`src/Pawse/Core/QuitSignal.cs`),
+   and wait up to 10 s for it to exit on its own.
+3. Offer Retry (you quit it from the tray) or Ignore (force it) if it is still there.
+   Cancel/Abort stops before anything is written or deleted.
+4. If even `taskkill` is refused — Pawse was restarted as administrator from its tray menu
+   and this installer is not elevated — offer to run just the kill behind a UAC prompt
+   (`ExecShellWait "runas"`). There is no elevated way to send the polite quit signal, so
+   that path stays a force-close.
+
+Silent runs (`/S`, and the registered `QuietUninstallString`) never show a dialog: they try
+the clean quit and then force it, which is what the script always did.
+
+The event and mutex names are hard-coded in **both** `pawse.nsi` and the app - change them
+together or the installer silently falls back to asking the user to force the close. A
+build older than this channel simply doesn't answer, which lands the user on the Retry
+dialog by design.
 
 ## Build it
 

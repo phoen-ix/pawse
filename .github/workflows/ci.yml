@@ -48,3 +48,26 @@ jobs:
           -p:EnableCompressionInSingleFile=true
           -p:DebugType=none
           -o publish-smoke
+
+  # The installer is a hand-built artifact (packaging/README.md) that CI never ships, so
+  # without this nothing would catch a broken pawse.nsi until someone built a release
+  # installer by hand. Compile-only: the stub exes just satisfy the File directives.
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Stub the release exes
+        run: |
+          : > packaging/Pawse.exe
+          : > packaging/Pawse-min.exe
+
+      # -WX: a warning here (an unreferenced function, a bad !insertmacro) means the
+      # script is not doing what it reads like it does.
+      - name: Compile both installers
+        run: |
+          makensis -WX -V2 -DVERSION=0.0.0 packaging/pawse.nsi
+          makensis -WX -V2 -DVERSION=0.0.0 -DMINIMAL_ONLY packaging/pawse.nsi
