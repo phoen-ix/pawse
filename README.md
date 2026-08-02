@@ -9,24 +9,34 @@ This is a native Windows app (C# / .NET 8, WPF + a WinForms tray).
 
 ## Install
 
-Grab one zip from the [latest release](https://github.com/phoen-ix/pawse/releases),
-unzip it, and run the exe inside - no installer, no admin. A paw appears in the
-system tray.
+Two ways to install, both from the [latest release](https://github.com/phoen-ix/pawse/releases)
+(while the repo is private that link needs access - see [pawse.at](https://pawse.at) otherwise):
 
-| Download | Size | Needs anything installed? |
+- **Installer** - run `Pawse-Setup-<version>.exe` (built from [`packaging/`](packaging/)).
+  Installs per-user by default (no admin), offers Start Menu/Desktop shortcuts, and
+  uninstalls cleanly from Windows' "Installed apps".
+- **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
+
+A paw appears in the system tray either way.
+
+| Portable download | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-<version>.zip`** → `Pawse.exe` | ~58 MB zipped (63 MB unzipped) | **No** - the runtime is bundled. Just run it. |
 | **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), installed once. |
 
 Same app either way. `Pawse.exe` is self-contained (bundled + compressed);
 `Pawse-min.exe` is a tiny launcher that reuses a runtime you install once.
-(Windows may flag a downloaded zip - if the exe won't start, right-click the zip →
+(Windows may flag a downloaded file - if an exe won't start, right-click the zip →
 **Properties → Unblock** before extracting.)
 
 ## Use
 
-- **Left-click** the tray paw to lock / unlock.
-- **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit.
+- **Left-click** the tray paw to lock. While locked a single click only shows a
+  balloon hint - **double-click** to unlock, so a stray paw-click can't undo the
+  lock. (Prefer the classic single-click toggle? Turn the double-click guard off
+  in Settings.)
+- **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
+  (Quit asks for confirmation while locked).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on your chosen monitor (you can turn it
@@ -60,8 +70,10 @@ including the F-keys and normal typing, and it clears any stuck modifier on lock
 
 **`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
 so Pawse can optionally block it **only while locked** - off by default; turn it on
-under **Settings → System keys**. It toggles the per-user `DisableLockWorkstation`
-policy on lock and removes it on unlock. Needs no admin on a normal PC, but on
+under **Settings → System keys**. It sets the per-user `DisableLockWorkstation`
+policy on lock and restores its previous state on unlock - a value that was
+already there before Pawse (e.g. set by an admin) is left exactly as found.
+Needs no admin on a normal PC, but on
 **managed / corporate** machines the policy key is ACL-locked and needs elevation -
 enabling it prompts to **Restart as administrator** (also available in the tray menu,
 shown only when Pawse isn't already elevated).
@@ -72,11 +84,17 @@ additionally engages the Windows **Keyboard Filter** to catch the few consumer k
 Windows as `WM_APPCOMMAND` and bypass the hook - that part needs **Windows Enterprise /
 Education / IoT** with the Keyboard Filter feature and Pawse running as administrator.
 
+**Touch is not the mouse**: even with mouse blocking on, native touch / pen input
+reaches pointer-aware apps (browsers, UWP, Office) through the `WM_POINTER`
+pipeline, which the low-level mouse hook never sees - on a touchscreen, screen
+taps still land.
+
 Still out of reach: input to windows running **as administrator** (unless Pawse
 itself runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would
 need a signed kernel driver (out of scope). If Pawse is killed while locked, it
-sweeps any leftover `DisableLockWorkstation` state on next start, so nothing stays
-blocked.
+sweeps its own leftover `DisableLockWorkstation` state on next start (the
+uninstaller does the same), so nothing Pawse blocked stays blocked - while a
+block it didn't set is never touched.
 
 ## Privacy
 
