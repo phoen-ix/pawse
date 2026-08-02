@@ -17,7 +17,7 @@
 <style>
   :root{
     --bg:#17131f; --bg2:#1d1730; --panel:rgba(255,247,237,.035);
-    --ink:#F7EFE4; --soft:rgba(247,239,228,.66); --faint:rgba(247,239,228,.40);
+    --ink:#F7EFE4; --soft:rgba(247,239,228,.66); --faint:rgba(247,239,228,.52); /* ≥4.5:1 on bg for the 10.5-12px text (WCAG AA) */
     --indigo:#6D5AE6; --violet:#8B6CF0; --cream:#FFF7ED; --amber:#F5C97B;
     --line:rgba(247,239,228,.12);
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
@@ -180,7 +180,7 @@
     <div class="grid">
       <div class="card"><span class="kbd">Ctrl+L</span>
         <span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
-        <h3>One-click lock</h3><p>Click the tray paw or hit your hotkey. The global hook swallows every physical key while locked.</p></div>
+        <h3>One-click lock</h3><p>Click the tray paw or hit your hotkey. The global hook swallows every physical key while locked - all but Ctrl+Alt+Del and windows running as administrator.</p></div>
 
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 5l-4 14"/></svg></span>
@@ -200,7 +200,7 @@
 
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <h3>Installer or portable</h3><p>Run the installer for a normal setup - Start-menu entry, optional run-at-login, clean uninstall. Or take the portable route: a single self-contained exe (runtime baked in) you just unzip and run - plus a ~0.2 MB launcher that reuses an installed .NET 8 runtime.</p></div>
+        <h3>Portable or installer</h3><p>Grab a zip, unzip, run - a single self-contained exe (runtime baked in) or a ~0.2 MB launcher that reuses an installed .NET 8 runtime; no admin either way. An installer ships when available: Start-menu entry, per-user install, clean uninstall.</p></div>
     </div>
   </section>
 
