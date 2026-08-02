@@ -55,7 +55,18 @@ BrandingText "${APP} ${VERSION}${VARIANT}"
 ; uninstaller deletes) - a bare "${APP}" here would probe a key nobody creates.
 !define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY "${UNINST_KEY}"
 !define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_VALUENAME "UninstallString"
+; Install for the current user unless the user asks otherwise - without this MultiUser
+; preselects per-machine for anyone holding an admin token.
+!define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
 !include "MultiUser.nsh"
+
+; Deliberately AFTER the include, to override the "highest" that MULTIUSER_EXECUTIONLEVEL
+; Highest emits. "highest" makes Windows elevate an administrator at launch - a UAC prompt
+; just to open the installer, before anyone has chosen anything, for what is by default a
+; per-user install that needs no privileges at all. asInvoker means no prompt ever unless
+; per-machine is actually picked, and then ElevateForAllUsers asks for exactly that.
+; The Highest define stays: MULTIUSER_PAGE_INSTALLMODE refuses to compile without it.
+RequestExecutionLevel user
 
 !ifndef MINIMAL_ONLY
 Var BuildChoice   ; "full" | "min"
@@ -134,6 +145,16 @@ Function un.onInit
   ${If} $MultiUser.InstallMode == "AllUsers"
   ${AndIf} $MultiUser.Privileges != "Admin"
   ${AndIf} $MultiUser.Privileges != "Power"
+    ; We run asInvoker (see RequestExecutionLevel above), so nobody lands here elevated -
+    ; not even an administrator launching this from "Installed apps". Hand off to an
+    ; elevated copy of the installed uninstaller. Target $INSTDIR rather than $EXEPATH:
+    ; NSIS runs uninstallers from a copy in $TEMP, and that copy is not what we want to
+    ; re-launch. The elevated copy has a full admin token, so it never comes back here.
+    ClearErrors
+    ExecShell "runas" "$INSTDIR\uninstall.exe"
+    ${IfNot} ${Errors}
+      Quit
+    ${EndIf}
     MessageBox MB_OK|MB_ICONSTOP|MB_TOPMOST|MB_SETFOREGROUND "Pawse was installed for everyone on this computer, so removing it needs administrator rights.$\n$\nRight-click uninstall.exe in the Pawse folder and choose 'Run as administrator'." /SD IDOK
     Quit
   ${EndIf}

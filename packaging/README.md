@@ -18,22 +18,35 @@ install would write the admin's `HKCU`. The app owns that setting; see the comme
 
 ## Per-user vs per-machine, and elevation
 
-`RequestExecutionLevel highest` (via `MULTIUSER_EXECUTIONLEVEL Highest`) means an
-administrator is already elevated before the wizard appears — so a machine-wide install
-never needs to elevate mid-flight.
+**Nothing elevates unless per-machine is actually chosen.** The installer manifests as
+`asInvoker`, so opening it never raises a UAC prompt — not even for an administrator — and
+the default is a per-user install into `$LOCALAPPDATA\Programs\Pawse`, which needs no
+privileges at all.
 
-Stock `MultiUser.nsh` doesn't merely grey out the per-machine option for a standard user,
-it **skips the whole page**, so someone who knows an admin password could never install
-machine-wide. The script works around that: `.onInit` records the real account type in
-`$RealPrivileges` and then tells MultiUser it is `Admin` purely so the choice renders. If
-all-users is actually picked, `ElevateForAllUsers` (the page's leave hook) re-launches the
-installer with `ExecShell "runas" "$EXEPATH" "/AllUsers"` and quits; the elevated copy is a
-genuine admin, so it never re-enters that path. Declining UAC falls back to a per-user
-install and says so.
+Two script details make that work, and both look odd out of context:
 
-The uninstaller does **not** self-elevate — it detects a machine-wide install run without
-admin and tells the user to run `uninstall.exe` as administrator, rather than failing one
-delete at a time and leaving a half-removed install.
+- `RequestExecutionLevel user` sits **after** `!include "MultiUser.nsh"`, overriding the
+  `highest` that `MULTIUSER_EXECUTIONLEVEL Highest` emits. `highest` would elevate any
+  administrator at launch, before they have chosen anything. The `Highest` define has to
+  stay, because `MULTIUSER_PAGE_INSTALLMODE` refuses to compile without it.
+- `MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER` forces per-user as the preselected option;
+  MultiUser otherwise preselects per-machine for anyone holding an admin token.
+
+Stock `MultiUser.nsh` also doesn't merely grey out the per-machine option for a standard
+user, it **skips the whole page**, so someone who knows an admin password could never
+install machine-wide. `.onInit` works around that by recording the real account type in
+`$RealPrivileges` and then telling MultiUser it is `Admin` purely so the choice renders.
+
+If all-users is actually picked, `ElevateForAllUsers` (the page's leave hook) re-launches
+with `ExecShell "runas" "$EXEPATH" "/AllUsers"` and quits — that is the only UAC prompt in
+the whole flow. The elevated copy holds a genuine admin token, so it never re-enters that
+path. Declining UAC falls back to a per-user install and says so.
+
+The uninstaller is `asInvoker` for the same reason, so a machine-wide uninstall — where
+even an administrator arrives unelevated — re-launches `$INSTDIR\uninstall.exe` through
+`runas` and quits. It targets `$INSTDIR` rather than `$EXEPATH` because NSIS runs
+uninstallers from a copy in `$TEMP`, which is not the one to re-launch. If UAC is declined
+it explains what is needed instead of failing one delete at a time.
 
 Silent runs never elevate: `/S` with a non-admin token simply installs per-user.
 
