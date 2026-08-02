@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{44F561E7-995
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pawse", "src\Pawse\Pawse.csproj", "{AD7C3017-C18A-4D82-8819-8C85D4CFEEE7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{66C09D33-69D0-4608-ACE6-E8CE3487CD1A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pawse.Tests", "tests\Pawse.Tests\Pawse.Tests.csproj", "{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,13 @@ Global
 		{AD7C3017-C18A-4D82-8819-8C85D4CFEEE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD7C3017-C18A-4D82-8819-8C85D4CFEEE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD7C3017-C18A-4D82-8819-8C85D4CFEEE7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AD7C3017-C18A-4D82-8819-8C85D4CFEEE7} = {44F561E7-9952-4B6C-8B75-DFE1F319A958}
+		{3F0A8BA8-DE06-4BFF-9D62-3A67D252AD4A} = {66C09D33-69D0-4608-ACE6-E8CE3487CD1A}
 	EndGlobalSection
 EndGlobal
