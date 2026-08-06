@@ -88,11 +88,19 @@
   @keyframes rise{from{opacity:0; transform:translateY(14px)}to{opacity:1; transform:none}}
   .reveal{opacity:0; animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
 
-  /* features */
-  .feat{position:relative; z-index:2; padding:26px 0 20px}
+  /* sections */
+  .feat,.sec{position:relative; z-index:2; padding:26px 0 20px}
   .rule{display:flex; align-items:center; gap:16px; color:var(--faint); font-family:var(--mono); font-size:11.5px; letter-spacing:.24em; text-transform:uppercase; margin:0 0 26px}
   .rule::before,.rule::after{content:""; height:1px; background:var(--line); flex:1}
+  .intro{color:var(--soft); font-size:15.5px; max-width:62ch; margin:-6px 0 22px}
+  .intro b{color:var(--ink); font-weight:600}
+  .sub{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:28px 0 12px}
+  .note{color:var(--faint); font-size:12.5px; line-height:1.65; margin:18px 0 0; max-width:74ch}
+  .note code,.intro code{font-family:var(--mono); font-size:.92em; color:var(--soft)}
+  .note a,.intro a{color:var(--soft)}
+
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
+  .grid.two{grid-template-columns:repeat(2,1fr)}
   .card{position:relative; border:1px solid var(--line); border-radius:16px; padding:28px 28px 30px; background:var(--panel);
     overflow:hidden; transition:border-color .2s ease, transform .2s ease, background .2s ease}
   .card:hover{border-color:rgba(139,108,240,.5); transform:translateY(-3px); background:rgba(139,108,240,.06)}
@@ -102,6 +110,22 @@
   .card p{margin:0; color:var(--soft); font-size:14.5px; line-height:1.55}
   .card .kbd{position:absolute; top:18px; right:18px; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--faint);
     border:1px solid var(--line); border-radius:6px; padding:4px 8px}
+  .card.plain{padding:22px 24px 24px}
+  .card.plain h3{font-size:17px; margin-bottom:4px}
+  .card.plain p{font-size:14px}
+  .card.plain:hover{transform:none; background:var(--panel); border-color:var(--line)}
+
+  /* labelled rows: unlock methods and downloads */
+  .rows{display:grid; gap:10px}
+  .row{display:grid; grid-template-columns:minmax(180px,1fr) auto minmax(0,1.9fr); gap:6px 18px; align-items:center;
+    border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:var(--panel)}
+  .row .name{font-family:var(--mono); font-size:13px; color:var(--cream); letter-spacing:.01em; word-break:break-word}
+  .row .what{color:var(--soft); font-size:14px; line-height:1.5}
+  .row.pick{border-color:rgba(139,108,240,.45); background:rgba(139,108,240,.07)}
+  .chip{justify-self:start; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap;
+    border:1px solid var(--line); border-radius:100px; padding:4px 10px; color:var(--faint)}
+  .chip.on{color:var(--amber); border-color:rgba(245,201,123,.35); background:rgba(245,201,123,.06)}
+  .chip.rec{color:var(--violet); border-color:rgba(139,108,240,.5); background:rgba(139,108,240,.1)}
 
   footer{position:relative; z-index:2; margin-top:34px; padding:30px 0 46px; border-top:1px solid var(--line);
     display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:space-between; color:var(--faint); font-family:var(--mono); font-size:12px; letter-spacing:.06em}
@@ -110,7 +134,12 @@
 
   @media (max-width:760px){
     .grid{grid-template-columns:1fr 1fr; gap:12px}
+    .grid.two{grid-template-columns:1fr}
     .bar{padding-top:20px}
+  }
+  @media (max-width:640px){
+    .row{grid-template-columns:1fr auto}
+    .row .what{grid-column:1/-1}
   }
   @media (max-width:480px){
     .grid{grid-template-columns:1fr}
@@ -163,7 +192,14 @@
     <p class="tag reveal" style="animation-delay:.2s">A cat-proof keyboard lock for Windows.</p>
     <p class="lede reveal" style="animation-delay:.28s">One click - or a hotkey - freezes the keyboard so a cat walking across it can't close your work, fire off shortcuts, or leave a modifier <b>stuck</b>. The days of your cat <b>force-pushing to main</b> are over. Unlock it deliberately: a chord, a passphrase, a hold-to-unlock button, or an auto-timer.</p>
     <div class="cta reveal" style="animation-delay:.36s">
-      <!-- disabled until public launch; wire Download -> releases and GitHub -> repo then -->
+      <!-- Pre-launch switch (the repo is private, so release links would 404). To go live:
+           1. make the repo public
+           2. drop the .status pill in the header
+           3. turn these two spans into <a href> - Download -> releases/latest, ghost -> the
+              repo - and delete the "· soon" chips
+           4. turn each <div class="row"> in the Download section into <a class="row">
+           5. remove "Coming soon" from <meta name=description> and og:description
+           6. regenerate og.png (web/og.png.py draws its own coming-soon pill; needs Pillow) -->
       <span class="btn" aria-disabled="true">
         <span class="di" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
         Download <span class="k">·&nbsp;soon</span>
@@ -180,28 +216,101 @@
     <div class="grid">
       <div class="card"><span class="kbd">Ctrl+L</span>
         <span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
-        <h3>One-click lock</h3><p>Click the tray paw or hit your hotkey. The global hook swallows every physical key while locked - all but Ctrl+Alt+Del and windows running as administrator. On-screen and touch keyboards keep working, unless you block those too.</p></div>
-
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 5l-4 14"/></svg></span>
-        <h3>Unlock your way</h3><p>A keyboard chord, a typed passphrase, a hold-to-unlock button, or an automatic timer - each toggleable.</p></div>
-
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h.01M11 9h.01M15 9h.01M8 13h8"/></svg></span>
-        <h3>Lives in the tray</h3><p>No window in your way - a paw in the system tray (green unlocked, red locked) and a small floating popup while locked.</p></div>
+        <h3>One-click lock</h3><p>Click the tray paw or hit your hotkey. A global hook swallows every physical key while locked - typing, shortcuts, F-keys - and clears any modifier the cat left stuck.</p></div>
 
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <h3>Even Win+L &amp; media keys</h3><p>Optionally block the lock-screen shortcut and the browser / calculator / media keys while locked - some of these ask for admin.</p></div>
+        <h3>Cat-proof by design</h3><p>The unlock chord has to be the <b>only</b> keys held, so a cat sprawled across half the keyboard can't stumble into it. While locked, the tray paw needs a deliberate double-click.</p></div>
+
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 5l-4 14"/></svg></span>
+        <h3>Unlock your way</h3><p>A keyboard chord, a typed passphrase, a hold-to-unlock button, or an automatic timer - each one toggleable, and at least one always kept working.</p></div>
+
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h.01M11 9h.01M15 9h.01M8 13h8"/></svg></span>
+        <h3>Lives in the tray</h3><p>No window in your way - a paw in the system tray (green unlocked, red locked) and a small floating popup while locked, which you can move, dim or switch off.</p></div>
+
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
+        <h3>Your keyboard, not the screen one</h3><p>On-screen and touch keyboards keep typing while the hardware keyboard is frozen - handy for wiping the keys down. One setting blocks those too.</p></div>
 
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="M21 3l-6 6"/></svg></span>
-        <h3>Fully local</h3><p>No network connections - no telemetry, no update checks, no phone-home. Your keystrokes never leave the machine.</p></div>
-
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <h3>Installer or portable</h3><p>An all-in-one installer with the runtime inside - per-user by default, no admin, Start-menu entry, clean uninstall - or just a zip: unzip and run the self-contained exe. Every release ships both, with checksums.</p></div>
+        <h3>Fully local</h3><p>No network connections - no telemetry, no update checks, no phone-home. Settings and log sit next to the exe. Your keystrokes never leave the machine.</p></div>
     </div>
+  </section>
+
+  <section class="sec">
+    <p class="rule">Unlocking</p>
+    <p class="intro">Four ways in, each switched on or off in Settings. Whatever you turn off, Pawse keeps at least one <b>working</b> method enabled - a lock you couldn't undo would be worse than no lock.</p>
+    <div class="rows">
+      <div class="row">
+        <span class="name">Keyboard chord</span><span class="chip on">on · Ctrl+L</span>
+        <span class="what">Any combination you like. The same chord locks and unlocks.</span>
+      </div>
+      <div class="row">
+        <span class="name">Passphrase</span><span class="chip">off</span>
+        <span class="what">Type a word while locked. Letters, digits and spaces - the keys that register through the hook.</span>
+      </div>
+      <div class="row">
+        <span class="name">Hold to unlock</span><span class="chip on">on · ~1.2 s</span>
+        <span class="what">Press and hold the button on the floating popup. No keyboard needed.</span>
+      </div>
+      <div class="row">
+        <span class="name">Auto timer</span><span class="chip">off</span>
+        <span class="what">Unlock by itself after a delay you set.</span>
+      </div>
+    </div>
+    <p class="note">Also in Settings: block the mouse too, block <code>Win+L</code> and the browser / calculator / media keys while locked, start Pawse at sign-in, and lock the moment it starts.</p>
+  </section>
+
+  <section class="sec">
+    <p class="rule">Download</p>
+    <p class="intro">Windows 10 or 11, 64-bit. <b>Not sure which? Take the all-in-one installer</b> - it carries everything and asks you nothing. Nothing here needs administrator rights unless you choose to install for every account on the PC.</p>
+    <!-- Rows are inert until launch - see the hero comment. Sizes track v0.5.0; the
+         version is deliberately x.y.z so the page doesn't go stale on every release. -->
+    <div class="rows">
+      <div class="row pick">
+        <span class="name">Pawse-Setup-x.y.z-full.exe</span><span class="chip rec">Recommended · ~58 MB</span>
+        <span class="what">All-in-one installer. The .NET runtime is inside; nothing else to install.</span>
+      </div>
+      <div class="row">
+        <span class="name">Pawse-Setup-x.y.z-min.exe</span><span class="chip">~0.5 MB</span>
+        <span class="what">Tiny installer. Needs the .NET 8 Desktop Runtime, which it fetches for you if it's missing.</span>
+      </div>
+      <div class="row">
+        <span class="name">Pawse-Setup-x.y.z.exe</span><span class="chip">~58 MB</span>
+        <span class="what">Carries both builds and asks which one to install.</span>
+      </div>
+    </div>
+    <p class="sub">Or stay portable</p>
+    <div class="rows">
+      <div class="row">
+        <span class="name">Pawse-x.y.z.zip</span><span class="chip">~58 MB</span>
+        <span class="what">Unzip, run <code>Pawse.exe</code>. Self-contained; settings and log live in the same folder.</span>
+      </div>
+      <div class="row">
+        <span class="name">Pawse-x.y.z-min.zip</span><span class="chip">~0.2 MB</span>
+        <span class="what">The small launcher. Needs the .NET 8 Desktop Runtime installed once.</span>
+      </div>
+    </div>
+    <p class="note">Every release is built and published by CI, with a <code>SHA256SUMS.txt</code> covering all five downloads. Windows may mark a downloaded file as blocked - if an exe won't start, right-click it (or the zip) → <b>Properties → Unblock</b> first. Installing or uninstalling asks a running Pawse to quit properly, so anything it blocked is always put back.</p>
+  </section>
+
+  <section class="sec">
+    <p class="rule">What it can't block</p>
+    <p class="intro">A keyboard hook is not a kernel driver, and pretending otherwise would be the wrong kind of confidence. Four things stay out of reach:</p>
+    <div class="grid two">
+      <div class="card plain">
+        <h3>Ctrl+Alt+Del</h3><p>Reserved by Windows below any hook. Only a signed kernel driver could touch it, which is out of scope.</p></div>
+      <div class="card plain">
+        <h3>Windows running as administrator</h3><p>An elevated window won't take input from an unelevated hook. Restart Pawse as administrator from the tray if you need that.</p></div>
+      <div class="card plain">
+        <h3>Touch and pen</h3><p>Even with mouse blocking on, native touch reaches pointer-aware apps through a pipeline no mouse hook sees. On a touchscreen, taps still land.</p></div>
+      <div class="card plain">
+        <h3>Simulated keystrokes</h3><p>Windows says a keystroke was simulated, never which program did it - so while on-screen keyboards are allowed, macro tools can type too. One setting shuts both out.</p></div>
+    </div>
+    <p class="note">And if Pawse itself dies, the lock dies with it: Windows drops the hook and the keyboard is yours again. Anything it switched on at the OS level is reverted on unlock, on quit, and swept on the next start if it was killed outright.</p>
   </section>
 
   <footer>
