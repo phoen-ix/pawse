@@ -49,9 +49,9 @@ jobs:
           -p:DebugType=none
           -o publish-smoke
 
-  # The installer is a hand-built artifact (packaging/README.md) that CI never ships, so
-  # without this nothing would catch a broken pawse.nsi until someone built a release
-  # installer by hand. Compile-only: the stub exes just satisfy the File directives.
+  # Compile-only, and fast: catches a broken pawse.nsi (bad !insertmacro, unreferenced
+  # function) within seconds of a push. The stub exes just satisfy the File directives;
+  # installer-smoke below is the job that runs a real one.
   installer:
     runs-on: ubuntu-latest
     steps:
@@ -71,3 +71,104 @@ jobs:
         run: |
           makensis -WX -V2 -DVERSION=0.0.0 packaging/pawse.nsi
           makensis -WX -V2 -DVERSION=0.0.0 -DMINIMAL_ONLY packaging/pawse.nsi
+
+  # A script that compiles can still install nothing, register the wrong thing, or leave
+  # a folder behind. This builds a real installer and runs the whole round trip on a
+  # throwaway machine: silent per-user install, start the installed app, silent
+  # uninstall. It covers the parts no unit test can - the Add/Remove Programs contract,
+  # and the quit channel whose event name is hard-coded in BOTH pawse.nsi and the app
+  # (packaging/README.md warns they must be changed together).
+  installer-smoke:
+    runs-on: windows-latest
+    env:
+      UNINST_KEY: HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Pawse
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish the full build
+        shell: pwsh
+        run: >
+          dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          -o publish-full
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --no-progress -y
+
+      - name: Build the standard installer
+        shell: pwsh
+        run: |
+          Copy-Item publish-full/Pawse.exe packaging/Pawse.exe -Force
+          # A silent run deploys the FULL build ($BuildChoice defaults to "full" in
+          # .onInit), so the bundled minimal exe is never unpacked here and a stub keeps
+          # this job to one publish. The -min installer is deliberately not exercised:
+          # silently it would have winget pull the ~55 MB .NET runtime onto the runner.
+          New-Item packaging/Pawse-min.exe -ItemType File -Force | Out-Null
+          # From inside packaging/, so OutFile lands next to the script.
+          Push-Location packaging
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /WX /V2 /DVERSION=0.0.0 pawse.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed with $LASTEXITCODE" }
+          Pop-Location
+          if (-not (Test-Path packaging/Pawse-Setup-0.0.0.exe)) { throw "makensis wrote no installer" }
+
+      - name: Install silently, per-user
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path packaging/Pawse-Setup-0.0.0.exe).Path
+          Start-Process -FilePath $setup -ArgumentList '/S','/CurrentUser' -Wait
+          if (-not (Test-Path $env:UNINST_KEY)) { throw "nothing registered at $env:UNINST_KEY" }
+          $entry = Get-ItemProperty $env:UNINST_KEY
+          "installed to $($entry.InstallLocation)"
+          if ($entry.DisplayVersion -ne '0.0.0') { throw "DisplayVersion is '$($entry.DisplayVersion)', expected 0.0.0" }
+          if (-not $entry.QuietUninstallString) { throw "no QuietUninstallString - Windows could not remove this silently" }
+          foreach ($f in 'Pawse.exe', 'uninstall.exe', 'pawse.ico', 'LICENSE.txt') {
+            if (-not (Test-Path (Join-Path $entry.InstallLocation $f))) { throw "$f missing from the install folder" }
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "INSTALL_DIR=$($entry.InstallLocation)"
+
+      - name: The installed app starts
+        shell: pwsh
+        run: |
+          # "startup complete" is the last line App.StartupCore logs, so it means the
+          # tray icon, both hooks and the config all came up on a machine that has never
+          # seen Pawse before.
+          $log = Join-Path $env:INSTALL_DIR 'pawse.log'
+          Start-Process -FilePath (Join-Path $env:INSTALL_DIR 'Pawse.exe')
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Get-Date) -lt $deadline) {
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern 'startup complete' -Quiet)) { exit 0 }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Test-Path $log) { Get-Content $log } else { "no pawse.log was written at all" }
+          throw "the installed Pawse never reached 'startup complete'"
+
+      - name: Uninstall silently and leave nothing behind
+        shell: pwsh
+        run: |
+          $uninstaller = (Get-ItemProperty $env:UNINST_KEY).UninstallString.Trim('"')
+          # An NSIS uninstaller re-launches itself from %TEMP%, so the process we start
+          # returns immediately - poll for the result instead of waiting on it. The
+          # script also removes its own folder through a delayed cmd, a second or two
+          # after the rest.
+          Start-Process -FilePath $uninstaller -ArgumentList '/S'
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Get-Date) -lt $deadline) {
+            if (-not (Test-Path $env:UNINST_KEY) -and -not (Test-Path $env:INSTALL_DIR)) { break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Test-Path $env:UNINST_KEY) { throw "the uninstall left $env:UNINST_KEY in the registry" }
+          if (Test-Path $env:INSTALL_DIR) {
+            throw "the uninstall left $env:INSTALL_DIR behind: $((Get-ChildItem $env:INSTALL_DIR -Force).Name -join ', ')"
+          }
+          # Pawse was running when the uninstall started: the installer asks it to quit
+          # over the named event and only force-kills as a fallback, so either way it
+          # must be gone now.
+          if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }

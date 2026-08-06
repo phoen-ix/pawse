@@ -77,6 +77,18 @@ dialog by design.
 
 ## Build it
 
+**Releases build themselves.** `.github/workflows/release.yml` publishes both exes,
+installs NSIS on the Windows runner, runs the same two `makensis` lines below at the
+release version, and attaches `Pawse-Setup-<version>.exe` and
+`Pawse-Setup-<version>-min.exe` to the GitHub Release next to the zips - nothing here has
+to be built or uploaded by hand. `ci.yml` guards it from two sides on every push: a Linux
+job compiles both scripts with `-WX`, and a Windows job builds a real installer and runs
+the round trip (silent per-user install → start the installed app → silent uninstall →
+assert nothing is left in the registry or on disk).
+
+The steps below are for building one locally - to try a change to `pawse.nsi` without
+cutting a release.
+
 1. Install **NSIS** (provides `makensis`) - https://nsis.sourceforge.io (or
    `winget install NSIS.NSIS`). On Linux: `apt install nsis`.
 2. From the matching GitHub Release, download **both** zips and extract them into

@@ -144,6 +144,33 @@ jobs:
           -p:Version=${{ needs.version.outputs.new_version }}
           -o publish-min
 
+      # The installers used to be the one hand-built asset (packaging/README.md): both
+      # builds have to exist side by side for the File directives, which is exactly what
+      # the two publishes above just produced. NSIS is not on the Windows image.
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --no-progress -y
+
+      # Same two makensis invocations as packaging/build.bat, at the release version.
+      # -WX: a warning here means the script isn't doing what it reads like it does.
+      - name: Build both installers
+        shell: pwsh
+        run: |
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          Copy-Item publish-full/Pawse.exe packaging/Pawse.exe     -Force
+          Copy-Item publish-min/Pawse.exe  packaging/Pawse-min.exe -Force
+          # From inside packaging/, so OutFile lands next to the script.
+          Push-Location packaging
+          & $makensis /WX /V2 /DVERSION=${{ needs.version.outputs.new_version }} pawse.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis (standard) failed with $LASTEXITCODE" }
+          & $makensis /WX /V2 /DVERSION=${{ needs.version.outputs.new_version }} /DMINIMAL_ONLY pawse.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis (minimal) failed with $LASTEXITCODE" }
+          Pop-Location
+          Move-Item packaging/Pawse-Setup-*.exe . -Force
+          if (-not (Test-Path "Pawse-Setup-${{ needs.version.outputs.new_version }}.exe")) { throw "the standard installer was not built" }
+          if (-not (Test-Path "Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe")) { throw "the minimal installer was not built" }
+          Get-ChildItem Pawse-Setup-*.exe | ForEach-Object { "built {0} ({1:N1} MB)" -f $_.Name, ($_.Length / 1MB) }
+
       # Zip each exe. Compress-Archive stores the file's leaf name inside the
       # archive, so users extract a plainly-named Pawse.exe / Pawse-min.exe.
       - name: Stage & zip assets
@@ -153,7 +180,7 @@ jobs:
           Copy-Item publish-min/Pawse.exe  Pawse-min.exe
           Compress-Archive -Path Pawse.exe     -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}.zip"     -Force
           Compress-Archive -Path Pawse-min.exe -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}-min.zip" -Force
-          Get-FileHash "Pawse-${{ needs.version.outputs.new_version }}.zip", "Pawse-${{ needs.version.outputs.new_version }}-min.zip" -Algorithm SHA256 |
+          Get-FileHash "Pawse-${{ needs.version.outputs.new_version }}.zip", "Pawse-${{ needs.version.outputs.new_version }}-min.zip", "Pawse-Setup-${{ needs.version.outputs.new_version }}.exe", "Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe" -Algorithm SHA256 |
             ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } |
             Set-Content SHA256SUMS.txt
 
@@ -162,6 +189,8 @@ jobs:
         with:
           tag_name: ${{ needs.version.outputs.new_tag }}
           files: |
+            Pawse-Setup-${{ needs.version.outputs.new_version }}.exe
+            Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe
             Pawse-${{ needs.version.outputs.new_version }}.zip
             Pawse-${{ needs.version.outputs.new_version }}-min.zip
             SHA256SUMS.txt
@@ -169,16 +198,23 @@ jobs:
           body: |
             **Pawse ${{ needs.version.outputs.new_tag }}** - Windows keyboard lock.
 
-            Two downloads - pick one, unzip it, and run the exe inside:
+            **Install it** - run the setup and follow it; per-user by default, so no admin:
 
-            | File | Download size | Needs anything installed? |
+            | Installer | Download size | Needs anything installed? |
+            | --- | --- | --- |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~58 MB | It asks: **Full** needs nothing, **Minimal** needs the runtime below. |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), fetched for you if missing. |
+
+            **Or stay portable** - unzip and run the exe inside, nothing is written outside its folder:
+
+            | Portable | Download size | Needs anything installed? |
             | --- | --- | --- |
             | **`Pawse-${{ needs.version.outputs.new_version }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
             | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
 
-            Both are identical apps; the full build bundles the runtime, the `-min`
-            build reuses one you install once. Windows may mark a downloaded zip as
-            blocked - if the exe won't start, right-click the zip → **Properties →
-            Unblock** before extracting. The tray paw is your control; the
+            All four are the same app; the full build bundles the runtime, the `-min`
+            build reuses one you install once. Windows may mark a downloaded file as
+            blocked - if an exe won't start, right-click it (or the zip) →
+            **Properties → Unblock** first. The tray paw is your control; the
             config and log are written next to the exe. `SHA256SUMS.txt` holds
-            checksums for both zips.
+            checksums for all four downloads.
