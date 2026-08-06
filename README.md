@@ -49,8 +49,12 @@ installers are built from [`packaging/`](packaging/).
   balloon hint - **double-click** to unlock, so a stray paw-click can't undo the
   lock. (Prefer the classic single-click toggle? Turn the double-click guard off
   in Settings.)
-- **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
-  (Quit asks for confirmation while locked).
+- **Right-click** for the menu: Lock/Unlock, Settings…, Check for updates…, Open config
+  file, Quit (Quit asks for confirmation while locked).
+- **Check for updates…** is the only thing in Pawse that goes online, and only when you
+  click it. If there's a newer release and you agree, an installed Pawse downloads the
+  matching installer, verifies its checksum and runs it; a portable copy points you at the
+  download page instead. See [Privacy](#privacy).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on your chosen monitor (you can turn it
@@ -123,9 +127,16 @@ blocks, and only force it if you tell them to.
 
 ## Privacy
 
-Pawse is **fully local**. It makes **no network connections** - no telemetry, no
-update checks, no phone-home. Updates are manual (download a new exe). Any future
-network feature would be strictly opt-in.
+Pawse makes **no automatic network connections** - no telemetry, no background update
+check, no phone-home. Exactly one request exists, and only you can start it:
+**Check for updates…** in the tray menu fetches `https://pawse.at/latest.json` and sends
+nothing but a `Pawse/<version>` user agent (that request isn't logged on the server).
+
+If it finds a newer release and you say yes, Pawse downloads the matching installer from
+GitHub Releases, checks it against the SHA-256 listed in the feed, and only then runs it -
+the checksum comes from a different host than the download, so it's a real cross-check.
+Decline, or never open that menu item, and Pawse never touches the network at all. Your
+settings, log and keystrokes stay on the machine either way.
 
 ## Build from source
 

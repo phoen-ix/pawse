@@ -7,8 +7,9 @@ namespace Pawse.Core;
 /// <summary>
 /// User configuration, persisted as <c>pawse.json</c> next to the exe. Every
 /// unlock method has its own <c>Enabled</c> flag; the popup is optional; mouse
-/// blocking is off by default. Nothing here touches the network - the app is
-/// fully local (no phone-home, manual updates).
+/// blocking is off by default. Deliberately nothing in here can put Pawse on the
+/// network: the only request it ever makes is the update check the user starts by
+/// hand from the tray (<see cref="UpdateCheck"/>), which no setting can automate.
 /// </summary>
 public sealed class Config
 {

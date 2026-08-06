@@ -133,11 +133,15 @@ jobs:
     needs: version
     if: needs.version.outputs.new_tag != ''
     runs-on: windows-latest
-    # contents: write only here - this job creates the tag and the release.
+    # contents: write only here - this job creates the tag and the release, and commits
+    # the update feed.
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history: the update-feed commit at the end rebases onto main.
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -254,3 +258,39 @@ jobs:
             **Properties → Unblock** first. The tray paw is your control; the
             config and log are written next to the exe. `SHA256SUMS.txt` holds
             checksums for every download.
+
+            Already have Pawse installed? **Check for updates…** in the tray menu
+            offers this build and installs it for you.
+
+      # The update feed the app reads when the user picks "Check for updates…" - published
+      # on pawse.at, which serves web/site straight from this repo. It has to be written
+      # AFTER the release exists, or it would point at assets that 404. The commit carries
+      # [skip ci] so publishing a feed doesn't re-run the whole pipeline.
+      - name: Publish the update feed
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.new_version }}"
+          $base = "https://github.com/${{ github.repository }}/releases/download/v$version"
+          function Sha([string]$file) { (Get-FileHash $file -Algorithm SHA256).Hash.ToLower() }
+          $feed = [ordered]@{
+            version    = $version
+            notes      = "https://github.com/${{ github.repository }}/releases/tag/v$version"
+            installers = [ordered]@{
+              full = [ordered]@{ url = "$base/Pawse-Setup-$version-full.exe"; sha256 = Sha "Pawse-Setup-$version-full.exe" }
+              min  = [ordered]@{ url = "$base/Pawse-Setup-$version-min.exe";  sha256 = Sha "Pawse-Setup-$version-min.exe" }
+            }
+          }
+          # LF and a trailing newline: ConvertTo-Json emits CRLF on Windows, which would
+          # rewrite the whole file on every release and look like a change that isn't one.
+          $json = (($feed | ConvertTo-Json -Depth 5) -replace "`r`n", "`n") + "`n"
+          Set-Content web/site/latest.json -Value $json -NoNewline -Encoding utf8
+          Get-Content web/site/latest.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/site/latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { "feed unchanged - nothing to commit"; exit 0 }
+          git commit -m "chore(release): update feed for v$version [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -18,6 +18,7 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _autoUnlock;
     private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
+    private bool _updateCheckBusy;
 
     internal static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
@@ -94,6 +95,7 @@ public partial class App : Application
         _tray = new TrayIcon { DoubleClickUnlock = config.General.TrayDoubleClickUnlock };
         _tray.ToggleRequested += () => { if (_canLock) _controller!.Toggle(); };
         _tray.SettingsRequested += OpenSettings;
+        _tray.UpdateCheckRequested += CheckForUpdates;
         _tray.OpenConfigRequested += OpenConfigFile;
         _tray.RestartAsAdminRequested += RestartAsAdmin;
         _tray.QuitRequested += QuitWithConfirm;
@@ -303,6 +305,131 @@ public partial class App : Application
         }
 
         Log.Info("config applied: " + config.Summary());
+    }
+
+    /// <summary>
+    /// The tray's "Check for updates…" - the only place Pawse goes online, and only because
+    /// the user just asked it to. Re-entry is refused rather than queued: the menu item stays
+    /// clickable, but a second click while one check is in flight does nothing.
+    /// </summary>
+    private async void CheckForUpdates()
+    {
+        if (_updateCheckBusy) return;
+        _updateCheckBusy = true;
+        try
+        {
+            await RunUpdateCheck();
+        }
+        catch (Exception ex)
+        {
+            // async void: no caller can catch this, and looking for an update must never be
+            // the thing that takes the app down.
+            Log.Error("update check", ex);
+            MessageBox.Show("Pawse could not check for updates.\n\n" + ex.Message,
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _updateCheckBusy = false;
+        }
+    }
+
+    private async Task RunUpdateCheck()
+    {
+        string current = Version;
+        if (current == UpdateCheck.DevVersion)
+        {
+            MessageBox.Show($"This is a development build ({current}) - there is nothing to compare a release against.",
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        Log.Info($"update check: asking {UpdateCheck.FeedUrl} (this copy is {current})");
+        var result = await UpdateCheck.FetchAsync();
+        if (result.Info is not { } info)
+        {
+            Log.Warn($"update check failed: {result.Error}");
+            OfferDownloadsPage((result.Error ?? "The update check failed.") +
+                               "\n\nOpen the downloads page instead?");
+            return;
+        }
+
+        if (!UpdateCheck.IsNewer(current, info.Version))
+        {
+            Log.Info($"update check: {current} is current (the feed offers {info.Version})");
+            MessageBox.Show($"Pawse {current} is the latest version.",
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var kind = UpdateCheck.DetectInstall();
+        var asset = kind switch
+        {
+            InstallKind.InstalledFull => info.Full,
+            InstallKind.InstalledMin => info.Min,
+            _ => null,
+        };
+        Log.Info($"update check: {info.Version} is available (this copy is {kind})");
+
+        if (asset is null)
+        {
+            OfferDownloadsPage(
+                $"Pawse {info.Version} is available (you have {current}).\n\n" +
+                (kind == InstallKind.Portable
+                    ? "This is a portable copy, so it can't replace itself."
+                    : "The update doesn't list an installer for this build.") +
+                "\n\nOpen the downloads page?", info.NotesUrl);
+            return;
+        }
+
+        string lockedNote = _controller?.IsLocked == true
+            ? "\n\nPawse is locked: installing closes it, which releases the keyboard."
+            : "";
+        if (MessageBox.Show(
+                $"Pawse {info.Version} is available (you have {current}).\n\nDownload and install it now?" + lockedNote,
+                "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            Log.Info("update: declined by the user");
+            return;
+        }
+
+        _tray?.Notify("Pawse", $"Downloading Pawse {info.Version}…");
+        string variant = kind == InstallKind.InstalledFull ? "full" : "min";
+        var installer = await UpdateCheck.DownloadVerifiedAsync(asset, $"Pawse-Setup-{info.Version}-{variant}.exe");
+        if (installer == null)
+        {
+            OfferDownloadsPage("The download failed or didn't match its checksum, so it was discarded.\n\n" +
+                               "Open the downloads page instead?", info.NotesUrl);
+            return;
+        }
+
+        // Hand over: the installer asks this instance to quit through the same channel the
+        // installer and uninstaller always use (QuitSignal), so there is nothing left to do
+        // here - including undoing the lock, which OnExit does on the way out.
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installer) { UseShellExecute = true });
+            Log.Info($"update: handed over to {installer}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("update: starting the installer", ex);
+            OfferDownloadsPage("The installer could not be started.\n\nOpen the downloads page instead?", info.NotesUrl);
+        }
+    }
+
+    /// <summary>Every dead end in the update flow ends the same way: say what happened, and
+    /// offer the page the user would have gone to anyway.</summary>
+    private static void OfferDownloadsPage(string text, string? url = null)
+    {
+        if (MessageBox.Show(text, "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(url ?? UpdateCheck.ReleasesUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) { Log.Error("open downloads page", ex); }
     }
 
     /// <summary>
