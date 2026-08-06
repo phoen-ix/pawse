@@ -1,16 +1,21 @@
 # Pawse installer (NSIS)
 
-`build.bat <version>` (or `./build.sh <version>`) builds **two** installers:
+`build.bat <version>` (or `./build.sh <version>`) builds **three** installers from the one
+script - the `FULL_ONLY` / `MINIMAL_ONLY` defines pick which:
 
+- **`Pawse-Setup-<version>-full.exe`** (all-in-one, ~58 MB) - carries only the
+  self-contained `Pawse.exe`, no build-choice page and nothing to install alongside it.
+  The one to hand someone who just wants Pawse.
+- **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.5 MB) - carries only
+  `Pawse-min.exe`, no build-choice page. For people who know they want the small build.
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
   - **Full** - self-contained `Pawse.exe` (~63 MB, runtime bundled, needs nothing).
   - **Minimal** - `Pawse-min.exe` (~0.2 MB); needs the **.NET 8 Desktop Runtime (x64)**.
-- **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.5 MB) - carries only
-  `Pawse-min.exe`, no build-choice page. For people who know they want the small build.
 
-Either way the minimal build ensures the .NET 8 Desktop Runtime via `winget` (else points
-to the download page). Both installers offer per-user vs per-machine install, optional
+Wherever the minimal build is deployed, the installer ensures the .NET 8 Desktop Runtime
+via `winget` (else points to the download page); the all-in-one build skips that code
+entirely. All three offer per-user vs per-machine install, optional
 Start Menu / Desktop shortcuts, and a "launch now" finish option; the installed exe is
 always named `Pawse.exe`. (Start-at-login is *not* offered here - an elevated per-machine
 install would write the admin's `HKCU`. The app owns that setting; see the comment above
@@ -78,13 +83,12 @@ dialog by design.
 ## Build it
 
 **Releases build themselves.** `.github/workflows/release.yml` publishes both exes,
-installs NSIS on the Windows runner, runs the same two `makensis` lines below at the
-release version, and attaches `Pawse-Setup-<version>.exe` and
-`Pawse-Setup-<version>-min.exe` to the GitHub Release next to the zips - nothing here has
-to be built or uploaded by hand. `ci.yml` guards it from two sides on every push: a Linux
-job compiles both scripts with `-WX`, and a Windows job builds a real installer and runs
-the round trip (silent per-user install → start the installed app → silent uninstall →
-assert nothing is left in the registry or on disk).
+installs NSIS on the Windows runner, runs the same three `makensis` lines below at the
+release version, and attaches all three installers to the GitHub Release next to the zips
+- nothing here has to be built or uploaded by hand. `ci.yml` guards it from two sides on
+every push: a Linux job compiles all three variants with `-WX`, and a Windows job builds a
+real installer and runs the round trip (silent per-user install → start the installed app
+→ silent uninstall → assert nothing is left in the registry or on disk).
 
 The steps below are for building one locally - to try a change to `pawse.nsi` without
 cutting a release.
@@ -95,18 +99,20 @@ cutting a release.
    this folder so it contains `Pawse.exe` **and** `Pawse-min.exe`:
    - `Pawse-<version>.zip`      -> `Pawse.exe`
    - `Pawse-<version>-min.zip`  -> `Pawse-min.exe`
-3. Build **both** installers from this folder (each script just runs `makensis` twice:
-   the standard build and the `-DMINIMAL_ONLY` build):
+3. Build **all three** installers from this folder (each script just runs `makensis`
+   three times: the standard build, `-DFULL_ONLY` and `-DMINIMAL_ONLY`):
 
    ```
    build.bat <version>       (Windows)      e.g.  build.bat 0.1.4
    ./build.sh <version>      (Linux/macOS)
    ```
 
-   -> produces `Pawse-Setup-<version>.exe` and `Pawse-Setup-<version>-min.exe` here.
-   (Or run the two `makensis` lines by hand - see the top of `pawse.nsi`.)
-4. Hand both installers over to attach them to the same GitHub Release
-   (`gh release upload v<version> Pawse-Setup-<version>.exe Pawse-Setup-<version>-min.exe`).
+   -> produces `Pawse-Setup-<version>.exe`, `Pawse-Setup-<version>-full.exe` and
+   `Pawse-Setup-<version>-min.exe` here. (Or run the three `makensis` lines by hand -
+   see the top of `pawse.nsi`.) A single-build installer only needs its own exe present:
+   `-DFULL_ONLY` wants `Pawse.exe`, `-DMINIMAL_ONLY` wants `Pawse-min.exe`.
+4. Nothing to upload - the release workflow builds and attaches these itself. Do this
+   only to try a `pawse.nsi` change locally.
 
 `Pawse.exe`, `Pawse-min.exe`, and `Pawse-Setup-*.exe` are git-ignored - only the
 sources (`pawse.nsi`, `build.bat`, `build.sh`, `pawse.ico`, `pawse-icon.py`) are tracked.

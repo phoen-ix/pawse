@@ -67,9 +67,10 @@ jobs:
 
       # -WX: a warning here (an unreferenced function, a bad !insertmacro) means the
       # script is not doing what it reads like it does.
-      - name: Compile both installers
+      - name: Compile all three installers
         run: |
           makensis -WX -V2 -DVERSION=0.0.0 packaging/pawse.nsi
+          makensis -WX -V2 -DVERSION=0.0.0 -DFULL_ONLY packaging/pawse.nsi
           makensis -WX -V2 -DVERSION=0.0.0 -DMINIMAL_ONLY packaging/pawse.nsi
 
   # A script that compiles can still install nothing, register the wrong thing, or leave

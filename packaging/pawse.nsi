@@ -1,15 +1,17 @@
-; Pawse installer - NSIS script. The MINIMAL_ONLY define picks which installer to build:
+; Pawse installer - NSIS script. One of two defines picks which installer to build:
 ;
-;   makensis /DVERSION=<v> pawse.nsi                 -> Pawse-Setup-<v>.exe      (standard)
-;   makensis /DVERSION=<v> /DMINIMAL_ONLY pawse.nsi  -> Pawse-Setup-<v>-min.exe  (true minimal)
+;   makensis /DVERSION=<v> pawse.nsi                 -> Pawse-Setup-<v>.exe       (standard)
+;   makensis /DVERSION=<v> /DFULL_ONLY pawse.nsi     -> Pawse-Setup-<v>-full.exe  (all-in-one)
+;   makensis /DVERSION=<v> /DMINIMAL_ONLY pawse.nsi  -> Pawse-Setup-<v>-min.exe   (true minimal)
 ;
-; build.bat <v>  (or ./build.sh <v>) runs both in one step. Run it from THIS folder
-; after downloading BOTH release exes (Pawse.exe and Pawse-min.exe) into it.
+; build.bat <v>  (or ./build.sh <v>) runs all three in one step. Run it from THIS folder
+; after downloading BOTH release exes (Pawse.exe and Pawse-min.exe) into it - the FULL_ONLY
+; build needs only Pawse.exe, the MINIMAL_ONLY build only Pawse-min.exe.
 ;
 ; The standard installer bundles both builds and asks which to deploy (the chosen exe
-; installs as Pawse.exe); the minimal installer carries only Pawse-min.exe (no choice
-; page). Either way the minimal build ensures the .NET 8 Desktop Runtime (via winget,
-; else points to the download page).
+; installs as Pawse.exe). The two single-build installers skip that page: FULL_ONLY carries
+; the self-contained exe and depends on nothing; MINIMAL_ONLY carries the launcher and
+; ensures the .NET 8 Desktop Runtime (via winget, else points to the download page).
 
 Unicode true
 
@@ -29,11 +31,22 @@ Unicode true
 !define ERROR_ACCESS_DENIED 5
 
 !ifdef MINIMAL_ONLY
+  !ifdef FULL_ONLY
+    !error "MINIMAL_ONLY and FULL_ONLY are mutually exclusive - build them one at a time."
+  !endif
   !define VARIANT " (Minimal)"
   !define OUTSUFFIX "-min"
+  ; SINGLE_BUILD = this installer carries one build, so there is nothing to ask.
+  !define SINGLE_BUILD
 !else
-  !define VARIANT ""
-  !define OUTSUFFIX ""
+  !ifdef FULL_ONLY
+    !define VARIANT " (Full)"
+    !define OUTSUFFIX "-full"
+    !define SINGLE_BUILD
+  !else
+    !define VARIANT ""
+    !define OUTSUFFIX ""
+  !endif
 !endif
 
 Name "${APP} ${VERSION}${VARIANT}"
@@ -68,7 +81,7 @@ BrandingText "${APP} ${VERSION}${VARIANT}"
 ; The Highest define stays: MULTIUSER_PAGE_INSTALLMODE refuses to compile without it.
 RequestExecutionLevel user
 
-!ifndef MINIMAL_ONLY
+!ifndef SINGLE_BUILD
 Var BuildChoice   ; "full" | "min"
 Var RbFull
 Var RbMin
@@ -77,7 +90,9 @@ Var RbMin
 Var PawseRunning     ; "1" | "0" - set by ${UN}PawseIsRunning, shared by both halves
 Var RealPrivileges   ; account type as Windows reports it, before we fib to MultiUser
 Var PrevInstDir      ; a previous install's folder, when its settings need carrying over
+!ifndef FULL_ONLY
 Var DotnetFound      ; "1" | "0" - set by DotnetPresent
+!endif
 
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
@@ -94,7 +109,7 @@ Var DotnetFound      ; "1" | "0" - set by DotnetPresent
 ; ElevateForAllUsers. The define is consumed by the page macro below.
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_LEAVE ElevateForAllUsers
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
-!ifndef MINIMAL_ONLY
+!ifndef SINGLE_BUILD
 Page custom BuildPageCreate BuildPageLeave
 !endif
 !insertmacro MUI_PAGE_COMPONENTS
@@ -108,7 +123,7 @@ Page custom BuildPageCreate BuildPageLeave
 !insertmacro MUI_LANGUAGE "English"
 
 ; ---- custom "which build" page (standard installer only) ----
-!ifndef MINIMAL_ONLY
+!ifndef SINGLE_BUILD
 Function BuildPageCreate
   !insertmacro MUI_HEADER_TEXT "Choose build" "Pick which Pawse build to install."
   nsDialogs::Create 1018
@@ -169,6 +184,9 @@ Function LaunchApp
 FunctionEnd
 
 ; ---- ensure .NET 8 Desktop Runtime for the minimal build ----
+; Skipped entirely in a FULL_ONLY build: nothing there can call these, and makensis -WX
+; treats an unreferenced function as an error.
+!ifndef FULL_ONLY
 ; Sets $DotnetFound. Asks the .NET host where it lives rather than assuming: a runtime
 ; installed anywhere but the default folder used to read as "missing" and trigger a
 ; download of something already on the machine.
@@ -280,6 +298,7 @@ Function DotnetManual
   MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 8 Desktop Runtime (x64), and it isn't installed on this PC.$\n$\nOpen the download page now? Pawse will finish installing either way, but the minimal build won't start until the runtime is there." /SD IDNO IDNO +2
   ExecShell "open" "${DOTNET_URL}"
 FunctionEnd
+!endif ; FULL_ONLY
 
 ; ---- running instance: detect, ask, close cleanly ----
 ; Pawse is a tray app with no window, so nothing here can send it a WM_CLOSE: plain
@@ -505,11 +524,15 @@ Section "-Core" SEC_CORE
 !ifdef MINIMAL_ONLY
   File /oname=${EXE} "Pawse-min.exe"
 !else
+  !ifdef FULL_ONLY
+  File /oname=${EXE} "Pawse.exe"
+  !else
   ${If} $BuildChoice == "min"
     File /oname=${EXE} "Pawse-min.exe"
   ${Else}
     File /oname=${EXE} "Pawse.exe"
   ${EndIf}
+  !endif
 !endif
 
   ; Bring the old settings along, but never over a config that's already here.
@@ -534,12 +557,15 @@ Section "-Core" SEC_CORE
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINST_KEY}" "NoRepair" 1
 
+; The FULL_ONLY build carries the self-contained exe, so there is no runtime to ensure.
 !ifdef MINIMAL_ONLY
   Call EnsureDotnet
 !else
+  !ifndef FULL_ONLY
   ${If} $BuildChoice == "min"
     Call EnsureDotnet
   ${EndIf}
+  !endif
 !endif
 SectionEnd
 
@@ -558,7 +584,7 @@ SectionEnd
 
 ; placed after the sections so ${SEC_DESK} is defined
 Function .onInit
-!ifndef MINIMAL_ONLY
+!ifndef SINGLE_BUILD
   StrCpy $BuildChoice "full"
 !endif
   !insertmacro MULTIUSER_INIT

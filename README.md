@@ -12,25 +12,36 @@ This is a native Windows app (C# / .NET 8, WPF + a WinForms tray).
 Two ways to install, both from the [latest release](https://github.com/phoen-ix/pawse/releases)
 (while the repo is private that link needs access - see [pawse.at](https://pawse.at) otherwise):
 
-- **Installer** - run `Pawse-Setup-<version>.exe` (built from [`packaging/`](packaging/)).
-  Installs per-user by default (no admin), offers Start Menu/Desktop shortcuts, and
-  uninstalls cleanly from Windows' "Installed apps" - or machine-wide if you'd rather
-  (it asks for administrator rights only if that's what you pick). If Pawse is running,
-  installing or uninstalling asks before closing it and lets the app shut itself down
-  properly, so its Win+L and media-key blocks are always undone.
+- **Installer** - run a `Pawse-Setup-<version>*.exe`. Installs per-user by default (no
+  admin), offers Start Menu/Desktop shortcuts, and uninstalls cleanly from Windows'
+  "Installed apps" - or machine-wide if you'd rather (it asks for administrator rights
+  only if that's what you pick). If Pawse is running, installing or uninstalling asks
+  before closing it and lets the app shut itself down properly, so its Win+L and
+  media-key blocks are always undone.
 - **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
 
 A paw appears in the system tray either way.
 
-| Portable download | Size | Needs anything installed? |
+**If you're not sure, take `Pawse-Setup-<version>-full.exe`** - it carries everything
+and asks you nothing about builds.
+
+| Installer | Size | Needs anything installed? |
+| --- | --- | --- |
+| **`Pawse-Setup-<version>-full.exe`** | ~58 MB | **No** - all-in-one, the runtime is inside. |
+| **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), fetched via `winget` if it's missing. |
+| **`Pawse-Setup-<version>.exe`** | ~58 MB | It asks which of the two builds above to install. |
+
+| Portable | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-<version>.zip`** → `Pawse.exe` | ~58 MB zipped (63 MB unzipped) | **No** - the runtime is bundled. Just run it. |
 | **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), installed once. |
 
-Same app either way. `Pawse.exe` is self-contained (bundled + compressed);
-`Pawse-min.exe` is a tiny launcher that reuses a runtime you install once.
-(Windows may flag a downloaded file - if an exe won't start, right-click the zip →
-**Properties → Unblock** before extracting.)
+Same app in every row. `Pawse.exe` is self-contained (bundled + compressed);
+`Pawse-min.exe` is a tiny launcher that reuses a runtime you install once. Every
+download is built and attached by CI, with `SHA256SUMS.txt` alongside them; the
+installers are built from [`packaging/`](packaging/).
+(Windows may flag a downloaded file - if an exe won't start, right-click it or the zip →
+**Properties → Unblock** first.)
 
 ## Use
 

@@ -178,22 +178,30 @@ jobs:
 
       # Same two makensis invocations as packaging/build.bat, at the release version.
       # -WX: a warning here means the script isn't doing what it reads like it does.
-      - name: Build both installers
+      - name: Build all three installers
         shell: pwsh
         run: |
           $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
           Copy-Item publish-full/Pawse.exe packaging/Pawse.exe     -Force
           Copy-Item publish-min/Pawse.exe  packaging/Pawse-min.exe -Force
-          # From inside packaging/, so OutFile lands next to the script.
+          $version = "${{ needs.version.outputs.new_version }}"
+          # From inside packaging/, so OutFile lands next to the script. No define = the
+          # standard installer that asks which build to deploy; the other two carry one
+          # build each. Same three invocations as packaging/build.bat.
           Push-Location packaging
-          & $makensis /WX /V2 /DVERSION=${{ needs.version.outputs.new_version }} pawse.nsi
-          if ($LASTEXITCODE -ne 0) { throw "makensis (standard) failed with $LASTEXITCODE" }
-          & $makensis /WX /V2 /DVERSION=${{ needs.version.outputs.new_version }} /DMINIMAL_ONLY pawse.nsi
-          if ($LASTEXITCODE -ne 0) { throw "makensis (minimal) failed with $LASTEXITCODE" }
+          foreach ($define in '', '/DFULL_ONLY', '/DMINIMAL_ONLY') {
+            $nsisArgs = @('/WX', '/V2', "/DVERSION=$version")
+            if ($define) { $nsisArgs += $define }
+            $nsisArgs += 'pawse.nsi'
+            & $makensis @nsisArgs
+            if ($LASTEXITCODE -ne 0) { throw "makensis $define failed with $LASTEXITCODE" }
+          }
           Pop-Location
           Move-Item packaging/Pawse-Setup-*.exe . -Force
-          if (-not (Test-Path "Pawse-Setup-${{ needs.version.outputs.new_version }}.exe")) { throw "the standard installer was not built" }
-          if (-not (Test-Path "Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe")) { throw "the minimal installer was not built" }
+          foreach ($suffix in '', '-full', '-min') {
+            $file = "Pawse-Setup-${{ needs.version.outputs.new_version }}$suffix.exe"
+            if (-not (Test-Path $file)) { throw "$file was not built" }
+          }
           Get-ChildItem Pawse-Setup-*.exe | ForEach-Object { "built {0} ({1:N1} MB)" -f $_.Name, ($_.Length / 1MB) }
 
       # Zip each exe. Compress-Archive stores the file's leaf name inside the
@@ -205,7 +213,7 @@ jobs:
           Copy-Item publish-min/Pawse.exe  Pawse-min.exe
           Compress-Archive -Path Pawse.exe     -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}.zip"     -Force
           Compress-Archive -Path Pawse-min.exe -DestinationPath "Pawse-${{ needs.version.outputs.new_version }}-min.zip" -Force
-          Get-FileHash "Pawse-${{ needs.version.outputs.new_version }}.zip", "Pawse-${{ needs.version.outputs.new_version }}-min.zip", "Pawse-Setup-${{ needs.version.outputs.new_version }}.exe", "Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe" -Algorithm SHA256 |
+          Get-FileHash "Pawse-${{ needs.version.outputs.new_version }}.zip", "Pawse-${{ needs.version.outputs.new_version }}-min.zip", "Pawse-Setup-${{ needs.version.outputs.new_version }}.exe", "Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe", "Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe" -Algorithm SHA256 |
             ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } |
             Set-Content SHA256SUMS.txt
 
@@ -215,6 +223,7 @@ jobs:
           tag_name: ${{ needs.version.outputs.new_tag }}
           files: |
             Pawse-Setup-${{ needs.version.outputs.new_version }}.exe
+            Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe
             Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe
             Pawse-${{ needs.version.outputs.new_version }}.zip
             Pawse-${{ needs.version.outputs.new_version }}-min.zip
@@ -223,12 +232,14 @@ jobs:
           body: |
             **Pawse ${{ needs.version.outputs.new_tag }}** - Windows keyboard lock.
 
-            **Install it** - run the setup and follow it; per-user by default, so no admin:
+            **Install it** - run the setup and follow it; per-user by default, so no admin.
+            Not sure? Take the all-in-one.
 
             | Installer | Download size | Needs anything installed? |
             | --- | --- | --- |
-            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~58 MB | It asks: **Full** needs nothing, **Minimal** needs the runtime below. |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe`** | ~58 MB | **No** - all-in-one, the runtime is inside. Installs straight away. |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), fetched for you if missing. |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~58 MB | It asks you which of the two builds above to install. |
 
             **Or stay portable** - unzip and run the exe inside, nothing is written outside its folder:
 
@@ -237,9 +248,9 @@ jobs:
             | **`Pawse-${{ needs.version.outputs.new_version }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
             | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
 
-            All four are the same app; the full build bundles the runtime, the `-min`
-            build reuses one you install once. Windows may mark a downloaded file as
-            blocked - if an exe won't start, right-click it (or the zip) →
+            Every download is the same app; the full build bundles the runtime, the
+            `-min` build reuses one you install once. Windows may mark a downloaded file
+            as blocked - if an exe won't start, right-click it (or the zip) →
             **Properties → Unblock** first. The tray paw is your control; the
             config and log are written next to the exe. `SHA256SUMS.txt` holds
-            checksums for all four downloads.
+            checksums for every download.
