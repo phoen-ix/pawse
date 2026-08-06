@@ -265,7 +265,11 @@ jobs:
       # The update feed the app reads when the user picks "Check for updates…" - published
       # on pawse.at, which serves web/site straight from this repo. It has to be written
       # AFTER the release exists, or it would point at assets that 404. The commit carries
-      # [skip ci] so publishing a feed doesn't re-run the whole pipeline.
+      # the skip-ci marker below so publishing a feed doesn't re-run the whole pipeline.
+      #
+      # Careful when writing ABOUT that marker: GitHub honours it anywhere in the message of
+      # a pushed commit, subject or body, so a commit that merely mentions it verbatim
+      # silently skips its own CI and release runs. Say "skip-ci marker" in prose instead.
       - name: Publish the update feed
         shell: pwsh
         run: |
