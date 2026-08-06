@@ -17,6 +17,7 @@ public partial class App : Application
     private OverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _autoUnlock;
+    private DispatcherTimer? _autoUpdate;
     private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
     private bool _updateCheckBusy;
 
@@ -95,7 +96,6 @@ public partial class App : Application
         _tray = new TrayIcon { DoubleClickUnlock = config.General.TrayDoubleClickUnlock };
         _tray.ToggleRequested += () => { if (_canLock) _controller!.Toggle(); };
         _tray.SettingsRequested += OpenSettings;
-        _tray.UpdateCheckRequested += CheckForUpdates;
         _tray.OpenConfigRequested += OpenConfigFile;
         _tray.RestartAsAdminRequested += RestartAsAdmin;
         _tray.QuitRequested += QuitWithConfirm;
@@ -140,6 +140,8 @@ public partial class App : Application
                 "Could not install the keyboard hook, so locking is disabled - a lock you " +
                 "couldn't undo would be worse. Try restarting Pawse.");
         }
+
+        StartAutoUpdateCheck();   // no-op unless the user turned it on
 
         Log.Info("startup complete");
     }
@@ -243,6 +245,7 @@ public partial class App : Application
             }
             _settingsWindow = new SettingsWindow(_controller!.Config, () => _controller!.IsLocked);
             _settingsWindow.Applied += ApplyConfigChange;
+            _settingsWindow.CheckUpdatesRequested += () => CheckForUpdates(interactive: true);
             _settingsWindow.Closed += (_, _) =>
             {
                 _settingsWindow = null;
@@ -287,6 +290,7 @@ public partial class App : Application
         }
         _tray!.DoubleClickUnlock = config.General.TrayDoubleClickUnlock;
         Autostart.SetEnabled(config.General.Autostart);
+        StartAutoUpdateCheck();   // re-armed or stopped to match the new setting
         // If Block Win+L was just enabled but this PC needs admin to apply it, offer to
         // relaunch elevated (same prompt as startup). On Yes we hand off and stop here.
         if (RelaunchElevatedIfWinLockNeedsIt(config)) return;
@@ -308,25 +312,35 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The tray's "Check for updates…" - the only place Pawse goes online, and only because
-    /// the user just asked it to. Re-entry is refused rather than queued: the menu item stays
-    /// clickable, but a second click while one check is in flight does nothing.
+    /// Settings → Updates → "Check now", and the opt-in daily check. Pawse reaches the
+    /// network here and nowhere else. Re-entry is refused rather than queued.
     /// </summary>
-    private async void CheckForUpdates()
+    /// <param name="interactive">True when the user just pressed the button: it may put
+    /// dialogs on screen and offer to install. False for the daily check, which is allowed
+    /// to say "there's an update" through the tray balloon and nothing more.</param>
+    private async void CheckForUpdates(bool interactive)
     {
-        if (_updateCheckBusy) return;
+        if (_updateCheckBusy)
+        {
+            if (interactive) _settingsWindow?.ShowUpdateStatus("A check is already running.");
+            return;
+        }
         _updateCheckBusy = true;
         try
         {
-            await RunUpdateCheck();
+            await RunUpdateCheck(interactive);
         }
         catch (Exception ex)
         {
             // async void: no caller can catch this, and looking for an update must never be
             // the thing that takes the app down.
             Log.Error("update check", ex);
-            MessageBox.Show("Pawse could not check for updates.\n\n" + ex.Message,
-                "Pawse", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (interactive)
+            {
+                _settingsWindow?.ShowUpdateStatus("The check failed.");
+                MessageBox.Show("Pawse could not check for updates.\n\n" + ex.Message,
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         finally
         {
@@ -334,21 +348,26 @@ public partial class App : Application
         }
     }
 
-    private async Task RunUpdateCheck()
+    private async Task RunUpdateCheck(bool interactive)
     {
         string current = Version;
         if (current == UpdateCheck.DevVersion)
         {
-            MessageBox.Show($"This is a development build ({current}) - there is nothing to compare a release against.",
-                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            Log.Info("update check: development build, nothing to compare against");
+            if (interactive)
+                _settingsWindow?.ShowUpdateStatus($"Development build ({current}) - nothing to compare.");
             return;
         }
 
-        Log.Info($"update check: asking {UpdateCheck.FeedUrl} (this copy is {current})");
+        Log.Info($"update check ({(interactive ? "requested" : "daily")}): asking {UpdateCheck.FeedUrl} (this copy is {current})");
         var result = await UpdateCheck.FetchAsync();
+        StampCheckedNow();
+
         if (result.Info is not { } info)
         {
             Log.Warn($"update check failed: {result.Error}");
+            if (!interactive) return;   // a daily check that can't reach the net says nothing
+            _settingsWindow?.ShowUpdateStatus(result.Error ?? "The check failed.");
             OfferDownloadsPage((result.Error ?? "The update check failed.") +
                                "\n\nOpen the downloads page instead?");
             return;
@@ -357,8 +376,16 @@ public partial class App : Application
         if (!UpdateCheck.IsNewer(current, info.Version))
         {
             Log.Info($"update check: {current} is current (the feed offers {info.Version})");
-            MessageBox.Show($"Pawse {current} is the latest version.",
-                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (interactive) _settingsWindow?.ShowUpdateStatus($"Pawse {current} is the latest version.");
+            return;
+        }
+
+        if (!interactive)
+        {
+            // Opting into the daily check opts into being told, not into a dialog appearing
+            // over whatever you were doing - let alone an install.
+            Log.Info($"update check: {info.Version} available (daily check - notifying only)");
+            _tray?.Notify("Pawse", $"Pawse {info.Version} is available. Settings → Updates to install it.");
             return;
         }
 
@@ -370,6 +397,8 @@ public partial class App : Application
             _ => null,
         };
         Log.Info($"update check: {info.Version} is available (this copy is {kind})");
+
+        _settingsWindow?.ShowUpdateStatus($"Pawse {info.Version} is available.");
 
         if (asset is null)
         {
@@ -416,6 +445,43 @@ public partial class App : Application
             Log.Error("update: starting the installer", ex);
             OfferDownloadsPage("The installer could not be started.\n\nOpen the downloads page instead?", info.NotesUrl);
         }
+    }
+
+    /// <summary>Remember that a check happened, so the daily one doesn't run again on every
+    /// restart. Stamped whether or not the fetch succeeded: an offline machine should retry
+    /// tomorrow, not once an hour.</summary>
+    private void StampCheckedNow()
+    {
+        if (_controller is null) return;
+        _controller.Config.Update.LastCheckUtc = DateTime.UtcNow;
+        _controller.Config.Save();
+    }
+
+    /// <summary>
+    /// Arms the opt-in daily check. The first look is a minute after startup - nothing about
+    /// the lock should ever wait on the network - and it then ticks hourly, doing nothing
+    /// until <see cref="UpdateCheck.IsCheckDue"/> says a day has passed.
+    /// </summary>
+    private void StartAutoUpdateCheck()
+    {
+        StopAutoUpdateCheck();
+        if (_controller?.Config.Update.AutoCheck != true) return;
+        _autoUpdate = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _autoUpdate.Tick += (_, _) =>
+        {
+            _autoUpdate!.Interval = TimeSpan.FromHours(1);
+            if (_controller?.Config.Update.AutoCheck != true) { StopAutoUpdateCheck(); return; }
+            if (!UpdateCheck.IsCheckDue(_controller.Config.Update.LastCheckUtc, DateTime.UtcNow)) return;
+            CheckForUpdates(interactive: false);
+        };
+        _autoUpdate.Start();
+        Log.Info("daily update check armed");
+    }
+
+    private void StopAutoUpdateCheck()
+    {
+        _autoUpdate?.Stop();
+        _autoUpdate = null;
     }
 
     /// <summary>Every dead end in the update flow ends the same way: say what happened, and
@@ -498,6 +564,7 @@ public partial class App : Application
         // Stop listening first - we're already on our way out, and a second request
         // arriving mid-teardown would only re-enter Shutdown.
         try { _quitChannel?.Dispose(); } catch { /* ignore */ }
+        StopAutoUpdateCheck();
         try { _controller?.Disengage("shutdown"); } catch { /* ignore */ }
         // Disengage's UI-thread dispatch may not run before we exit, so revert the
         // OS-level guards synchronously here (delete the policy value, disable WEKF).

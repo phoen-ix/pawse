@@ -119,6 +119,27 @@ public class UpdateInstallKindTests
             UpdateCheck.DetectInstall(@"C:\Program Files\Pawse", MinExe, () => @"C:\Program Files\Pawse"));
 }
 
+public class UpdateScheduleTests
+{
+    private static readonly DateTime Now = new(2026, 8, 6, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Never_checked_is_due()
+        => Assert.True(UpdateCheck.IsCheckDue(null, Now));
+
+    [Fact]
+    public void Checked_an_hour_ago_is_not_due()
+        => Assert.False(UpdateCheck.IsCheckDue(Now.AddHours(-1), Now));
+
+    [Fact]
+    public void Checked_a_day_ago_is_due()
+        => Assert.True(UpdateCheck.IsCheckDue(Now - UpdateCheck.AutoCheckInterval, Now));
+
+    [Fact]
+    public void A_stamp_in_the_future_is_due_rather_than_parked()
+        => Assert.True(UpdateCheck.IsCheckDue(Now.AddYears(1), Now));
+}
+
 public class UpdateHashTests
 {
     [Fact]

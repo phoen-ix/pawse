@@ -110,6 +110,17 @@
                     <TextBlock Text="seconds" VerticalAlignment="Center" />
                 </StackPanel>
 
+                <TextBlock Text="Updates" Style="{StaticResource Header}" />
+                <CheckBox x:Name="ChkAutoUpdate" Content="Check for updates once a day" />
+                <TextBlock Style="{StaticResource Hint}"
+                           Text="Off by default. Pawse contacts pawse.at only when you press Check now - or, with this on, once a day while it's running. A daily check only tells you an update exists; installing always asks first." />
+                <StackPanel Orientation="Horizontal" Margin="22,4,0,2">
+                    <Button x:Name="BtnCheckUpdates" Content="Check now" Width="100" Height="26"
+                            HorizontalAlignment="Left" Click="OnCheckUpdates" />
+                    <TextBlock x:Name="LblUpdateStatus" VerticalAlignment="Center" Margin="10,0,0,0"
+                               FontSize="11" Foreground="#FF7A808A" TextWrapping="Wrap" />
+                </StackPanel>
+
                 <TextBlock Text="Lock popup" Style="{StaticResource Header}" />
                 <CheckBox x:Name="ChkOverlay" Content="Show the floating lock popup" />
                 <StackPanel Orientation="Horizontal" Margin="22,6,0,2">

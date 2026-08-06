@@ -192,4 +192,34 @@ public class ConfigDefaultsTests
     [Fact]
     public void The_mouse_is_not_blocked_by_default()
         => Assert.False(new Config().General.BlockMouse);
+
+    /// <summary>The network stays untouched until the user asks for it - see UpdateCheck.</summary>
+    [Fact]
+    public void The_automatic_update_check_is_off_by_default()
+    {
+        var c = new Config();
+        Assert.False(c.Update.AutoCheck);
+        Assert.Null(c.Update.LastCheckUtc);
+    }
+
+    [Fact]
+    public void The_update_section_round_trips()
+    {
+        var c = new Config();
+        c.Update.AutoCheck = true;
+        c.Update.LastCheckUtc = new DateTime(2026, 8, 6, 10, 30, 0, DateTimeKind.Utc);
+
+        var back = Config.FromJson(c.ToJson());
+
+        Assert.True(back!.Update.AutoCheck);
+        Assert.Equal(c.Update.LastCheckUtc, back.Update.LastCheckUtc);
+    }
+
+    [Fact]
+    public void A_nulled_update_section_is_reseeded()
+    {
+        var cfg = Config.FromJson("""{"Update": null}""");
+        Assert.NotNull(cfg!.Update);
+        Assert.False(cfg.Update.AutoCheck);
+    }
 }

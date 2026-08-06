@@ -49,12 +49,13 @@ installers are built from [`packaging/`](packaging/).
   balloon hint - **double-click** to unlock, so a stray paw-click can't undo the
   lock. (Prefer the classic single-click toggle? Turn the double-click guard off
   in Settings.)
-- **Right-click** for the menu: Lock/Unlock, Settings…, Check for updates…, Open config
-  file, Quit (Quit asks for confirmation while locked).
-- **Check for updates…** is the only thing in Pawse that goes online, and only when you
-  click it. If there's a newer release and you agree, an installed Pawse downloads the
-  matching installer, verifies its checksum and runs it; a portable copy points you at the
-  download page instead. See [Privacy](#privacy).
+- **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
+  (Quit asks for confirmation while locked).
+- **Settings → Updates** is the only thing in Pawse that goes online. **Check now** looks
+  once; if there's a newer release and you agree, an installed Pawse downloads the matching
+  installer, verifies its checksum and runs it (a portable copy points you at the download
+  page instead). **Check for updates once a day** is off by default, and when on it only
+  tells you - installing still takes a deliberate yes. See [Privacy](#privacy).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on your chosen monitor (you can turn it
@@ -127,10 +128,12 @@ blocks, and only force it if you tell them to.
 
 ## Privacy
 
-Pawse makes **no automatic network connections** - no telemetry, no background update
-check, no phone-home. Exactly one request exists, and only you can start it:
-**Check for updates…** in the tray menu fetches `https://pawse.at/latest.json` and sends
-nothing but a `Pawse/<version>` user agent (that request isn't logged on the server).
+Out of the box Pawse makes **no network connections at all** - no telemetry, no background
+check, no phone-home. Exactly one request exists: **Settings → Updates → Check now** fetches
+`https://pawse.at/latest.json` and sends nothing but a `Pawse/<version>` user agent (that
+request isn't logged on the server). Turning on **Check for updates once a day** makes that
+same request run by itself while Pawse is open, at most once every 24 hours - it's off
+unless you switch it on, and it never does more than notify.
 
 If it finds a newer release and you say yes, Pawse downloads the matching installer from
 GitHub Releases, checks it against the SHA-256 listed in the feed, and only then runs it -

@@ -16,6 +16,10 @@ public partial class SettingsWindow : Window
     /// <summary>Raised after Save has written control values back into the config.</summary>
     public event Action? Applied;
 
+    /// <summary>Raised by "Check now". App owns the check itself (and the download that may
+    /// follow); this window only shows what came of it - see <see cref="ShowUpdateStatus"/>.</summary>
+    public event Action? CheckUpdatesRequested;
+
     public SettingsWindow(Config cfg, Func<bool> isLocked)
     {
         InitializeComponent();
@@ -83,6 +87,11 @@ public partial class SettingsWindow : Window
         ChkTimer.IsChecked = _cfg.Unlock.Timer.Enabled;
         TxtTimerSeconds.Text = _cfg.Unlock.Timer.Seconds.ToString(CultureInfo.InvariantCulture);
 
+        ChkAutoUpdate.IsChecked = _cfg.Update.AutoCheck;
+        LblUpdateStatus.Text = _cfg.Update.LastCheckUtc is { } last
+            ? $"Last checked {last.ToLocalTime():yyyy-MM-dd HH:mm}"
+            : "Never checked";
+
         ChkOverlay.IsChecked = _cfg.Overlay.Enabled;
         int count = Math.Max(1, CmbMonitor.Items.Count);
         CmbMonitor.SelectedIndex = Math.Clamp(_cfg.Overlay.Monitor, 0, count - 1);
@@ -117,6 +126,8 @@ public partial class SettingsWindow : Window
         _cfg.Unlock.Timer.Enabled = ChkTimer.IsChecked == true;
         _cfg.Unlock.Timer.Seconds = ParseInt(TxtTimerSeconds.Text, _cfg.Unlock.Timer.Seconds, 1, 86400);
 
+        _cfg.Update.AutoCheck = ChkAutoUpdate.IsChecked == true;
+
         _cfg.Overlay.Enabled = ChkOverlay.IsChecked == true;
         _cfg.Overlay.Monitor = Math.Max(0, CmbMonitor.SelectedIndex);
         _cfg.Overlay.Opacity = SldOpacity.Value;
@@ -136,6 +147,21 @@ public partial class SettingsWindow : Window
 
         Applied?.Invoke();
         Close();
+    }
+
+    private void OnCheckUpdates(object sender, RoutedEventArgs e)
+    {
+        BtnCheckUpdates.IsEnabled = false;
+        LblUpdateStatus.Text = "Checking…";
+        CheckUpdatesRequested?.Invoke();
+    }
+
+    /// <summary>Report a finished check. Called by App on the UI thread; safe to call after
+    /// the user has closed the window (App null-checks its reference, WPF ignores the rest).</summary>
+    public void ShowUpdateStatus(string text)
+    {
+        LblUpdateStatus.Text = text;
+        BtnCheckUpdates.IsEnabled = true;
     }
 
     private void OnCancel(object sender, RoutedEventArgs e) => Close();

@@ -55,9 +55,18 @@ public static class UpdateCheck
     private static readonly TimeSpan FeedTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>How long the opt-in automatic check waits between attempts.</summary>
+    public static readonly TimeSpan AutoCheckInterval = TimeSpan.FromHours(24);
+
     /// <summary>Outcome of a feed fetch: either <paramref name="Info"/> or a human-readable
     /// <paramref name="Error"/> - never both, never neither.</summary>
     public sealed record FetchResult(UpdateInfo? Info, string? Error);
+
+    /// <summary>Whether the automatic check is due. Never checked = due. A stamp in the
+    /// future means the clock moved (or the file was edited), which also counts as due
+    /// rather than parking the check until that date arrives.</summary>
+    public static bool IsCheckDue(DateTime? lastUtc, DateTime nowUtc) =>
+        lastUtc is not { } last || last > nowUtc || nowUtc - last >= AutoCheckInterval;
 
     /// <summary>True when <paramref name="latest"/> is a strictly higher version than
     /// <paramref name="current"/>. Anything unparseable answers false: an update prompt off

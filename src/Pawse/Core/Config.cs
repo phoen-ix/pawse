@@ -18,6 +18,7 @@ public sealed class Config
     public UnlockCfg Unlock { get; set; } = new();
     public OverlayCfg Overlay { get; set; } = new();
     public SystemBlockCfg SystemBlock { get; set; } = new();
+    public UpdateCfg Update { get; set; } = new();
 
     public sealed class GeneralCfg
     {
@@ -34,6 +35,21 @@ public sealed class Config
         /// click shows a hint), so a stray paw-click can't undo the lock. Off =
         /// classic single-click toggle. Locking is always a single click.</summary>
         public bool TrayDoubleClickUnlock { get; set; } = true;
+    }
+
+    /// <summary>
+    /// The update check, which is the only thing in Pawse that can reach the network.
+    /// Off by default: nothing happens until you press "Check now" in Settings. Turning
+    /// <see cref="AutoCheck"/> on adds a once-a-day check while Pawse runs - it only ever
+    /// tells you an update exists; installing still takes a deliberate yes.
+    /// </summary>
+    public sealed class UpdateCfg
+    {
+        public bool AutoCheck { get; set; }
+
+        /// <summary>UTC of the last completed check, so the daily check doesn't fire again
+        /// on every restart. Written by the app; there is nothing to hand-edit here.</summary>
+        public DateTime? LastCheckUtc { get; set; }
     }
 
     public sealed class UnlockCfg
@@ -190,6 +206,7 @@ public sealed class Config
         Unlock.Timer ??= new();
         Overlay ??= new();
         SystemBlock ??= new();
+        Update ??= new();
     }
 
     /// <summary>
@@ -233,5 +250,6 @@ public sealed class Config
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
+        $"auto_update_check={Update.AutoCheck} " +
         $"sysblock=[win_l={SystemBlock.WinLock} launch_media={SystemBlock.LaunchMediaKeys}]";
 }

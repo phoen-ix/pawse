@@ -33,7 +33,6 @@ public sealed class TrayIcon : IDisposable
 
     public event Action? ToggleRequested;
     public event Action? SettingsRequested;
-    public event Action? UpdateCheckRequested;
     public event Action? OpenConfigRequested;
     public event Action? RestartAsAdminRequested;
     public event Action? QuitRequested;
@@ -42,8 +41,6 @@ public sealed class TrayIcon : IDisposable
     {
         _toggle = new ToolStripMenuItem("Lock now", null, (_, _) => ToggleRequested?.Invoke());
         var settings = new ToolStripMenuItem("Settings…", null, (_, _) => SettingsRequested?.Invoke());
-        // The only thing in Pawse that goes online, and only from this click.
-        var update = new ToolStripMenuItem("Check for updates…", null, (_, _) => UpdateCheckRequested?.Invoke());
         var openCfg = new ToolStripMenuItem("Open config file", null, (_, _) => OpenConfigRequested?.Invoke());
         var quit = new ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke());
 
@@ -51,7 +48,6 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(_toggle);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settings);
-        menu.Items.Add(update);
         menu.Items.Add(openCfg);
         // Only offer elevation when we're not already elevated. Needed for the Win+L block
         // on managed PCs and for the browser/calculator/media-key block (Keyboard Filter).
