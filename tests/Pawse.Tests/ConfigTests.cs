@@ -120,6 +120,7 @@ public class ConfigJsonTests
         var c = new Config();
         c.General.StartLocked = true;
         c.General.BlockMouse = true;
+        c.General.BlockScreenKeyboard = true;
         c.Unlock.Passphrase.Enabled = true;
         c.Unlock.Passphrase.Text = "let me in";
         c.Unlock.Timer.Seconds = 42;
@@ -131,6 +132,7 @@ public class ConfigJsonTests
         Assert.NotNull(back);
         Assert.True(back!.General.StartLocked);
         Assert.True(back.General.BlockMouse);
+        Assert.True(back.General.BlockScreenKeyboard);
         Assert.True(back.Unlock.Passphrase.Enabled);
         Assert.Equal("let me in", back.Unlock.Passphrase.Text);
         Assert.Equal(42, back.Unlock.Timer.Seconds);
@@ -177,4 +179,17 @@ public class ConfigJsonTests
     [Fact]
     public void Literal_null_document_yields_null()
         => Assert.Null(Config.FromJson("null"));
+}
+
+public class ConfigDefaultsTests
+{
+    /// <summary>The lock is about the hardware keyboard: an on-screen / touch keyboard keeps
+    /// working unless the user turns this on (LockController.OnKeyboard).</summary>
+    [Fact]
+    public void On_screen_keyboards_are_not_blocked_by_default()
+        => Assert.False(new Config().General.BlockScreenKeyboard);
+
+    [Fact]
+    public void The_mouse_is_not_blocked_by_default()
+        => Assert.False(new Config().General.BlockMouse);
 }

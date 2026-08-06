@@ -20,6 +20,11 @@ internal static class NativeMethods
     /// <summary>Tag stamped on our own injected input so the hook lets it through.</summary>
     public static readonly nuint PAWSE_MAGIC = unchecked((nuint)0x50415753u); // "PAWS"
 
+    /// <summary>KBDLLHOOKSTRUCT.flags bit for "some process injected this event" (any
+    /// integrity level). An on-screen keyboard types through SendInput, so this is how it
+    /// reaches the hook - the flag never says WHICH process injected it.</summary>
+    public const uint LLKHF_INJECTED = 0x10;
+
     public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]

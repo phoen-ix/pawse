@@ -57,7 +57,8 @@ public sealed class KeyboardHook : IDisposable
                 {
                     var s = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
                     bool ours = s.dwExtraInfo == NativeMethods.PAWSE_MAGIC;
-                    if (_controller.OnKeyboard((int)s.vkCode, isDown, ours))
+                    bool injected = (s.flags & NativeMethods.LLKHF_INJECTED) != 0;
+                    if (_controller.OnKeyboard((int)s.vkCode, isDown, ours, injected))
                         return 1;
                 }
                 catch (Exception ex)

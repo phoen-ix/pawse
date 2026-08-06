@@ -24,6 +24,11 @@ public sealed class Config
         public bool Autostart { get; set; }
         public bool BlockMouse { get; set; }
 
+        /// <summary>Off by default: an on-screen / touch keyboard keeps working while the
+        /// hardware keyboard is locked. The hook can only tell that a keystroke was
+        /// simulated, not which program simulated it, so this covers all injected input.</summary>
+        public bool BlockScreenKeyboard { get; set; }
+
         /// <summary>While locked, the tray paw unlocks only on a double-click (a lone
         /// click shows a hint), so a stray paw-click can't undo the lock. Off =
         /// classic single-click toggle. Locking is always a single click.</summary>
@@ -223,6 +228,7 @@ public sealed class Config
 
     public string Summary() =>
         $"gui=tray lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
+        $"block_screen_keyboard={General.BlockScreenKeyboard} " +
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +

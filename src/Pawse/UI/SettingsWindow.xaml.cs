@@ -58,6 +58,7 @@ public partial class SettingsWindow : Window
         ChkStartLocked.IsChecked = _cfg.General.StartLocked;
         ChkAutostart.IsChecked = Autostart.IsEnabled();
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
+        ChkBlockScreenKeyboard.IsChecked = _cfg.General.BlockScreenKeyboard;
         ChkTrayDoubleClick.IsChecked = _cfg.General.TrayDoubleClickUnlock;
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
@@ -94,6 +95,7 @@ public partial class SettingsWindow : Window
         _cfg.General.StartLocked = ChkStartLocked.IsChecked == true;
         _cfg.General.Autostart = ChkAutostart.IsChecked == true;
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
+        _cfg.General.BlockScreenKeyboard = ChkBlockScreenKeyboard.IsChecked == true;
         _cfg.General.TrayDoubleClickUnlock = ChkTrayDoubleClick.IsChecked == true;
 
         _cfg.SystemBlock.WinLock = ChkWinLock.IsChecked == true;

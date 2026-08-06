@@ -52,6 +52,9 @@
                 <CheckBox x:Name="ChkBlockMouse" Content="Also block the mouse while locked" />
                 <TextBlock Style="{StaticResource Hint}"
                            Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
+                <CheckBox x:Name="ChkBlockScreenKeyboard" Content="Also block on-screen keyboards while locked" />
+                <TextBlock Style="{StaticResource Hint}"
+                           Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse makes an on-screen keyboard unclickable anyway.)" />
                 <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
                 <TextBlock Style="{StaticResource Hint}"
                            Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />

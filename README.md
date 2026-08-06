@@ -56,6 +56,8 @@ off, move it, and set its opacity). The desktop stays visible around it.
 
 Mouse blocking is **off by default**; enable it in Settings if the cat uses the
 mouse too. (With it on, unlock with the keyboard - the hold button needs the mouse.)
+Blocking **on-screen keyboards** is off by default as well - see
+[What it can and can't block](#what-it-can-and-cant-block).
 
 ## Configuration & logs
 
@@ -70,6 +72,13 @@ folder isn't writable):
 The global low-level keyboard hook swallows **all physical keys while locked**,
 including the F-keys and normal typing, and it clears any stuck modifier on lock
 (fixing the "Ctrl seems held → the browser zooms when I scroll" problem).
+
+**On-screen keyboards keep working** - the lock is about the hardware keyboard, so
+`osk.exe`, the Windows touch keyboard and third-party ones type as usual while locked,
+and the unlock chord can be tapped on them. Turn on "Also block on-screen keyboards
+while locked" (**Settings → General**) if you want them frozen too. One caveat worth
+knowing: Windows only tells the hook that a keystroke was *simulated*, never which
+program simulated it, so leaving this off also lets macro tools type while locked.
 
 **`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
 so Pawse can optionally block it **only while locked** - off by default; turn it on

@@ -27,10 +27,11 @@ public class LockControllerTests
 
         /// <summary>Feed one key event; returns true if Pawse swallowed it. A swallowed event
         /// never reaches the stage that updates the OS key state, so <see cref="OsDown"/>
-        /// only moves for events that passed through.</summary>
-        public bool Send(int vk, bool isDown)
+        /// only moves for events that passed through. <paramref name="injected"/> models an
+        /// on-screen keyboard (or any other SendInput source).</summary>
+        public bool Send(int vk, bool isDown, bool injected = false)
         {
-            bool swallowed = Controller.OnKeyboard(vk, isDown, ours: false);
+            bool swallowed = Controller.OnKeyboard(vk, isDown, ours: false, injected: injected);
             if (!swallowed)
             {
                 if (isDown) OsDown.Add(Keys.Normalize(vk));
@@ -158,6 +159,41 @@ public class LockControllerTests
         // or the foreground is left with a stuck modifier.
         Assert.False(h.Send(Keys.VK_LCONTROL, false));
         Assert.True(h.Send(A, true));                 // everything else stays swallowed
+    }
+
+    [Fact]
+    public void An_on_screen_keyboard_keeps_typing_while_the_hardware_keyboard_is_locked()
+    {
+        var h = new Harness();
+        h.Controller.Engage("test");
+
+        Assert.False(h.Send(A, true, injected: true));  // reaches the focused app
+        Assert.False(h.Send(A, false, injected: true));
+        Assert.True(h.Send(A, true));                   // the real keyboard stays locked
+    }
+
+    [Fact]
+    public void Blocking_on_screen_keyboards_swallows_injected_keys_too()
+    {
+        var config = new Config();
+        config.General.BlockScreenKeyboard = true;
+
+        var h = new Harness(config);
+        h.Controller.Engage("test");
+
+        Assert.True(h.Send(A, true, injected: true));
+        Assert.True(h.Send(A, false, injected: true));
+    }
+
+    [Fact]
+    public void The_unlock_chord_can_be_tapped_on_an_on_screen_keyboard()
+    {
+        var h = new Harness();
+        h.Controller.Engage("test");
+
+        h.Send(Keys.VK_LCONTROL, true, injected: true);
+        Assert.True(h.Send(L, true, injected: true)); // the completing key is swallowed
+        Assert.False(h.Controller.IsLocked);
     }
 
     [Fact]
