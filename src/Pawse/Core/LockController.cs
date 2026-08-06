@@ -9,6 +9,14 @@ namespace Pawse.Core;
 ///
 /// <para><see cref="LockedChanged"/> is raised synchronously on whichever thread
 /// flipped the state; App marshals the actual UI work onto the dispatcher.</para>
+///
+/// <para>Which keys are held is decided differently in the two states. While UNLOCKED every
+/// key passes through, so the OS agrees with us and <see cref="PruneReleased"/> can heal our
+/// set from <c>GetAsyncKeyState</c>. While LOCKED that state is useless - it is updated
+/// downstream of WH_KEYBOARD_LL, so a key-down we swallow never registers there - and this
+/// class's own down/up record is the only truth. The one thing that can make that record
+/// drift is a desktop switch eating key-ups, which is what <see cref="ForgetHeldKeys"/> is
+/// for.</para>
 /// </summary>
 public sealed class LockController
 {
@@ -21,13 +29,21 @@ public sealed class LockController
     /// their key-UPs through while locked to avoid a stuck modifier.</summary>
     private readonly HashSet<int> _leakedDown = new();
 
-    /// <summary>Normalized VKs that were physically held when the lock engaged (e.g.
-    /// the lock hotkey's own keys). The OS autorepeats the newest held key, and those
-    /// repeat DOWNs would re-enter <see cref="_pressed"/> and could complete an unlock
-    /// chord that overlaps the hotkey. A key leaves this set only on its real key-UP
-    /// (or when pruning sees it released), so held-across-the-lock keys never count
-    /// toward the unlock chord until deliberately pressed again.</summary>
+    /// <summary>Normalized VKs that were physically held when the lock engaged (e.g. the lock
+    /// hotkey's own keys). The OS autorepeats a held key, and to the hook those repeats are
+    /// ordinary key-downs: feeding them to the matchers would let a key the user never pressed
+    /// again type the passphrase or complete the unlock chord by itself. Repeats of these keys
+    /// are therefore ignored until the key's real key-UP (or <see cref="ForgetHeldKeys"/>)
+    /// drops it from the set. It stays in <see cref="_pressed"/> throughout - it really is
+    /// held, and the unlock chord is entitled to count it once the chord is re-formed.</summary>
     private readonly HashSet<int> _staleSinceEngage = new();
+
+    /// <summary>"Is this normalized VK physically down?" - the OS by default, swappable in
+    /// tests. Only meaningful for keys the system actually processed (see OnKeyboard).</summary>
+    private readonly Func<int, bool> _isPhysicallyDown;
+
+    /// <summary>Injects modifier key-UPs; <see cref="Input.ClearModifiers"/> by default.</summary>
+    private readonly Action _clearModifiers;
 
     private ChordMatcher? _unlockChord;
     private ChordMatcher? _lockHotkey;
@@ -50,9 +66,15 @@ public sealed class LockController
     /// <summary>Raised with the new locked state. Handlers should be quick or defer.</summary>
     public event Action<bool>? LockedChanged;
 
-    public LockController(Config config)
+    public LockController(Config config) : this(config, null, null) { }
+
+    /// <summary>Test seam: the two calls into the OS this class makes are injectable so the
+    /// state machine can be driven without a keyboard (see Pawse.Tests).</summary>
+    internal LockController(Config config, Func<int, bool>? isPhysicallyDown, Action? clearModifiers)
     {
         Config = config;
+        _isPhysicallyDown = isPhysicallyDown ?? PhysicallyDown;
+        _clearModifiers = clearModifiers ?? Input.ClearModifiers;
         RebuildMatchers();
     }
 
@@ -74,6 +96,9 @@ public sealed class LockController
             _passphrase = Config.Unlock.Passphrase.Enabled
                 ? new PassphraseMatcher(Config.Unlock.Passphrase.Text, Config.Unlock.Passphrase.ResetOnWrongKey)
                 : null;
+            // Re-bound mid-lock (Settings → Apply): a brand-new matcher is armed, so if the
+            // new chord happens to be held right now, the next autorepeat would unlock.
+            if (_isLocked) _unlockChord?.Prime(_pressed);
         }
     }
 
@@ -96,7 +121,7 @@ public sealed class LockController
             bool staleRepeat = isDown && _staleSinceEngage.Contains(nv);
             if (isDown)
             {
-                if (!staleRepeat) _pressed.Add(nv);
+                _pressed.Add(nv);
             }
             else
             {
@@ -104,12 +129,21 @@ public sealed class LockController
                 _staleSinceEngage.Remove(nv);
             }
 
-            // Key-ups delivered on another desktop (Win+L's Winlogon, a UAC prompt)
-            // never reach a LL hook, leaving phantom entries in _pressed - and a
-            // phantom plus subset/exact matching would let a single real keypress
-            // complete a chord. Reconcile against the OS's async key state before
-            // matching; the sets are tiny, so this is a handful of user32 calls.
-            PruneReleased(exceptNv: nv);
+            // Key-ups delivered on another desktop (Win+L's Winlogon, a UAC prompt) never
+            // reach a LL hook, leaving phantom entries in _pressed - and a phantom plus
+            // subset matching would let a single real keypress complete the lock hotkey.
+            // Reconcile against the OS's async key state; the sets are tiny, so this is a
+            // handful of user32 calls.
+            //
+            // ONLY while unlocked. That state is updated downstream of WH_KEYBOARD_LL ("the
+            // callback function is called before the asynchronous state of the key is
+            // updated"), so it only ever knows about events the system actually processed -
+            // and while locked we swallow every key-down, so the OS never records it.
+            // Pruning there would evict the very keys being held for the unlock chord: the
+            // Ctrl of a Ctrl+L would be gone by the time L arrives, and no multi-key chord
+            // could ever complete. While locked, our own down/up record is the only truth;
+            // phantoms are healed by ForgetHeldKeys when the input desktop comes back.
+            if (!_isLocked) PruneReleased(exceptNv: nv);
 
             if (_isLocked)
             {
@@ -165,11 +199,14 @@ public sealed class LockController
             if (_isLocked) return;
             _isLocked = true;
             Log.Info($"LOCK engaged (source={source})");
-            Input.ClearModifiers();        // fast; kills stuck-modifier / zoom-on-scroll bug
+            _clearModifiers();             // fast; kills stuck-modifier / zoom-on-scroll bug
             _staleSinceEngage.Clear();
-            _staleSinceEngage.UnionWith(_pressed); // held-at-engage keys must be re-pressed to count
-            _pressed.Clear();
-            _unlockChord?.Reset();
+            _staleSinceEngage.UnionWith(_pressed); // their autorepeat must not feed the matchers
+            // _pressed is NOT cleared: it is what the user is physically holding, and while
+            // locked nothing else can tell us (see the pruning note in OnKeyboard). Priming
+            // the chord instead of resetting it is what keeps a held Ctrl+L from unlocking
+            // the moment it autorepeats - an already-satisfied chord must be broken first.
+            _unlockChord?.Prime(_pressed);
             _passphrase?.Reset();
         }
         RaiseLocked(true);
@@ -182,7 +219,10 @@ public sealed class LockController
             if (!_isLocked) return;
             _isLocked = false;
             Log.Info($"UNLOCK ({source})");
-            Input.ClearModifiers();
+            _clearModifiers();
+            // Clearing is truthful here: ClearModifiers has just made the OS-level modifier
+            // state "up", so the foreground app holds nothing either. Real keys still held
+            // announce themselves again on their next event.
             _pressed.Clear();
             _leakedDown.Clear();
             _staleSinceEngage.Clear();
@@ -190,12 +230,32 @@ public sealed class LockController
         RaiseLocked(false);
     }
 
+    /// <summary>
+    /// Drop everything we believe is held. Called when key-ups were provably missed - input
+    /// went to a desktop we don't own (Win+L's Winlogon, a UAC prompt, Ctrl+Alt+Del), where
+    /// no LL hook of ours runs. Without this a key released over there stays "held" forever
+    /// and, under exact matching, blocks the unlock chord for good.
+    /// <para><see cref="_leakedDown"/> is deliberately kept: its entries only ever let a
+    /// key-UP through to the foreground, and dropping them risks a stuck modifier.</para>
+    /// </summary>
+    public void ForgetHeldKeys()
+    {
+        lock (_gate)
+        {
+            if (_pressed.Count == 0 && _staleSinceEngage.Count == 0) return;
+            _pressed.Clear();
+            _staleSinceEngage.Clear();
+            _unlockChord?.Reset();
+            _lockHotkey?.Reset();
+        }
+    }
+
     private void PruneReleased(int exceptNv)
     {
         // The current event's own key is exempt: for the key being processed the
         // async state may not be updated yet (LL hooks run ahead of it).
-        _pressed.RemoveWhere(nv => nv != exceptNv && !PhysicallyDown(nv));
-        _staleSinceEngage.RemoveWhere(nv => nv != exceptNv && !PhysicallyDown(nv));
+        _pressed.RemoveWhere(nv => nv != exceptNv && !_isPhysicallyDown(nv));
+        _staleSinceEngage.RemoveWhere(nv => nv != exceptNv && !_isPhysicallyDown(nv));
     }
 
     private static bool PhysicallyDown(int nv)

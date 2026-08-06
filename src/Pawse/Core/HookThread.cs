@@ -17,6 +17,10 @@ namespace Pawse.Core;
 /// thread also re-registers both hooks every few seconds (WM_TIMER) - the
 /// standard self-heal idiom. Re-registering an alive hook is cheap; the
 /// unhook→rehook gap is microseconds.</para>
+///
+/// <para>The same tick watches for input moving to a desktop we don't own (lock
+/// screen, UAC prompt), where key-ups happen out of our sight - see
+/// <see cref="CheckInputDesktop"/>.</para>
 /// </summary>
 public sealed class HookThread
 {
@@ -30,6 +34,7 @@ public sealed class HookThread
     private MouseHook? _mouse;
     private bool _installOk;
     private bool _rehookFailureLogged;
+    private bool _wasAwayFromInputDesktop;
 
     public HookThread(LockController controller) => _controller = controller;
 
@@ -70,12 +75,47 @@ public sealed class HookThread
 
         while (NativeMethods.GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
         {
-            if (msg.message == NativeMethods.WM_TIMER) Rehook();
+            if (msg.message == NativeMethods.WM_TIMER) OnTimer();
             else NativeMethods.DispatchMessageW(ref msg);
         }
 
         _mouse?.Dispose();
         _kb.Dispose();
+    }
+
+    private void OnTimer()
+    {
+        Rehook();
+        CheckInputDesktop();
+    }
+
+    /// <summary>
+    /// Notice when input goes to a desktop we don't own - the lock screen, a UAC prompt,
+    /// Ctrl+Alt+Del. No hook of ours runs over there, so any key released there is one we
+    /// never see go up, and it would stay "held" forever: under the unlock chord's exact
+    /// matching, one such phantom blocks unlocking by keyboard for good. Forget the held
+    /// keys on the way out and again on the way back. (Nothing arrives while we're away, so
+    /// clearing on the two edges covers everything repeated polling would.)
+    /// </summary>
+    private void CheckInputDesktop()
+    {
+        bool away = !OnInputDesktop();
+        if (away == _wasAwayFromInputDesktop) return;
+        _wasAwayFromInputDesktop = away;
+        _controller.ForgetHeldKeys();
+        Log.Info(away
+            ? "input moved to another desktop (lock screen / UAC) - held keys forgotten"
+            : "back on the input desktop - held keys forgotten");
+    }
+
+    /// <summary>True if the desktop currently receiving input is one we can open - i.e. ours.
+    /// Winlogon's secure desktop denies access, which is exactly the case we're after.</summary>
+    private static bool OnInputDesktop()
+    {
+        IntPtr desktop = NativeMethods.OpenInputDesktop(0, false, NativeMethods.DESKTOP_READOBJECTS);
+        if (desktop == IntPtr.Zero) return false;
+        NativeMethods.CloseDesktop(desktop);
+        return true;
     }
 
     private void Rehook()
@@ -93,6 +133,8 @@ public sealed class HookThread
         else if (_rehookFailureLogged)
         {
             _rehookFailureLogged = false;
+            // We were blind for at least a tick: key-ups may have come and gone unseen.
+            _controller.ForgetHeldKeys();
             Log.Info("periodic hook re-registration recovered");
         }
     }

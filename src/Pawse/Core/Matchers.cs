@@ -28,14 +28,22 @@ public sealed class ChordMatcher
     /// <param name="isDown">True for key-down.</param>
     public bool Feed(HashSet<int> pressed, int justVk, bool isDown)
     {
-        bool now = _target.Count > 0 &&
-            (_requireExact ? _target.SetEquals(pressed) : _target.IsSubsetOf(pressed));
+        bool now = Matches(pressed);
         bool fire = now && !_satisfied && isDown && _target.Contains(justVk);
         _satisfied = now;
         return fire;
     }
 
+    /// <summary>Latch the matcher against what is held right now, without firing. Used when
+    /// the lock engages on this very chord: it is already satisfied, so it must be broken
+    /// before it can fire again - otherwise the OS autorepeat of the held key unlocks
+    /// instantly. Re-arming happens on its own, on the first event that breaks the chord.</summary>
+    public void Prime(HashSet<int> pressed) => _satisfied = Matches(pressed);
+
     public void Reset() => _satisfied = false;
+
+    private bool Matches(HashSet<int> pressed) =>
+        _target.Count > 0 && (_requireExact ? _target.SetEquals(pressed) : _target.IsSubsetOf(pressed));
 }
 
 /// <summary>

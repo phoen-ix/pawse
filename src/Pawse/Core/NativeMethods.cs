@@ -83,10 +83,21 @@ internal static class NativeMethods
     [DllImport("kernel32.dll")]
     public static extern uint GetCurrentThreadId();
 
-    /// <summary>High bit set = key physically down right now. Used to heal
-    /// <c>_pressed</c> after key-ups lost to a secure desktop (Win+L, UAC).</summary>
+    /// <summary>High bit set = key physically down right now. Only knows about events the
+    /// system actually processed - a key-down a LL hook swallowed never registers - so
+    /// <see cref="LockController"/> consults it only while unlocked.</summary>
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
+
+    // ---- Input desktop (are we still the desktop receiving input?) -----------
+    public const uint DESKTOP_READOBJECTS = 0x0001;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr OpenInputDesktop(uint dwFlags, [MarshalAs(UnmanagedType.Bool)] bool fInherit, uint dwDesiredAccess);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseDesktop(IntPtr hDesktop);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
