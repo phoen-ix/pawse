@@ -137,7 +137,8 @@ dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64 --self-contained tru
 ```
 
 The project compiles on Linux too (for type-checking) via `EnableWindowsTargeting`;
-the runnable exe is produced on Windows.
+the runnable exe is produced on Windows. The installers are built from the same
+`makensis` lines CI runs - see [`packaging/README.md`](packaging/README.md).
 
 ## License
 
