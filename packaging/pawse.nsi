@@ -167,8 +167,16 @@ Function un.onInit
     ; elevated copy of the installed uninstaller. Target $INSTDIR rather than $EXEPATH:
     ; NSIS runs uninstallers from a copy in $TEMP, and that copy is not what we want to
     ; re-launch. The elevated copy has a full admin token, so it never comes back here.
+    ; Forward /S: the QuietUninstallString runs this silently, and a handoff that
+    ; dropped the flag would turn that "quiet" uninstall into a full interactive
+    ; wizard behind the UAC prompt (see EnsurePawseClosed: a silent caller must
+    ; never block on a dialog).
     ClearErrors
-    ExecShell "runas" "$INSTDIR\uninstall.exe"
+    ${If} ${Silent}
+      ExecShell "runas" "$INSTDIR\uninstall.exe" "/S"
+    ${Else}
+      ExecShell "runas" "$INSTDIR\uninstall.exe"
+    ${EndIf}
     ${IfNot} ${Errors}
       Quit
     ${EndIf}
@@ -592,8 +600,9 @@ Function .onInit
   ; the whole page (MultiUser.nsh:444-447) - so a standard user who knows an admin password
   ; could never install machine-wide. Remember what we really are, then claim Admin purely
   ; so the choice renders; ElevateForAllUsers does the real elevating if it's picked.
-  ; RequestExecutionLevel is "highest", so a genuine admin is already elevated by here and
-  ; this is a no-op for them.
+  ; We run asInvoker (RequestExecutionLevel user, see above), so even an administrator
+  ; arrives here UNELEVATED with a filtered token that MultiUser reads as non-admin -
+  ; the fib below therefore matters for admins too, not just standard users.
   StrCpy $RealPrivileges $MultiUser.Privileges
   ${If} $RealPrivileges != "Admin"
   ${AndIf} $RealPrivileges != "Power"

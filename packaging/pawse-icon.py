@@ -34,9 +34,9 @@ here = os.path.dirname(os.path.abspath(__file__))
 sizes = [256, 128, 64, 48, 32, 24, 16]
 imgs = [render(s) for s in sizes]
 ico = os.path.join(here, 'pawse.ico')
-try:
-    imgs[0].save(ico, format='ICO', sizes=[(s, s) for s in sizes], append_images=imgs[1:])
-except TypeError:
-    imgs[0].save(ico, format='ICO', sizes=[(s, s) for s in sizes])
+# append_images needs Pillow >= 9.1 for ICO; older Pillow IGNORES unknown save
+# kwargs rather than raising, so there is no exception to fall back on - it would
+# just quietly resize the 256px frame for every size.
+imgs[0].save(ico, format='ICO', sizes=[(s, s) for s in sizes], append_images=imgs[1:])
 render(256).save(os.path.join(here, 'pawse.png'))
 print('wrote', ico)
