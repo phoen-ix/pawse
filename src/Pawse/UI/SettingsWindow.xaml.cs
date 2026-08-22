@@ -13,6 +13,10 @@ public partial class SettingsWindow : Window
 {
     private readonly Config _cfg;
 
+    /// <summary>What the monitor combo was set to on load (the stored index clamped to
+    /// the displays attached right now) - OnSave persists only a departure from this.</summary>
+    private int _loadedMonitorIndex;
+
     /// <summary>Raised after Save has written control values back into the config.</summary>
     public event Action? Applied;
 
@@ -94,7 +98,8 @@ public partial class SettingsWindow : Window
 
         ChkOverlay.IsChecked = _cfg.Overlay.Enabled;
         int count = Math.Max(1, CmbMonitor.Items.Count);
-        CmbMonitor.SelectedIndex = Math.Clamp(_cfg.Overlay.Monitor, 0, count - 1);
+        _loadedMonitorIndex = Math.Clamp(_cfg.Overlay.Monitor, 0, count - 1);
+        CmbMonitor.SelectedIndex = _loadedMonitorIndex;
         SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         SldVertical.Value = Math.Clamp(_cfg.Overlay.VerticalPercent, 0, 100);
     }
@@ -129,7 +134,12 @@ public partial class SettingsWindow : Window
         _cfg.Update.AutoCheck = ChkAutoUpdate.IsChecked == true;
 
         _cfg.Overlay.Enabled = ChkOverlay.IsChecked == true;
-        _cfg.Overlay.Monitor = Math.Max(0, CmbMonitor.SelectedIndex);
+        // Persist the display only when the user actually changed it. The combo can only
+        // show the displays attached right now, so with the laptop undocked the stored
+        // index is clamped for display - writing that clamp back on an unrelated save
+        // would permanently forget which monitor the user picked.
+        if (CmbMonitor.SelectedIndex != _loadedMonitorIndex)
+            _cfg.Overlay.Monitor = Math.Max(0, CmbMonitor.SelectedIndex);
         _cfg.Overlay.Opacity = SldOpacity.Value;
         _cfg.Overlay.VerticalPercent = (int)Math.Round(SldVertical.Value);
 

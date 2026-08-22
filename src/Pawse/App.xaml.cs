@@ -278,6 +278,9 @@ public partial class App : Application
         var config = _controller!.Config;
         config.Save();
         _controller.RebuildMatchers();
+        // The mouse hook only exists while BlockMouse is on (HookThread.SyncMouse) -
+        // tell the hook thread to reconcile now rather than on its next periodic tick.
+        _hooks?.SyncMouseHook();
         // Re-arm the auto-unlock timer against the NEW settings if we're locked right
         // now: without this, a timer disabled mid-lock still fires at its old deadline
         // (a surprise unlock), and a timer enabled mid-lock never arms at all - which

@@ -45,8 +45,11 @@ public partial class OverlayWindow : Window
         // work (and teaching the user that Pawse is broken).
         bool holdUsable = cfg.Unlock.MouseHold.Enabled && !cfg.General.BlockMouse;
         HoldArea.Visibility = holdUsable ? Visibility.Visible : Visibility.Collapsed;
-        AutoUnlockText.Visibility = cfg.Unlock.Timer.Enabled ? Visibility.Visible : Visibility.Collapsed;
-        if (cfg.Unlock.Timer.Enabled)
+        // Same guard as App.StartAutoUnlock: a hand-edited Seconds <= 0 arms no timer,
+        // so advertising "Auto-unlocks after 0s" would promise an unlock that never comes.
+        bool timerUsable = cfg.Unlock.Timer.Enabled && cfg.Unlock.Timer.Seconds > 0;
+        AutoUnlockText.Visibility = timerUsable ? Visibility.Visible : Visibility.Collapsed;
+        if (timerUsable)
             AutoUnlockText.Text = $"Auto-unlocks after {cfg.Unlock.Timer.Seconds}s";
     }
 

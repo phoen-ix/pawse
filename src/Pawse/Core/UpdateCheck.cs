@@ -23,9 +23,11 @@ public enum InstallKind
 }
 
 /// <summary>
-/// The only code in Pawse that touches the network, and it runs solely when the user picks
-/// "Check for updates…" from the tray. There is no timer, no startup check and no setting
-/// that could enable one - the request carries a version number and nothing else.
+/// The only code in Pawse that touches the network. It runs when the user presses
+/// "Check now" in Settings → Updates, or - only with the off-by-default
+/// <see cref="Config.UpdateCfg.AutoCheck"/> switched on - once a day while Pawse is open,
+/// and that daily check does no more than notify (installing still takes a deliberate
+/// yes). The request carries a version number and nothing else.
 ///
 /// <para>The feed lives on pawse.at (so checking never depends on the GitHub repo being
 /// public) while the installers come from GitHub Releases. That split is deliberate: the

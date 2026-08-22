@@ -3,7 +3,12 @@ using System.Threading;
 namespace Pawse.Core;
 
 /// <summary>
-/// Owns both low-level hooks on a dedicated message-pumping thread.
+/// Owns the low-level hooks on a dedicated message-pumping thread: the keyboard hook
+/// always, the mouse hook only while <see cref="Config.GeneralCfg.BlockMouse"/> is on.
+/// An installed WH_MOUSE_LL makes the system route EVERY mouse event through this
+/// thread and wait for the callback - a system-wide tax paid for the whole process
+/// lifetime - so a hook whose only job is off-by-default mouse blocking is not kept
+/// installed "just in case" (see <see cref="SyncMouse"/>).
 ///
 /// <para>Installed on the WPF UI thread, hook callbacks wait for whatever the
 /// dispatcher is doing - the overlay's first Show(), a config save, a settings
@@ -25,6 +30,11 @@ namespace Pawse.Core;
 public sealed class HookThread
 {
     private const uint RehookMs = 5000;
+
+    /// <summary>Thread message posted by <see cref="SyncMouseHook"/> so a BlockMouse
+    /// change applies immediately rather than on the next WM_TIMER tick. WM_APP - the
+    /// OS never posts this to a thread queue.</summary>
+    private const uint WM_SYNC_MOUSE = 0x8000;
 
     private readonly LockController _controller;
     private readonly ManualResetEventSlim _ready = new();
@@ -66,8 +76,7 @@ public sealed class HookThread
         _installOk = _kb.Install();
         if (_installOk)
         {
-            _mouse = new MouseHook(_controller);
-            _mouse.Install();
+            SyncMouse();
             NativeMethods.SetTimer(IntPtr.Zero, 0, RehookMs, IntPtr.Zero);
         }
         _ready.Set();
@@ -76,6 +85,7 @@ public sealed class HookThread
         while (NativeMethods.GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
         {
             if (msg.message == NativeMethods.WM_TIMER) OnTimer();
+            else if (msg.message == WM_SYNC_MOUSE) SyncMouse();
             else NativeMethods.DispatchMessageW(ref msg);
         }
 
@@ -83,8 +93,33 @@ public sealed class HookThread
         _kb.Dispose();
     }
 
+    /// <summary>Ask the hook thread to reconcile the mouse hook with the config now -
+    /// App calls this after a settings change. Safe from any thread; the periodic tick
+    /// would catch up within <see cref="RehookMs"/> anyway, this just removes the lag.</summary>
+    public void SyncMouseHook() =>
+        NativeMethods.PostThreadMessageW(_threadId, WM_SYNC_MOUSE, 0, 0);
+
+    /// <summary>Install or remove the mouse hook to match BlockMouse. Hook-thread only -
+    /// LL hooks must be (un)installed on the thread that pumps for them, which is also
+    /// what makes plain field access to <see cref="_mouse"/> safe.</summary>
+    private void SyncMouse()
+    {
+        bool want = _controller.Config.General.BlockMouse;
+        if (want && _mouse == null)
+        {
+            _mouse = new MouseHook(_controller);
+            _mouse.Install();
+        }
+        else if (!want && _mouse != null)
+        {
+            _mouse.Dispose();
+            _mouse = null;
+        }
+    }
+
     private void OnTimer()
     {
+        SyncMouse();
         Rehook();
         CheckInputDesktop();
     }

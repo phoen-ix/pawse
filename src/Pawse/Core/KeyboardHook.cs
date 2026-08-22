@@ -55,10 +55,17 @@ public sealed class KeyboardHook : IDisposable
             {
                 try
                 {
-                    var s = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
-                    bool ours = s.dwExtraInfo == NativeMethods.PAWSE_MAGIC;
-                    bool injected = (s.flags & NativeMethods.LLKHF_INJECTED) != 0;
-                    if (_controller.OnKeyboard((int)s.vkCode, isDown, ours, injected))
+                    // Field reads instead of PtrToStructure: that call marshals (and
+                    // allocates) the whole struct on every keystroke system-wide, and
+                    // only three fields are needed. KBDLLHOOKSTRUCT starts with four
+                    // uints, so vkCode/flags/dwExtraInfo sit at 0/8/16 on x86 and x64
+                    // alike (dwExtraInfo is pointer-aligned after 16 bytes either way).
+                    int vk = Marshal.ReadInt32(lParam);
+                    uint flags = (uint)Marshal.ReadInt32(lParam, 8);
+                    nuint extra = (nuint)(nint)Marshal.ReadIntPtr(lParam, 16);
+                    bool ours = extra == NativeMethods.PAWSE_MAGIC;
+                    bool injected = (flags & NativeMethods.LLKHF_INJECTED) != 0;
+                    if (_controller.OnKeyboard(vk, isDown, ours, injected))
                         return 1;
                 }
                 catch (Exception ex)

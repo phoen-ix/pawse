@@ -63,7 +63,7 @@ public class UpdateFeedTests
 
     [Theory]
     [InlineData("abc")]                     // too short
-    [InlineData("zzz9abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456")] // not hex
+    [InlineData("zzz3456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")] // 64 chars, not hex
     public void An_asset_without_a_real_sha256_is_dropped(string sha)
         => Assert.Null(UpdateCheck.Parse(Feed(sha: sha))!.Full);
 

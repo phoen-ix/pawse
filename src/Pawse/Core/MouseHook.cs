@@ -3,7 +3,10 @@ using System.Runtime.InteropServices;
 namespace Pawse.Core;
 
 /// <summary>
-/// Optional global low-level mouse hook. Off by default. When enabled and locked
+/// Optional global low-level mouse hook - only INSTALLED while
+/// <see cref="Config.GeneralCfg.BlockMouse"/> is on (see <see cref="HookThread.SyncMouse"/>);
+/// an installed WH_MOUSE_LL routes every mouse event system-wide through the hook
+/// thread, a tax not paid for an off-by-default feature. When installed and locked
 /// it swallows all mouse input. Note: with mouse-blocking ON, the overlay's
 /// hold-to-unlock button cannot receive clicks, so use a keyboard unlock method.
 /// Blocks only the legacy mouse stream: native touch/pen input reaches

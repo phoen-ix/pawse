@@ -8,7 +8,10 @@ namespace Pawse.Core;
 /// lock is set arithmetic - microseconds - so the hook path never waits long.
 ///
 /// <para><see cref="LockedChanged"/> is raised synchronously on whichever thread
-/// flipped the state; App marshals the actual UI work onto the dispatcher.</para>
+/// flipped the state, while still holding <see cref="_gate"/> - so two racing
+/// transitions can never deliver their notifications in the opposite order to the
+/// state changes (the UI would latch the stale one). Handlers must not block:
+/// App only does a <c>BeginInvoke</c> onto the dispatcher.</para>
 ///
 /// <para>Which keys are held is decided differently in the two states. While UNLOCKED every
 /// key passes through, so the OS agrees with us and <see cref="PruneReleased"/> can heal our
@@ -218,8 +221,11 @@ public sealed class LockController
             // the moment it autorepeats - an already-satisfied chord must be broken first.
             _unlockChord?.Prime(_pressed);
             _passphrase?.Reset();
+            // Inside the lock on purpose: raised after release, a hook-thread transition
+            // squeezing into that gap could get its notification out first and the UI
+            // would end up showing the stale state (see the class doc).
+            RaiseLocked(true);
         }
-        RaiseLocked(true);
     }
 
     public void Disengage(string source)
@@ -236,8 +242,8 @@ public sealed class LockController
             _pressed.Clear();
             _leakedDown.Clear();
             _staleSinceEngage.Clear();
+            RaiseLocked(false); // inside the lock - see Engage
         }
-        RaiseLocked(false);
     }
 
     /// <summary>
@@ -260,12 +266,25 @@ public sealed class LockController
         }
     }
 
+    // State for PruneReleased's cached predicate; only ever touched under _gate.
+    private int _pruneExceptNv;
+    private Predicate<int>? _prunePredicate;
+
+    /// <summary>Only called while unlocked (the caller guards). The predicate is a cached
+    /// closure reading <see cref="_pruneExceptNv"/>, not a per-call lambda: this runs on
+    /// every key event while unlocked, and capturing the parameter fresh each time
+    /// allocated a closure per keystroke in an otherwise allocation-free hot path. Safe
+    /// because everything here runs under <see cref="_gate"/>.</summary>
     private void PruneReleased(int exceptNv)
     {
         // The current event's own key is exempt: for the key being processed the
         // async state may not be updated yet (LL hooks run ahead of it).
-        _pressed.RemoveWhere(nv => nv != exceptNv && !_isPhysicallyDown(nv));
-        _staleSinceEngage.RemoveWhere(nv => nv != exceptNv && !_isPhysicallyDown(nv));
+        _pruneExceptNv = exceptNv;
+        _prunePredicate ??= nv => nv != _pruneExceptNv && !_isPhysicallyDown(nv);
+        _pressed.RemoveWhere(_prunePredicate);
+        // Empty on every unlocked event (Engage fills it, Disengage/ForgetHeldKeys clear
+        // it, all under _gate) - skip the scan rather than prove it forever.
+        if (_staleSinceEngage.Count > 0) _staleSinceEngage.RemoveWhere(_prunePredicate);
     }
 
     private static bool PhysicallyDown(int nv)

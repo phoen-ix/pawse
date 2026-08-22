@@ -70,31 +70,49 @@ public sealed class KeyboardFilterGuard
     /// <summary>
     /// Enable or disable the given predefined key combinations. No-op (safe) when
     /// the feature is unavailable. Intended to be called off the UI thread.
+    /// One query for the whole batch - a WHERE-per-id loop cost 18 WMI round-trips
+    /// on every lock/unlock. Returns true only when every requested rule was
+    /// actually written (missing ids are tolerated - nothing to revert there);
+    /// SystemBlock keeps its owed-revert marker unless a revert reports true, so a
+    /// failed Put can never orphan machine-wide rules with the marker already gone.
     /// </summary>
-    public void Set(IReadOnlyCollection<string> ids, bool enabled)
+    public bool Set(IReadOnlyCollection<string> ids, bool enabled)
     {
-        if (ids.Count == 0 || !IsAvailable()) return;
-        foreach (var id in ids)
+        if (ids.Count == 0) return true;      // nothing asked for - vacuously done
+        if (!IsAvailable()) return false;     // rules (if any) were definitely not written
+        var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+        bool ok = true;
+        try
         {
-            try
+            using var searcher = new ManagementObjectSearcher(
+                WmiScope, $"SELECT * FROM {PredefinedClass}");
+            using var col = searcher.Get();
+            foreach (ManagementObject mo in col)
             {
-                using var searcher = new ManagementObjectSearcher(
-                    WmiScope, $"SELECT * FROM {PredefinedClass} WHERE Id='{id}'");
-                using var col = searcher.Get();
-                bool found = false;
-                foreach (ManagementObject mo in col)
+                using (mo)
                 {
-                    using (mo)
+                    if (mo["Id"] is not string id || !wanted.Remove(id)) continue;
+                    try
                     {
                         mo["Enabled"] = enabled;
                         mo.Put();
-                        found = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        ok = false;
+                        Log.Error($"keyboard-filter set {id}={enabled}", ex);
                     }
                 }
-                if (!found) Log.Warn($"keyboard-filter: predefined key '{id}' not found on this build");
             }
-            catch (Exception ex) { Log.Error($"keyboard-filter set {id}={enabled}", ex); }
         }
+        catch (Exception ex)
+        {
+            Log.Error($"keyboard-filter set [{string.Join(", ", ids)}]={enabled}", ex);
+            return false;
+        }
+        if (wanted.Count > 0)
+            Log.Warn($"keyboard-filter: predefined keys not found on this build: [{string.Join(", ", wanted)}]");
         Log.Info($"keyboard-filter: {(enabled ? "enabled" : "disabled")} [{string.Join(", ", ids)}]");
+        return ok;
     }
 }

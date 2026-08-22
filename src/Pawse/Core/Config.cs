@@ -7,9 +7,10 @@ namespace Pawse.Core;
 /// <summary>
 /// User configuration, persisted as <c>pawse.json</c> next to the exe. Every
 /// unlock method has its own <c>Enabled</c> flag; the popup is optional; mouse
-/// blocking is off by default. Deliberately nothing in here can put Pawse on the
-/// network: the only request it ever makes is the update check the user starts by
-/// hand from the tray (<see cref="UpdateCheck"/>), which no setting can automate.
+/// blocking is off by default. The only thing here that can put Pawse on the
+/// network is the update check (<see cref="UpdateCheck"/>): manual via
+/// Settings → Updates → "Check now", or - only if <see cref="UpdateCfg.AutoCheck"/>
+/// is switched on - a once-a-day check that does no more than notify.
 /// </summary>
 public sealed class Config
 {
@@ -190,16 +191,22 @@ public sealed class Config
     /// System.Text.Json assigns a JSON <c>null</c> into non-nullable properties, so a
     /// hand-edited <c>"Unlock": null</c> would NRE later (worst case inside
     /// <see cref="HasUsableUnlock"/> during startup). Reseed any nulled section with
-    /// its defaults instead.
+    /// its defaults instead. The same applies one level down: a null ELEMENT inside a
+    /// Keys array (<c>"Keys": ["Ctrl", null]</c>) also deserializes fine and would NRE
+    /// in <see cref="Keys.NameToVk"/> - and because the JSON itself is valid, the
+    /// .bad-file recovery in <see cref="Load"/> never triggers, so without the scrub
+    /// below that one edit would crash-loop every startup.
     /// </summary>
     private void NormalizeAfterLoad()
     {
         General ??= new();
         LockHotkey ??= new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
         LockHotkey.Keys ??= new();
+        LockHotkey.Keys.RemoveAll(string.IsNullOrWhiteSpace);
         Unlock ??= new();
         Unlock.Chord ??= new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
         Unlock.Chord.Keys ??= new();
+        Unlock.Chord.Keys.RemoveAll(string.IsNullOrWhiteSpace);
         Unlock.Passphrase ??= new();
         Unlock.Passphrase.Text ??= "";
         Unlock.MouseHold ??= new();

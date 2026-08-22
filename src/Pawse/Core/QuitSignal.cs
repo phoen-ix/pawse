@@ -29,11 +29,17 @@ public static class QuitSignal
     /// which is not fatal: the app runs exactly as before and the installer falls back to
     /// asking the user whether to force the close.
     /// </summary>
-    public static IDisposable? Listen(Action onQuit)
+    public static IDisposable? Listen(Action onQuit) => Listen(onQuit, EventName);
+
+    /// <summary>Test seam: the same channel on an arbitrary event name. The named event is
+    /// session-global, so tests exercising the real <see cref="EventName"/> would signal -
+    /// and quit - a Pawse running in the developer's session; they use throwaway names
+    /// instead (a separate test pins the production name against pawse.nsi).</summary>
+    internal static IDisposable? Listen(Action onQuit, string eventName)
     {
         try
         {
-            var handle = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
+            var handle = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
             // Registering on an already-signalled event fires straight away, so a request
             // that arrives before we get here is still delivered rather than lost.
             var registration = ThreadPool.RegisterWaitForSingleObject(
@@ -65,11 +71,14 @@ public static class QuitSignal
     /// Ask a running Pawse to quit. False means nobody is listening - no instance running,
     /// or one built before this channel existed.
     /// </summary>
-    public static bool Signal()
+    public static bool Signal() => Signal(EventName);
+
+    /// <summary>Test seam - see <see cref="Listen(Action, string)"/>.</summary>
+    internal static bool Signal(string eventName)
     {
         try
         {
-            if (!EventWaitHandle.TryOpenExisting(EventName, out var handle)) return false;
+            if (!EventWaitHandle.TryOpenExisting(eventName, out var handle)) return false;
             using (handle) return handle.Set();
         }
         catch (Exception ex)

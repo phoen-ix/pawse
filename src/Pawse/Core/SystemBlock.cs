@@ -101,10 +101,13 @@ public sealed class SystemBlock
                 // persistent machine-wide state, so a crash-while-locked leaves them
                 // on, and only the marker lets the next start know Pawse owes a
                 // revert (a non-elevated restart can't even read WEKF to find out).
+                // "Full revert" is taken literally: a disable pass where any Put
+                // failed keeps the marker, so the revert stays owed and the next
+                // sweep retries instead of orphaning the rules machine-wide.
                 if (enableIds.Length > 0) SetWekfMarker(true);
-                _kf.Set(disableIds, enabled: false);
+                bool reverted = _kf.Set(disableIds, enabled: false);
                 _kf.Set(enableIds, enabled: true);
-                if (enableIds.Length == 0) SetWekfMarker(false);
+                if (enableIds.Length == 0 && reverted) SetWekfMarker(false);
             }
         }
 

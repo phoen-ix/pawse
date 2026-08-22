@@ -70,7 +70,9 @@ public sealed class TrayIcon : IDisposable
         _clickTimer.Tick += (_, _) =>
         {
             _clickTimer.Stop();
-            Notify("Pawse", "Locked - double-click the paw to unlock.");
+            // An unlock (chord, hold, timer) can land inside the double-click window -
+            // don't claim "Locked" when it no longer is.
+            if (_locked) Notify("Pawse", "Locked - double-click the paw to unlock.");
         };
         _ni.MouseUp += (_, e) =>
         {

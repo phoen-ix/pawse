@@ -146,6 +146,8 @@ public class ConfigJsonTests
     [InlineData(/*lang=json*/ """{"Unlock": null}""")]
     [InlineData(/*lang=json*/ """{"Unlock": {"Chord": null}}""")]
     [InlineData(/*lang=json*/ """{"Unlock": {"Chord": {"Enabled": true, "Keys": null}}}""")]
+    [InlineData(/*lang=json*/ """{"Unlock": {"Chord": {"Enabled": true, "Keys": ["Ctrl", null]}}}""")]
+    [InlineData(/*lang=json*/ """{"LockHotkey": {"Enabled": true, "Keys": [null, " ", "L"]}}""")]
     [InlineData(/*lang=json*/ """{"Unlock": {"Passphrase": {"Enabled": true, "Text": null}}}""")]
     [InlineData(/*lang=json*/ """{"General": null, "LockHotkey": null, "Overlay": null, "SystemBlock": null}""")]
     public void Nulled_sections_are_reseeded_with_defaults(string json)
@@ -157,6 +159,11 @@ public class ConfigJsonTests
         Assert.NotNull(cfg.Unlock.Passphrase.Text);
         Assert.NotNull(cfg.General);
         Assert.NotNull(cfg.Overlay);
+        // Null/blank ELEMENTS are scrubbed too - a hand-edited ["Ctrl", null] used to
+        // NRE inside HasUsableUnlock on every startup (and, being valid JSON, never
+        // tripped the .bad-file recovery).
+        Assert.DoesNotContain(cfg.Unlock.Chord.Keys, string.IsNullOrWhiteSpace);
+        Assert.DoesNotContain(cfg.LockHotkey.Keys, string.IsNullOrWhiteSpace);
     }
 
     [Fact]

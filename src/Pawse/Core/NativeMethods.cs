@@ -27,6 +27,9 @@ internal static class NativeMethods
 
     public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
+    // KeyboardHook reads vkCode/flags/dwExtraInfo straight from lParam by offset
+    // (0/8/16 - valid on x86 and x64) rather than marshaling this struct on every
+    // keystroke; change the two together if this layout ever changes.
     [StructLayout(LayoutKind.Sequential)]
     public struct KBDLLHOOKSTRUCT
     {
