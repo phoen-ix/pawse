@@ -225,6 +225,12 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ needs.version.outputs.new_tag }}
+          # Pin the new tag to the commit this job checked out and built. Left out, the
+          # API tags the default branch's HEAD at publish time - so a push landing during
+          # the build would get the tag (pointing at code these binaries don't contain),
+          # and the queued run for that push would then see no commits past the tag and
+          # silently release nothing.
+          target_commitish: ${{ github.sha }}
           files: |
             Pawse-Setup-${{ needs.version.outputs.new_version }}.exe
             Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe
@@ -259,7 +265,7 @@ jobs:
             config and log are written next to the exe. `SHA256SUMS.txt` holds
             checksums for every download.
 
-            Already have Pawse installed? **Check for updates…** in the tray menu
+            Already have Pawse installed? **Settings → Updates → Check now**
             offers this build and installs it for you.
 
       # The update feed the app reads when the user picks "Check for updates…" - published
@@ -296,5 +302,11 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { "feed unchanged - nothing to commit"; exit 0 }
           git commit -m "chore(release): update feed for v$version [skip ci]"
+          # A pwsh step only fails on the LAST command's exit code, and a conflicted
+          # rebase leaves HEAD at the upstream tip - the push then "succeeds" as a no-op
+          # and the feed commit is silently gone. Fail the step at the first git error
+          # instead, so a human sees that latest.json still needs publishing.
           git pull --rebase origin main
+          if ($LASTEXITCODE -ne 0) { throw "git pull --rebase failed - the feed commit was NOT pushed" }
           git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { throw "git push failed - the feed commit was NOT pushed" }
