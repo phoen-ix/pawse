@@ -34,7 +34,7 @@ and asks you nothing about builds.
 | Portable | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-<version>.zip`** → `Pawse.exe` | ~58 MB zipped (63 MB unzipped) | **No** - the runtime is bundled. Just run it. |
-| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), installed once. |
+| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), installed once. |
 
 Same app in every row. `Pawse.exe` is self-contained (bundled + compressed);
 `Pawse-min.exe` is a tiny launcher that reuses a runtime you install once. Every
