@@ -332,6 +332,7 @@ public partial class App : Application
             _settingsWindow = new SettingsWindow(_controller!.Config, () => _controller!.IsLocked);
             _settingsWindow.Applied += ApplyConfigChange;
             _settingsWindow.CheckUpdatesRequested += () => CheckForUpdates(interactive: true);
+            _settingsWindow.DownloadsPageRequested += OpenDownloadsPage;
             _settingsWindow.Closed += (_, _) =>
             {
                 _settingsWindow = null;
@@ -458,7 +459,17 @@ public partial class App : Application
         var kind = UpdateCheck.DetectInstall();
         Log.Info($"update check ({(interactive ? "requested" : "scheduled")}): this copy is {current} ({kind})");
 
-        var plan = await UpdateCheck.CheckAsync(current, kind, _shutdown.Token);
+        // Only from the second attempt on: a check that works first time - almost all of them -
+        // should look exactly as it always has.
+        var progress = interactive
+            ? new Progress<int>(attempt =>
+            {
+                if (attempt > 1)
+                    _settingsWindow?.ShowUpdateProgress($"Checking… ({attempt} of {UpdateCheck.MaxCheckAttempts})");
+            })
+            : null;
+
+        var plan = await UpdateCheck.CheckAsync(current, kind, _shutdown.Token, progress);
         StampCheckedNow();
         Log.Info("update check: " + plan);
 
@@ -480,9 +491,11 @@ public partial class App : Application
             default:
                 // A scheduled check that cannot reach the network says nothing at all.
                 if (!interactive) break;
-                _settingsWindow?.ShowUpdateStatus(plan.Error ?? "The check failed.");
-                OfferDownloadsPage((plan.Error ?? "The update check failed.") +
-                                   "\n\nOpen the downloads page instead?");
+                // No dialog: the check has already tried five times, and the thing most likely
+                // to help is a sixth on the user's own timing - once the firewall has been
+                // answered, or the network is back. So the button becomes that, and the
+                // downloads page sits next to it instead of interrupting.
+                _settingsWindow?.ShowUpdateFailure(plan.Error ?? "The check failed.");
                 break;
         }
     }
@@ -738,6 +751,18 @@ public partial class App : Application
     {
         _autoUpdate?.Stop();
         _autoUpdate = null;
+    }
+
+    /// <summary>The downloads page, straight up - no dialog. Used by the button that appears
+    /// after a failed check, where the user has already been told what happened.</summary>
+    private static void OpenDownloadsPage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(UpdateCheck.ReleasesUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) { Log.Error("open downloads page", ex); }
     }
 
     /// <summary>Every dead end in the update flow ends the same way: say what happened, and

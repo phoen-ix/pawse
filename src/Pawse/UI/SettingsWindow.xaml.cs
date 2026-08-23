@@ -24,6 +24,10 @@ public partial class SettingsWindow : Window
     /// follow); this window only shows what came of it - see <see cref="ShowUpdateStatus"/>.</summary>
     public event Action? CheckUpdatesRequested;
 
+    /// <summary>Raised by the "Downloads page" button that appears after a failed check. App
+    /// owns opening it, the same as it owns the check itself.</summary>
+    public event Action? DownloadsPageRequested;
+
     public SettingsWindow(Config cfg, Func<bool> isLocked)
     {
         InitializeComponent();
@@ -178,8 +182,26 @@ public partial class SettingsWindow : Window
     private void OnCheckUpdates(object sender, RoutedEventArgs e)
     {
         BtnCheckUpdates.IsEnabled = false;
+        BtnDownloadsPage.Visibility = Visibility.Collapsed;
         LblUpdateStatus.Text = "Checking…";
         CheckUpdatesRequested?.Invoke();
+    }
+
+    private void OnOpenDownloadsPage(object sender, RoutedEventArgs e) => DownloadsPageRequested?.Invoke();
+
+    /// <summary>Progress while a check is still running: the text changes, the button stays
+    /// disabled. <see cref="ShowUpdateStatus"/> is the terminal one and re-enables it.</summary>
+    public void ShowUpdateProgress(string text) => LblUpdateStatus.Text = text;
+
+    /// <summary>A check that reached nobody. The button becomes the retry - a first attempt
+    /// fails far more often than a second - and the downloads page moves in beside it rather
+    /// than interrupting with a dialog.</summary>
+    public void ShowUpdateFailure(string text)
+    {
+        LblUpdateStatus.Text = text;
+        BtnCheckUpdates.Content = "Try again";
+        BtnCheckUpdates.IsEnabled = true;
+        BtnDownloadsPage.Visibility = Visibility.Visible;
     }
 
     /// <summary>Report a finished check. Called by App on the UI thread; safe to call after
@@ -187,7 +209,9 @@ public partial class SettingsWindow : Window
     public void ShowUpdateStatus(string text)
     {
         LblUpdateStatus.Text = text;
+        BtnCheckUpdates.Content = "Check now";
         BtnCheckUpdates.IsEnabled = true;
+        BtnDownloadsPage.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Say up front when this copy cannot take an update on its own, so choosing

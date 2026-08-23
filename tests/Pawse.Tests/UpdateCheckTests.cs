@@ -543,3 +543,65 @@ public class UpdateFeedPortableTests
             , "portable": { "full": { "url": "https://github.com/x/y/p.zip", "sha256": "nope" } }
             """))!.PortableFull);
 }
+
+/// <summary>When a check retries. The attempt cap alone is not enough: two hosts timing out
+/// costs ~20 s an attempt, so five of those would sit on "Checking…" for nearly two minutes -
+/// hence a wall-clock budget as well.</summary>
+public class UpdateRetryPolicyTests
+{
+    [Fact]
+    public void A_first_failure_is_worth_another_go()
+        => Assert.True(UpdateCheck.ShouldRetryCheck(completed: 1, TimeSpan.Zero));
+
+    [Fact]
+    public void It_stops_at_the_attempt_cap()
+    {
+        Assert.True(UpdateCheck.ShouldRetryCheck(UpdateCheck.MaxCheckAttempts - 1, TimeSpan.Zero));
+        Assert.False(UpdateCheck.ShouldRetryCheck(UpdateCheck.MaxCheckAttempts, TimeSpan.Zero));
+    }
+
+    /// <summary>Slow failures run out of budget before they run out of attempts.</summary>
+    [Fact]
+    public void It_stops_once_the_budget_is_spent()
+        => Assert.False(UpdateCheck.ShouldRetryCheck(completed: 2, UpdateCheck.CheckRetryBudget));
+
+    /// <summary>And it won't start an attempt it has no room for: the gap alone would take it
+    /// past the budget.</summary>
+    [Fact]
+    public void It_does_not_start_an_attempt_it_cannot_fit()
+        => Assert.False(UpdateCheck.ShouldRetryCheck(
+            completed: 1, UpdateCheck.CheckRetryBudget - TimeSpan.FromMilliseconds(1)));
+
+    /// <summary>A fast failure - offline, DNS answering immediately - gets every attempt.</summary>
+    [Fact]
+    public void Fast_failures_get_the_full_five()
+    {
+        var elapsed = TimeSpan.Zero;
+        int attempts = 1;
+        while (UpdateCheck.ShouldRetryCheck(attempts, elapsed))
+        {
+            elapsed += UpdateCheck.CheckRetryGap + TimeSpan.FromMilliseconds(100);
+            attempts++;
+        }
+        Assert.Equal(UpdateCheck.MaxCheckAttempts, attempts);
+    }
+
+    /// <summary>A slow one - both hosts timing out - still spans long enough to outlast someone
+    /// answering a firewall prompt, without turning into a two-minute stare. Note the budget
+    /// gates whether a new attempt STARTS, so the last one admitted still runs its full timeout
+    /// and the total overshoots the budget by roughly one attempt.</summary>
+    [Fact]
+    public void Slow_failures_still_get_a_useful_window()
+    {
+        var perAttempt = TimeSpan.FromSeconds(20);
+        var elapsed = perAttempt;
+        int attempts = 1;
+        while (UpdateCheck.ShouldRetryCheck(attempts, elapsed))
+        {
+            elapsed += UpdateCheck.CheckRetryGap + perAttempt;
+            attempts++;
+        }
+        Assert.Equal(3, attempts);
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(70));
+    }
+}

@@ -138,6 +138,27 @@ public static class UpdateCheck
     /// <summary>How long the opt-in automatic check waits between attempts.</summary>
     public static readonly TimeSpan AutoCheckInterval = TimeSpan.FromHours(24);
 
+    /// <summary>How many times one check will ask before giving up. A first attempt fails far
+    /// more often than a second: a firewall that prompts per-application blocks the connection
+    /// while its dialog waits, and a cold first HTTPS request pays for DNS, TLS and building
+    /// the certificate chain - all inside the same timeout.</summary>
+    public const int MaxCheckAttempts = 5;
+
+    /// <summary>Breathing room between attempts.</summary>
+    public static readonly TimeSpan CheckRetryGap = TimeSpan.FromSeconds(1);
+
+    /// <summary>How late a NEW attempt may start - not a hard ceiling, since the attempt it
+    /// admits still runs to its own timeout. The count alone is not enough: two hosts timing out
+    /// costs ~20 s each time, so five of those would leave "Checking…" up for nearly two
+    /// minutes. With this, fast failures get all five attempts, and slow ones get three spanning
+    /// roughly a minute - long enough to outlast someone answering a firewall prompt, and
+    /// bounded enough to stay honest with a counter on screen.</summary>
+    public static readonly TimeSpan CheckRetryBudget = TimeSpan.FromSeconds(45);
+
+    /// <summary>Whether to make attempt number <paramref name="completed"/> + 1.</summary>
+    public static bool ShouldRetryCheck(int completed, TimeSpan elapsed) =>
+        completed < MaxCheckAttempts && elapsed + CheckRetryGap < CheckRetryBudget;
+
     /// <summary>Outcome of a feed fetch: either <paramref name="Info"/> or a human-readable
     /// <paramref name="Error"/> - never both, never neither.</summary>
     public sealed record FetchResult(UpdateInfo? Info, string? Error);
@@ -458,7 +479,35 @@ public static class UpdateCheck
     /// One whole check: GitHub for the version, the feed for the checksum, and SHA256SUMS.txt
     /// only when the feed cannot supply one. The result says what may be done about it.
     /// </summary>
-    public static async Task<UpdatePlan> CheckAsync(string current, InstallKind kind, CancellationToken ct = default)
+    /// <summary>
+    /// One check, retried while nothing at all answers. Only the <see cref="UpdateVerdict.Unknown"/>
+    /// verdict is retried: every other one already has a usable answer, and GitHub timing out
+    /// while the feed replies is the fallback doing its job, not a failure.
+    /// </summary>
+    /// <param name="onAttempt">Called with the attempt number as each one starts, so the caller
+    /// can say so on screen - a 20 s wait with no sign of life reads as a hang.</param>
+    public static async Task<UpdatePlan> CheckAsync(string current, InstallKind kind,
+                                                    CancellationToken ct = default,
+                                                    IProgress<int>? onAttempt = null)
+    {
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        UpdatePlan plan;
+        for (int attempt = 1; ; attempt++)
+        {
+            onAttempt?.Report(attempt);
+            plan = await CheckOnceAsync(current, kind, ct).ConfigureAwait(false);
+            if (plan.Verdict != UpdateVerdict.Unknown) return plan;
+
+            if (ct.IsCancellationRequested || !ShouldRetryCheck(attempt, started.Elapsed)) break;
+            Log.Info($"update check: attempt {attempt} reached nobody, trying again");
+            try { await Task.Delay(CheckRetryGap, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+        }
+        Log.Warn($"update check: gave up after {started.Elapsed.TotalSeconds:F0}s - {plan.Error}");
+        return plan;
+    }
+
+    private static async Task<UpdatePlan> CheckOnceAsync(string current, InstallKind kind, CancellationToken ct)
     {
         var githubVersion = await FetchGitHubVersionAsync(ct).ConfigureAwait(false);
 
@@ -472,7 +521,10 @@ public static class UpdateCheck
         // carries the checksum from the other host, the only kind an unattended install acts on.
         var feed = await FetchAsync(ct).ConfigureAwait(false);
         if (githubVersion is null && feed.Info is null)
-            return Plan(current, kind, null, null, null, feed.Error);
+            // Both were tried and both failed, so name both: reporting only the feed's error
+            // points at pawse.at when github.com was asked first and is just as unreachable.
+            return Plan(current, kind, null, null, null,
+                        "Pawse could not reach github.com or pawse.at.");
 
         string? sums = null;
         if (NeedsSums(current, kind, githubVersion, feed.Info))

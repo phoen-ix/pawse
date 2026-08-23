@@ -272,9 +272,16 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="BtnCheckUpdates" Grid.Column="0" Content="Check now"
-                                    Width="100" Height="26" HorizontalAlignment="Left"
-                                    VerticalAlignment="Top" Click="OnCheckUpdates" />
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Top">
+                                <Button x:Name="BtnCheckUpdates" Content="Check now"
+                                        Width="100" Height="26" Click="OnCheckUpdates" />
+                                <!-- Only after a check found nobody home. A failure that a retry
+                                     would fix shouldn't cost a modal, but the downloads page
+                                     should still be one click away. -->
+                                <Button x:Name="BtnDownloadsPage" Content="Downloads page"
+                                        Width="120" Height="26" Margin="8,0,0,0"
+                                        Visibility="Collapsed" Click="OnOpenDownloadsPage" />
+                            </StackPanel>
                             <TextBlock x:Name="LblUpdateStatus" Grid.Column="1" VerticalAlignment="Center"
                                        Margin="10,0,0,0" FontSize="11" Foreground="#FF7A808A"
                                        TextWrapping="Wrap" />
