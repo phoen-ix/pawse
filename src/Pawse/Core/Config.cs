@@ -9,7 +9,7 @@ namespace Pawse.Core;
 /// unlock method has its own <c>Enabled</c> flag; the popup is optional; mouse
 /// blocking is off by default. The only thing here that can put Pawse on the
 /// network is the update check (<see cref="UpdateCheck"/>): manual via
-/// Settings → Updates → "Check now", or - only if <see cref="UpdateCfg.AutoCheck"/>
+/// Settings → About → "Check now", or - only if <see cref="UpdateCfg.AutoCheck"/>
 /// is switched on - a once-a-day check that does no more than notify.
 /// </summary>
 public sealed class Config

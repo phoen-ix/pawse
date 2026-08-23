@@ -315,7 +315,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Settings → Updates → "Check now", and the opt-in daily check. Pawse reaches the
+    /// Settings → About → "Check now", and the opt-in daily check. Pawse reaches the
     /// network here and nowhere else. Re-entry is refused rather than queued.
     /// </summary>
     /// <param name="interactive">True when the user just pressed the button: it may put
@@ -388,7 +388,7 @@ public partial class App : Application
             // Opting into the daily check opts into being told, not into a dialog appearing
             // over whatever you were doing - let alone an install.
             Log.Info($"update check: {info.Version} available (daily check - notifying only)");
-            _tray?.Notify("Pawse", $"Pawse {info.Version} is available. Settings → Updates to install it.");
+            _tray?.Notify("Pawse", $"Pawse {info.Version} is available. Settings → About to install it.");
             return;
         }
 

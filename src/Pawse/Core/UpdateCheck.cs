@@ -24,7 +24,7 @@ public enum InstallKind
 
 /// <summary>
 /// The only code in Pawse that touches the network. It runs when the user presses
-/// "Check now" in Settings → Updates, or - only with the off-by-default
+/// "Check now" in Settings → About, or - only with the off-by-default
 /// <see cref="Config.UpdateCfg.AutoCheck"/> switched on - once a day while Pawse is open,
 /// and that daily check does no more than notify (installing still takes a deliberate
 /// yes). The request carries a version number and nothing else.

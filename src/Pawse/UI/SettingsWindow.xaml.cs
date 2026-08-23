@@ -28,7 +28,17 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         _cfg = cfg;
-        VersionLabel.Text = "v" + App.Version;
+        // The version reads from the title bar now, and again on the About page - the
+        // footer is just Cancel/Save.
+        Title = "Pawse settings - v" + App.Version;
+        LblVersion.Text = App.Version == UpdateCheck.DevVersion
+            ? $"Pawse {App.Version} - development build"
+            : $"Pawse {App.Version}";
+        // The default size does not fit a 1366x768 laptop at 125% scaling, and
+        // CanMinimize leaves no way to resize out of it - so Save would sit below the
+        // screen edge. Shrink instead; the per-page scrollers take up the slack.
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
+        Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
         SldOpacity.Minimum = Config.OverlayCfg.MinOpacity;
         LoadMonitors();
         LoadFromConfig();

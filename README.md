@@ -51,7 +51,7 @@ installers are built from [`packaging/`](packaging/).
   in Settings.)
 - **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
   (Quit asks for confirmation while locked).
-- **Settings → Updates** is the only thing in Pawse that goes online. **Check now** looks
+- **Settings → About** is the only thing in Pawse that goes online. **Check now** looks
   once; if there's a newer release and you agree, an installed Pawse downloads the matching
   installer, verifies its checksum and runs it (a portable copy points you at the download
   page instead). **Check for updates once a day** is off by default, and when on it only
@@ -92,13 +92,13 @@ including the F-keys and normal typing, and it clears any stuck modifier on lock
 **On-screen keyboards keep working** - the lock is about the hardware keyboard, so
 `osk.exe`, the Windows touch keyboard and third-party ones type as usual while locked,
 and the unlock chord can be tapped on them. Turn on "Also block on-screen keyboards
-while locked" (**Settings → General**) if you want them frozen too. One caveat worth
+while locked" (**Settings → Locking**) if you want them frozen too. One caveat worth
 knowing: Windows only tells the hook that a keystroke was *simulated*, never which
 program simulated it, so leaving this off also lets macro tools type while locked.
 
 **`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
 so Pawse can optionally block it **only while locked** - off by default; turn it on
-under **Settings → System keys**. It sets the per-user `DisableLockWorkstation`
+under **Settings → Locking**. It sets the per-user `DisableLockWorkstation`
 policy on lock and restores its previous state on unlock - a value that was
 already there before Pawse (e.g. set by an admin) is left exactly as found.
 Needs no admin on a normal PC, but on
@@ -107,7 +107,7 @@ enabling it prompts to **Restart as administrator** (also available in the tray 
 shown only when Pawse isn't already elevated).
 
 The **browser / calculator / media / volume keys** are already swallowed by the lock on any
-edition. The "Block browser / calculator / media keys" option (**Settings → System keys**)
+edition. The "Block browser / calculator / media keys" option (**Settings → Locking**)
 additionally engages the Windows **Keyboard Filter** to catch the few consumer keys that reach
 Windows as `WM_APPCOMMAND` and bypass the hook - that part needs **Windows Enterprise /
 Education / IoT** with the Keyboard Filter feature and Pawse running as administrator.
@@ -129,7 +129,7 @@ blocks, and only force it if you tell them to.
 ## Privacy
 
 Out of the box Pawse makes **no network connections at all** - no telemetry, no background
-check, no phone-home. Exactly one request exists: **Settings → Updates → Check now** fetches
+check, no phone-home. Exactly one request exists: **Settings → About → Check now** fetches
 `https://pawse.at/latest.json` and sends nothing but a `Pawse/<version>` user agent (that
 request isn't logged on the server). Turning on **Check for updates once a day** makes that
 same request run by itself while Pawse is open, at most once every 24 hours - it's off

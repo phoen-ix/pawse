@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:Pawse.UI"
         Title="Pawse settings"
-        Width="460" Height="740"
+        Width="800" Height="680"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
         Background="#FFF6F7F9">
@@ -14,6 +14,17 @@
             <Setter Property="Margin" Value="0,16,0,6" />
             <Setter Property="Foreground" Value="#FF2B2F36" />
         </Style>
+        <!-- The page's own title. Same voice as Header, but nothing precedes it on a
+             page, so it carries no top margin. -->
+        <Style TargetType="TextBlock" x:Key="PageTitle" BasedOn="{StaticResource Header}">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <!-- A group inside a page (Locking, Unlocking and About each hold several). -->
+        <Style TargetType="TextBlock" x:Key="SubHeader" BasedOn="{StaticResource Header}">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,14,0,4" />
+        </Style>
         <Style TargetType="TextBlock" x:Key="Hint">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="#FF7A808A" />
@@ -23,10 +34,12 @@
         <Style TargetType="CheckBox">
             <Setter Property="Margin" Value="0,4,0,2" />
         </Style>
+        <!-- Only TxtPassphrase takes this width; the numeric boxes and both chord
+             boxes set their own. Widened with the content pane. -->
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="22,2,0,2" />
             <Setter Property="Padding" Value="4,2" />
-            <Setter Property="Width" Value="180" />
+            <Setter Property="Width" Value="260" />
             <Setter Property="HorizontalAlignment" Value="Left" />
         </Style>
         <!-- A TextBox subclass does NOT inherit the implicit TextBox style above, so
@@ -36,6 +49,71 @@
             <Setter Property="Foreground" Value="#FFB00020" />
             <Setter Property="Visibility" Value="Collapsed" />
         </Style>
+
+        <!-- One row of the left-hand menu. -->
+        <Style TargetType="TabItem">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="#FF2B2F36" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Row" Background="Transparent" CornerRadius="6"
+                                Padding="12,9" Margin="0,1">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="#FFE4E8EF" />
+                            </Trigger>
+                            <!-- After IsMouseOver on purpose: hovering the selected row must
+                                 keep the accent, not fall back to the hover grey. -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="#FF2E6CF0" />
+                                <Setter Property="Foreground" Value="White" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Menu on the left, the matching page on the right. The template places both,
+             so TabStripPlacement is not used. -->
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <!-- Local, not Cycle: Tab must walk the menu then the page and
+                             then LEAVE, or Cancel/Save become unreachable by keyboard. -->
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="176" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="#FFECEFF4" CornerRadius="10" Padding="8"
+                                    UseLayoutRounding="True"
+                                    KeyboardNavigation.TabIndex="1"
+                                    KeyboardNavigation.TabNavigation="Once"
+                                    KeyboardNavigation.DirectionalNavigation="Cycle">
+                                <!-- A StackPanel rather than the stock TabPanel: it stacks
+                                     vertically and stretches the rows to the full sidebar
+                                     width without depending on TabStripPlacement. -->
+                                <StackPanel IsItemsHost="True" />
+                            </Border>
+                            <Border Grid.Column="1" Background="White" CornerRadius="10"
+                                    Margin="14,0,0,0" Padding="18,14"
+                                    KeyboardNavigation.TabIndex="2">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="18">
@@ -44,104 +122,154 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TextBlock Text="General" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkStartLocked" Content="Lock immediately when Pawse starts" />
-                <CheckBox x:Name="ChkAutostart" Content="Start Pawse when I sign in to Windows" />
-                <CheckBox x:Name="ChkBlockMouse" Content="Also block the mouse while locked" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
-                <CheckBox x:Name="ChkBlockScreenKeyboard" Content="Also block on-screen keyboards while locked" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse makes an on-screen keyboard unclickable anyway.)" />
-                <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />
+        <!-- Each page is sized to fit; the ScrollViewers are a safety net for a revealed
+             warning, a high DPI setting or a short display. -->
+        <TabControl Grid.Row="0" AutomationProperties.Name="Settings sections">
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Text="General" Style="{StaticResource PageTitle}" />
+                        <CheckBox x:Name="ChkStartLocked" Content="Lock immediately when Pawse starts" />
+                        <CheckBox x:Name="ChkAutostart" Content="Start Pawse when I sign in to Windows" />
+                        <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Text="System keys (while locked)" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Disables Win+L only while Pawse is locked; restored on unlock. Most PCs need no admin; managed/corporate PCs will prompt to restart Pawse as administrator." />
-                <CheckBox x:Name="ChkLaunchMedia" Content="Block browser / calculator / media keys" />
-                <TextBlock x:Name="LblFilterStatus" Style="{StaticResource Hint}" />
+            <TabItem Header="Locking">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Text="Locking" Style="{StaticResource PageTitle}" />
 
-                <TextBlock Text="Lock hotkey" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkLockHotkey" Content="Lock with a keyboard shortcut" />
-                <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
-                    <ui:ChordBox x:Name="TxtLockHotkey" Width="180" Margin="0" />
-                    <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
-                            VerticalAlignment="Center" Click="OnClearLockHotkey" />
-                </StackPanel>
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Click the box and press your shortcut (e.g. Ctrl+Alt+L). The Windows key may open Start, but the shortcut is still captured." />
-                <TextBlock x:Name="LblLockHotkeyWarn" Style="{StaticResource Warn}" />
+                        <TextBlock Text="Lock hotkey" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkLockHotkey" Content="Lock with a keyboard shortcut" />
+                        <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
+                            <ui:ChordBox x:Name="TxtLockHotkey" Width="180" Margin="0" />
+                            <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
+                                    VerticalAlignment="Center" Click="OnClearLockHotkey" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Click the box and press your shortcut (e.g. Ctrl+Alt+L). The Windows key may open Start, but the shortcut is still captured." />
+                        <TextBlock x:Name="LblLockHotkeyWarn" Style="{StaticResource Warn}" />
 
-                <TextBlock Text="Unlock - keyboard chord" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkChord" Content="Unlock with a key combination" />
-                <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
-                    <ui:ChordBox x:Name="TxtChord" Width="180" Margin="0" />
-                    <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
-                            VerticalAlignment="Center" Click="OnClearChord" />
-                </StackPanel>
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Click the box and press your shortcut (e.g. Ctrl+Shift+U)." />
-                <TextBlock x:Name="LblChordWarn" Style="{StaticResource Warn}" />
+                        <TextBlock Text="While locked" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkBlockMouse" Content="Also block the mouse while locked" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
+                        <CheckBox x:Name="ChkBlockScreenKeyboard" Content="Also block on-screen keyboards while locked" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse makes an on-screen keyboard unclickable anyway.)" />
 
-                <TextBlock Text="Unlock - passphrase" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkPassphrase" Content="Unlock by typing a passphrase" />
-                <TextBox x:Name="TxtPassphrase" />
-                <TextBlock x:Name="LblPassphraseWarn" Style="{StaticResource Warn}" />
-                <CheckBox x:Name="ChkResetWrong" Content="A wrong key restarts the passphrase" Margin="22,2,0,2" />
+                        <TextBlock Text="System keys" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Disables Win+L only while Pawse is locked; restored on unlock. Most PCs need no admin; managed/corporate PCs will prompt to restart Pawse as administrator." />
+                        <CheckBox x:Name="ChkLaunchMedia" Content="Block browser / calculator / media keys" />
+                        <TextBlock x:Name="LblFilterStatus" Style="{StaticResource Hint}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Text="Unlock - mouse hold" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkMouseHold" Content="Unlock by holding the popup button" />
-                <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
-                    <TextBlock Text="Hold for" VerticalAlignment="Center" />
-                    <TextBox x:Name="TxtHoldMs" Width="70" Margin="8,0" />
-                    <TextBlock Text="milliseconds" VerticalAlignment="Center" />
-                </StackPanel>
+            <TabItem Header="Unlocking">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Text="Unlocking" Style="{StaticResource PageTitle}" />
 
-                <TextBlock Text="Unlock - auto timer" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkTimer" Content="Automatically unlock after a delay" />
-                <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
-                    <TextBlock Text="Unlock after" VerticalAlignment="Center" />
-                    <TextBox x:Name="TxtTimerSeconds" Width="70" Margin="8,0" />
-                    <TextBlock Text="seconds" VerticalAlignment="Center" />
-                </StackPanel>
+                        <TextBlock Text="Keyboard chord" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkChord" Content="Unlock with a key combination" />
+                        <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
+                            <ui:ChordBox x:Name="TxtChord" Width="180" Margin="0" />
+                            <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
+                                    VerticalAlignment="Center" Click="OnClearChord" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Click the box and press your shortcut (e.g. Ctrl+Shift+U)." />
+                        <TextBlock x:Name="LblChordWarn" Style="{StaticResource Warn}" />
 
-                <TextBlock Text="Updates" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkAutoUpdate" Content="Check for updates once a day" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Off by default. Pawse contacts pawse.at only when you press Check now - or, with this on, once a day while it's running. A daily check only tells you an update exists; installing always asks first." />
-                <StackPanel Orientation="Horizontal" Margin="22,4,0,2">
-                    <Button x:Name="BtnCheckUpdates" Content="Check now" Width="100" Height="26"
-                            HorizontalAlignment="Left" Click="OnCheckUpdates" />
-                    <TextBlock x:Name="LblUpdateStatus" VerticalAlignment="Center" Margin="10,0,0,0"
-                               FontSize="11" Foreground="#FF7A808A" TextWrapping="Wrap" />
-                </StackPanel>
+                        <TextBlock Text="Passphrase" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkPassphrase" Content="Unlock by typing a passphrase" />
+                        <TextBox x:Name="TxtPassphrase" />
+                        <TextBlock x:Name="LblPassphraseWarn" Style="{StaticResource Warn}" />
+                        <CheckBox x:Name="ChkResetWrong" Content="A wrong key restarts the passphrase" Margin="22,2,0,2" />
 
-                <TextBlock Text="Lock popup" Style="{StaticResource Header}" />
-                <CheckBox x:Name="ChkOverlay" Content="Show the floating lock popup" />
-                <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
-                    <TextBlock Text="Display" VerticalAlignment="Center" Width="70" />
-                    <ComboBox x:Name="CmbMonitor" Width="220" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
-                    <TextBlock Text="Opacity" VerticalAlignment="Center" Width="70" />
-                    <Slider x:Name="SldOpacity" Maximum="1.0" Width="200"
-                            TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
-                    <TextBlock Text="Vertical" VerticalAlignment="Center" Width="70" />
-                    <Slider x:Name="SldVertical" Minimum="0" Maximum="100" Width="200"
-                            TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
+                        <TextBlock Text="Mouse hold" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkMouseHold" Content="Unlock by holding the popup button" />
+                        <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
+                            <TextBlock Text="Hold for" VerticalAlignment="Center" />
+                            <TextBox x:Name="TxtHoldMs" Width="70" Margin="8,0" />
+                            <TextBlock Text="milliseconds" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <TextBlock Text="Auto timer" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkTimer" Content="Automatically unlock after a delay" />
+                        <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
+                            <TextBlock Text="Unlock after" VerticalAlignment="Center" />
+                            <TextBox x:Name="TxtTimerSeconds" Width="70" Margin="8,0" />
+                            <TextBlock Text="seconds" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Lock popup">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Text="Lock popup" Style="{StaticResource PageTitle}" />
+                        <CheckBox x:Name="ChkOverlay" Content="Show the floating lock popup" />
+                        <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
+                            <TextBlock Text="Display" VerticalAlignment="Center" Width="70" />
+                            <ComboBox x:Name="CmbMonitor" Width="220" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
+                            <TextBlock Text="Opacity" VerticalAlignment="Center" Width="70" />
+                            <Slider x:Name="SldOpacity" Maximum="1.0" Width="200"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
+                            <TextBlock Text="Vertical" VerticalAlignment="Center" Width="70" />
+                            <Slider x:Name="SldVertical" Minimum="0" Maximum="100" Width="200"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="About">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Text="About" Style="{StaticResource PageTitle}" />
+                        <TextBlock x:Name="LblVersion" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="#FF2B2F36" />
+                        <TextBlock Text="A cat-proof keyboard lock for Windows." Margin="0,6,0,0"
+                                   Foreground="#FF7A808A" TextWrapping="Wrap" />
+
+                        <TextBlock Text="Updates" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkAutoUpdate" Content="Check for updates once a day" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Off by default. Pawse contacts pawse.at only when you press Check now - or, with this on, once a day while it's running. A daily check only tells you an update exists; installing always asks first." />
+                        <!-- A Grid, not a horizontal StackPanel: that measures its children with
+                             infinite width, so the status text would never wrap however long the
+                             message gets. -->
+                        <Grid Margin="22,4,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="BtnCheckUpdates" Grid.Column="0" Content="Check now"
+                                    Width="100" Height="26" HorizontalAlignment="Left"
+                                    VerticalAlignment="Top" Click="OnCheckUpdates" />
+                            <TextBlock x:Name="LblUpdateStatus" Grid.Column="1" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" FontSize="11" Foreground="#FF7A808A"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <TextBlock x:Name="VersionLabel" VerticalAlignment="Center" Margin="0,0,14,0" Foreground="#FF9AA0AA" />
             <Button Content="Cancel" Width="92" Height="30" Margin="0,0,8,0" Click="OnCancel" />
             <Button Content="Save" Width="92" Height="30" Click="OnSave" IsDefault="True" />
         </StackPanel>
