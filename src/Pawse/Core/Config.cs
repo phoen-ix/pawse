@@ -8,9 +8,9 @@ namespace Pawse.Core;
 /// User configuration, persisted as <c>pawse.json</c> next to the exe. Every
 /// unlock method has its own <c>Enabled</c> flag; the popup is optional; mouse
 /// blocking is off by default. The only thing here that can put Pawse on the
-/// network is the update check (<see cref="UpdateCheck"/>): manual via
-/// Settings → About → "Check now", or - only if <see cref="UpdateCfg.AutoCheck"/>
-/// is switched on - a once-a-day check that does no more than notify.
+/// network is the update check (<see cref="UpdateCheck"/>), and
+/// <see cref="UpdateCfg.Mode"/> decides how far it may go on its own - the default
+/// is "not at all until you press Check now".
 /// </summary>
 public sealed class Config
 {
@@ -38,19 +38,70 @@ public sealed class Config
         public bool TrayDoubleClickUnlock { get; set; } = true;
     }
 
+    /// <summary>How far Pawse may go about updates on its own.</summary>
+    public enum UpdateMode
+    {
+        /// <summary>Only when I ask. The default, and the only level at which nothing
+        /// whatsoever leaves the machine unasked.</summary>
+        Manual = 0,
+
+        /// <summary>A once-a-day check that does no more than tell you.</summary>
+        Notify = 1,
+
+        /// <summary>Download, verify and install it. Still refuses anything that would need
+        /// a UAC prompt, a runtime download, or a guess about which build is installed.</summary>
+        Automatic = 2,
+    }
+
     /// <summary>
     /// The update check, which is the only thing in Pawse that can reach the network.
-    /// Off by default: nothing happens until you press "Check now" in Settings. Turning
-    /// <see cref="AutoCheck"/> on adds a once-a-day check while Pawse runs - it only ever
-    /// tells you an update exists; installing still takes a deliberate yes.
+    /// <see cref="Mode"/> is <see cref="UpdateMode.Manual"/> by default: nothing happens
+    /// until you press "Check now" in Settings → About.
     /// </summary>
     public sealed class UpdateCfg
     {
-        public bool AutoCheck { get; set; }
+        /// <summary>Read only to migrate configs written before <see cref="Mode"/> existed,
+        /// where true meant the daily notify-only check. Never written back - the JsonIgnore
+        /// overrides the file-wide <c>DefaultIgnoreCondition.Never</c> - so the key drops out
+        /// of pawse.json the first time this build saves.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? AutoCheck { get; set; }
+
+        /// <summary>"Manual" | "Notify" | "Automatic" - see <see cref="UpdateMode"/>. Stored
+        /// as text so a hand-edited pawse.json reads like English, and typed as string rather
+        /// than the enum on purpose: a JsonStringEnumConverter property THROWS on an
+        /// unrecognised value, and <see cref="Load"/> answers a throw by keeping the file as
+        /// .bad and starting from defaults - so one typo in the field people actually edit
+        /// would cost them every other setting. <see cref="ParseMode"/> is lenient instead.</summary>
+        public string Mode { get; set; } = nameof(UpdateMode.Manual);
 
         /// <summary>UTC of the last completed check, so the daily check doesn't fire again
         /// on every restart. Written by the app; there is nothing to hand-edit here.</summary>
         public DateTime? LastCheckUtc { get; set; }
+
+        /// <summary>The version an unattended install was last attempted for, and when. A
+        /// silent installer that refuses the job leaves the old version in place, and without
+        /// this the next daily check would find the same update and try again - every day,
+        /// forever. Written by the app.</summary>
+        public string? LastAutoAttemptVersion { get; set; }
+        public DateTime? LastAutoAttemptUtc { get; set; }
+
+        /// <summary><see cref="Mode"/> parsed. Not serialized - the string is the stored form.</summary>
+        [JsonIgnore]
+        public UpdateMode ModeValue
+        {
+            get => ParseMode(Mode);
+            set => Mode = value.ToString();
+        }
+
+        /// <summary>Anything unrecognised - a typo, a number, null - reads as
+        /// <see cref="UpdateMode.Manual"/>, never as consent to go online. Enum.TryParse also
+        /// accepts numbers, including ones no member sits at, so IsDefined has the last word.</summary>
+        internal static UpdateMode ParseMode(string? text) =>
+            Enum.TryParse<UpdateMode>((text ?? "").Trim(), ignoreCase: true, out var mode)
+            && Enum.IsDefined(mode)
+                ? mode
+                : UpdateMode.Manual;
     }
 
     public sealed class UnlockCfg
@@ -214,6 +265,15 @@ public sealed class Config
         Overlay ??= new();
         SystemBlock ??= new();
         Update ??= new();
+        Update.Mode ??= nameof(UpdateMode.Manual);
+        // Configs written before the three-level setting carry "AutoCheck": true|false and
+        // no "Mode". Fold the old flag in once - true meant the daily notify-only check,
+        // which is exactly Notify - then clear it so the next Save writes only the new key.
+        // Guarded on Mode still being at its default: someone who has already chosen a level
+        // keeps it, and an AutoCheck of false never turns anything on.
+        if (Update.AutoCheck == true && Update.ModeValue == UpdateMode.Manual)
+            Update.ModeValue = UpdateMode.Notify;
+        Update.AutoCheck = null;
     }
 
     /// <summary>
@@ -257,6 +317,6 @@ public sealed class Config
         $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
-        $"auto_update_check={Update.AutoCheck} " +
+        $"update_mode={Update.ModeValue} " +
         $"sysblock=[win_l={SystemBlock.WinLock} launch_media={SystemBlock.LaunchMediaKeys}]";
 }

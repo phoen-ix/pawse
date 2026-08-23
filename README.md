@@ -10,7 +10,7 @@ This is a native Windows app (C# / .NET 8, WPF + a WinForms tray).
 ## Install
 
 Two ways to install, both from the [latest release](https://github.com/phoen-ix/pawse/releases)
-(while the repo is private that link needs access - see [pawse.at](https://pawse.at) otherwise):
+(or via [pawse.at](https://pawse.at)):
 
 - **Installer** - run a `Pawse-Setup-<version>*.exe`. Installs per-user by default (no
   admin), offers Start Menu/Desktop shortcuts, and uninstalls cleanly from Windows'
@@ -51,11 +51,14 @@ installers are built from [`packaging/`](packaging/).
   in Settings.)
 - **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
   (Quit asks for confirmation while locked).
-- **Settings → About** is the only thing in Pawse that goes online. **Check now** looks
-  once; if there's a newer release and you agree, an installed Pawse downloads the matching
-  installer, verifies its checksum and runs it (a portable copy points you at the download
-  page instead). **Check for updates once a day** is off by default, and when on it only
-  tells you - installing still takes a deliberate yes. See [Privacy](#privacy).
+- **Settings → About** is the only thing in Pawse that goes online, and it offers three
+  levels: **Only when I ask** (the default - nothing leaves the machine until you press
+  **Check now**), **Tell me when an update is ready**, and **Download and install updates
+  automatically**. An update is downloaded from GitHub Releases and its checksum
+  cross-checked against pawse.at before anything runs; an installed copy runs the matching
+  installer, a portable one replaces its own exe and restarts. Automatic installs decline
+  anything that would need administrator rights, a runtime download, or a guess about which
+  build you have - those still ask. See [Privacy](#privacy).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on your chosen monitor (you can turn it
@@ -129,16 +132,24 @@ blocks, and only force it if you tell them to.
 ## Privacy
 
 Out of the box Pawse makes **no network connections at all** - no telemetry, no background
-check, no phone-home. Exactly one request exists: **Settings → About → Check now** fetches
-`https://pawse.at/latest.json` and sends nothing but a `Pawse/<version>` user agent (that
-request isn't logged on the server). Turning on **Check for updates once a day** makes that
-same request run by itself while Pawse is open, at most once every 24 hours - it's off
-unless you switch it on, and it never does more than notify.
+check, no phone-home. The update setting starts at **Only when I ask**, so nothing leaves the
+machine until you press **Check now** or move it up a level. Whatever Pawse sends is a
+`Pawse/<version>` user agent and nothing else.
 
-If it finds a newer release and you say yes, Pawse downloads the matching installer from
-GitHub Releases, checks it against the SHA-256 listed in the feed, and only then runs it -
-the checksum comes from a different host than the download, so it's a real cross-check.
-Decline, or never open that menu item, and Pawse never touches the network at all. Your
+A check asks `https://github.com/phoen-ix/pawse/releases/latest` which release is newest -
+just the redirect, no API - and reads `https://pawse.at/latest.json` for the checksum. That
+request to pawse.at isn't logged on the server; GitHub, being GitHub, logs what it likes.
+
+If there's something newer and you agree, Pawse downloads it from GitHub Releases, checks it
+against the SHA-256 pawse.at published, and only then runs it. Two hosts is the point: a
+hash served alongside the binary only tells you the transfer wasn't corrupted. Be clear-eyed
+about how far that goes, though - this repository serves both the release and the feed, so
+the split protects against a compromised CDN edge or a MITM, not against a compromised
+source. (Signed binaries would; Pawse doesn't have them yet.) When pawse.at can't vouch for
+a release, Pawse falls back to the release's own `SHA256SUMS.txt`, says so before installing,
+and refuses to do it unattended.
+
+Decline, or leave the setting alone, and Pawse never touches the network at all. Your
 settings, log and keystrokes stay on the machine either way.
 
 ## Build from source

@@ -92,7 +92,10 @@ Var RealPrivileges   ; account type as Windows reports it, before we fib to Mult
 Var PrevInstDir      ; a previous install's folder, when its settings need carrying over
 !ifndef FULL_ONLY
 Var DotnetFound      ; "1" | "0" - set by DotnetPresent
+Var NoRuntime        ; "1" when /NORUNTIME was passed - never fetch .NET unattended
 !endif
+; Outside the guard above: every build honours /RESTART, including FULL_ONLY.
+Var RestartApp       ; "1" when /RESTART was passed - a silent install relaunches Pawse
 
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
@@ -231,6 +234,15 @@ Function EnsureDotnet
     Return
   ${EndIf}
   DetailPrint ".NET 8 Desktop Runtime (x64) not found."
+
+  ; An automatic update passes /NORUNTIME. The prompt below defaults to Yes under /S so a
+  ; scripted deploy provisions the runtime unattended, but an update the user never watched
+  ; start must not pull ~55 MB and install it machine-wide on that same default.
+  ${If} $NoRuntime == "1"
+    DetailPrint "Skipping the runtime download (/NORUNTIME)."
+    Call DotnetManual
+    Return
+  ${EndIf}
 
   ; Ask first. This pulls roughly 55 MB down and installs it machine-wide; doing that
   ; unannounced because someone picked the small build is not a decision Setup gets to make.
@@ -557,6 +569,20 @@ Section "-Core" SEC_CORE
   WriteRegStr   SHCTX "${UNINST_KEY}" "Publisher"       "${PUBLISHER}"
   WriteRegStr   SHCTX "${UNINST_KEY}" "DisplayIcon"     "$INSTDIR\pawse.ico"
   WriteRegStr   SHCTX "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  ; Which build is deployed here. The app used to infer this from the exe's size, which
+  ; misreads a full install as minimal whenever the size can't be read - and then offers it
+  ; the wrong installer. Recorded rather than guessed; see UpdateCheck.DetectInstall.
+  ; $BuildChoice only exists in the installer that carries both builds; the single-build
+  ; ones know what they shipped.
+!ifdef MINIMAL_ONLY
+  WriteRegStr   SHCTX "${UNINST_KEY}" "BuildVariant"    "min"
+!else
+  !ifdef FULL_ONLY
+  WriteRegStr   SHCTX "${UNINST_KEY}" "BuildVariant"    "full"
+  !else
+  WriteRegStr   SHCTX "${UNINST_KEY}" "BuildVariant"    "$BuildChoice"
+  !endif
+!endif
   WriteRegStr   SHCTX "${UNINST_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegStr   SHCTX "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
   ; installed size (KB) so Add/Remove Programs shows a Size for Pawse
@@ -635,7 +661,60 @@ Function .onInit
     Quit
   ${EndIf}
 
+  ; MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY is inert in stock MultiUser.nsh, so do what
+  ; it advertises: upgrade over the previous copy instead of relocating a custom-directory
+  ; install into the default folder. Interactively that was only cosmetic - the user sees the
+  ; directory page and can correct it - but a silent upgrade has no page, so it would orphan
+  ; the old folder (pawse.json, uninstall.exe and all) and leave the Run key pointing at a
+  ; stale exe that still exists, which Autostart.Repair only re-points when it's GONE.
+  ReadRegStr $0 SHCTX "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 != ""
+  ${AndIf} ${FileExists} "$0\${EXE}"
+    StrCpy $INSTDIR $0
+  ${EndIf}
+
+  ; /RESTART - relaunch Pawse when a silent install finishes. The updater passes "/S /RESTART"
+  ; after the app has been asked to quit, so the user gets their tray paw back instead of
+  ; watching it vanish. Honoured only under /S: an interactive run already offers this on the
+  ; finish page, and both firing would trip the single-instance guard.
+  ;
+  ; /NORUNTIME - never provision the .NET runtime. EnsureDotnet's prompt defaults to Yes under
+  ; /S so a scripted deploy works unattended, but an automatic UPDATE must not pull ~55 MB
+  ; machine-wide without anyone agreeing to it. Pawse passes this on every silent update.
+  Push $R0
+  Push $R1
+  StrCpy $RestartApp "0"
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/RESTART" $R1
+  ${IfNot} ${Errors}
+    StrCpy $RestartApp "1"
+  ${EndIf}
+!ifndef FULL_ONLY
+  ; Only a build that can reach EnsureDotnet has anything to suppress.
+  StrCpy $NoRuntime "0"
+  ClearErrors
+  ${GetOptions} $R0 "/NORUNTIME" $R1
+  ${IfNot} ${Errors}
+    StrCpy $NoRuntime "1"
+  ${EndIf}
+!endif
+  ClearErrors
+  Pop $R1
+  Pop $R0
+
   SectionSetFlags ${SEC_DESK} 0     ; Desktop shortcut off by default
+FunctionEnd
+
+; NSIS calls this after a successful install - Abort and Quit skip it - including a silent
+; one, which is the whole point: /S never reaches the finish page, so MUI_FINISHPAGE_RUN
+; never fires and the app the updater just closed would simply stay closed.
+Function .onInstSuccess
+  ${If} ${Silent}
+  ${AndIf} $RestartApp == "1"
+    DetailPrint "Relaunching Pawse..."
+    Call LaunchApp
+  ${EndIf}
 FunctionEnd
 
 ; Called by MULTIUSER_PAGE_INSTALLMODE's leave handler, after MultiUser has applied the
@@ -677,6 +756,11 @@ Section "Uninstall"
   SetOutPath "$TEMP"   ; move CWD out of $INSTDIR so the folder can be removed
 
   Delete "$INSTDIR\${EXE}"
+  ; A portable copy replaces its own exe by renaming (see Core/SelfReplace.cs) and leaves
+  ; these behind if it is interrupted. An installed copy never self-replaces, but someone
+  ; may have dropped a portable one into this folder - and a leftover would block the RMDir.
+  Delete "$INSTDIR\${EXE}.old"
+  Delete "$INSTDIR\${EXE}.new"
   Delete "$INSTDIR\pawse.ico"
   Delete "$INSTDIR\LICENSE.txt"
   ; App-generated files (the app writes config + log next to the exe) - removed so

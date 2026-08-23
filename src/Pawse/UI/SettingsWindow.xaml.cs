@@ -101,7 +101,10 @@ public partial class SettingsWindow : Window
         ChkTimer.IsChecked = _cfg.Unlock.Timer.Enabled;
         TxtTimerSeconds.Text = _cfg.Unlock.Timer.Seconds.ToString(CultureInfo.InvariantCulture);
 
-        ChkAutoUpdate.IsChecked = _cfg.Update.AutoCheck;
+        RbUpdManual.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Manual;
+        RbUpdNotify.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Notify;
+        RbUpdAuto.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Automatic;
+        ShowUpdateCaveat();
         LblUpdateStatus.Text = _cfg.Update.LastCheckUtc is { } last
             ? $"Last checked {last.ToLocalTime():yyyy-MM-dd HH:mm}"
             : "Never checked";
@@ -141,7 +144,10 @@ public partial class SettingsWindow : Window
         _cfg.Unlock.Timer.Enabled = ChkTimer.IsChecked == true;
         _cfg.Unlock.Timer.Seconds = ParseInt(TxtTimerSeconds.Text, _cfg.Unlock.Timer.Seconds, 1, 86400);
 
-        _cfg.Update.AutoCheck = ChkAutoUpdate.IsChecked == true;
+        _cfg.Update.ModeValue =
+            RbUpdAuto.IsChecked == true ? Config.UpdateMode.Automatic :
+            RbUpdNotify.IsChecked == true ? Config.UpdateMode.Notify :
+            Config.UpdateMode.Manual;
 
         _cfg.Overlay.Enabled = ChkOverlay.IsChecked == true;
         // Persist the display only when the user actually changed it. The combo can only
@@ -182,6 +188,39 @@ public partial class SettingsWindow : Window
     {
         LblUpdateStatus.Text = text;
         BtnCheckUpdates.IsEnabled = true;
+    }
+
+    /// <summary>Say up front when this copy cannot take an update on its own, so choosing
+    /// "automatically" never quietly means "notify". Both reasons are properties of where
+    /// Pawse is installed, so neither can change while the window is open.</summary>
+    private void ShowUpdateCaveat()
+    {
+        string? reason = null;
+        if (UpdateCheck.IsInstalled(UpdateCheck.DetectInstall())
+            && UpdateCheck.DetectScope() == InstallScope.PerMachine)
+            reason = "This copy is installed for everyone on this PC, so updates are offered "
+                   + "rather than installed - installing needs administrator rights.";
+        else if (!SelfReplace.CanWriteTo(Log.ExeDir()))
+            reason = "Pawse can't write to its own folder, so it can only tell you about "
+                   + "updates - installing one is up to you.";
+
+        LblUpdateCaveat.Text = reason ?? "";
+        LblUpdateCaveat.Visibility = reason is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Both About-page links. A WPF Hyperlink does nothing by itself; this hands the
+    /// URL to the default browser. https only - the shell would run whatever NavigateUri said,
+    /// and these two are the only things that should ever reach it.</summary>
+    private void OnOpenLink(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try
+        {
+            if (e.Uri.Scheme == Uri.UriSchemeHttps)
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception ex) { Log.Error("open link", ex); }
+        e.Handled = true;
     }
 
     private void OnCancel(object sender, RoutedEventArgs e) => Close();

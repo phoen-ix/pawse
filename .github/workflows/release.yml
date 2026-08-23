@@ -265,7 +265,7 @@ jobs:
             config and log are written next to the exe. `SHA256SUMS.txt` holds
             checksums for every download.
 
-            Already have Pawse installed? **Settings → Updates → Check now**
+            Already have Pawse installed? **Settings → About → Check now**
             offers this build and installs it for you.
 
       # The update feed the app reads when the user picks "Check for updates…" - published
@@ -285,9 +285,22 @@ jobs:
           $feed = [ordered]@{
             version    = $version
             notes      = "https://github.com/${{ github.repository }}/releases/tag/v$version"
+            # Absent means allowed, so every feed written before this key existed stays valid.
+            # Setting it to false in a follow-up commit is the ONLY way to stop a bad release
+            # installing itself on every copy set to "download and install automatically" -
+            # installed copies have no rollback, and the alternative is cutting another
+            # release and waiting out another 24 h of daily checks.
+            auto       = $true
             installers = [ordered]@{
               full = [ordered]@{ url = "$base/Pawse-Setup-$version-full.exe"; sha256 = Sha "Pawse-Setup-$version-full.exe" }
               min  = [ordered]@{ url = "$base/Pawse-Setup-$version-min.exe";  sha256 = Sha "Pawse-Setup-$version-min.exe" }
+            }
+            # Portable copies replace their own exe, and need a checksum from THIS host to
+            # cross-check a zip served by GitHub - the same reason the installers are listed
+            # here rather than trusting GitHub's own SHA256SUMS.txt.
+            portable   = [ordered]@{
+              full = [ordered]@{ url = "$base/Pawse-$version.zip";     sha256 = Sha "Pawse-$version.zip" }
+              min  = [ordered]@{ url = "$base/Pawse-$version-min.zip"; sha256 = Sha "Pawse-$version-min.zip" }
             }
           }
           # LF and a trailing newline: ConvertTo-Json emits CRLF on Windows, which would

@@ -205,7 +205,7 @@ public class ConfigDefaultsTests
     public void The_automatic_update_check_is_off_by_default()
     {
         var c = new Config();
-        Assert.False(c.Update.AutoCheck);
+        Assert.Equal(Config.UpdateMode.Manual, c.Update.ModeValue);
         Assert.Null(c.Update.LastCheckUtc);
     }
 
@@ -213,13 +213,17 @@ public class ConfigDefaultsTests
     public void The_update_section_round_trips()
     {
         var c = new Config();
-        c.Update.AutoCheck = true;
+        c.Update.ModeValue = Config.UpdateMode.Automatic;
         c.Update.LastCheckUtc = new DateTime(2026, 8, 6, 10, 30, 0, DateTimeKind.Utc);
+        c.Update.LastAutoAttemptVersion = "0.8.0";
+        c.Update.LastAutoAttemptUtc = new DateTime(2026, 8, 6, 11, 0, 0, DateTimeKind.Utc);
 
         var back = Config.FromJson(c.ToJson());
 
-        Assert.True(back!.Update.AutoCheck);
+        Assert.Equal(Config.UpdateMode.Automatic, back!.Update.ModeValue);
         Assert.Equal(c.Update.LastCheckUtc, back.Update.LastCheckUtc);
+        Assert.Equal("0.8.0", back.Update.LastAutoAttemptVersion);
+        Assert.Equal(c.Update.LastAutoAttemptUtc, back.Update.LastAutoAttemptUtc);
     }
 
     [Fact]
@@ -227,6 +231,58 @@ public class ConfigDefaultsTests
     {
         var cfg = Config.FromJson("""{"Update": null}""");
         Assert.NotNull(cfg!.Update);
-        Assert.False(cfg.Update.AutoCheck);
+        Assert.Equal(Config.UpdateMode.Manual, cfg.Update.ModeValue);
+    }
+}
+
+/// <summary>The three-level update setting, and the one-way migration from the bool it
+/// replaced. The stakes on the parsing side are high: Config.Load answers a throw by keeping
+/// the file as .bad and starting from defaults, so a typo here must never throw.</summary>
+public class ConfigUpdateModeTests
+{
+    [Theory]
+    [InlineData("Manual", Config.UpdateMode.Manual)]
+    [InlineData("Notify", Config.UpdateMode.Notify)]
+    [InlineData("Automatic", Config.UpdateMode.Automatic)]
+    [InlineData("automatic", Config.UpdateMode.Automatic)]   // hand-edited, any casing
+    [InlineData("  Notify  ", Config.UpdateMode.Notify)]     // and any stray whitespace
+    [InlineData("1", Config.UpdateMode.Notify)]              // the number it sits at
+    [InlineData("7", Config.UpdateMode.Manual)]              // a number no member sits at
+    [InlineData("nonsense", Config.UpdateMode.Manual)]
+    [InlineData("", Config.UpdateMode.Manual)]
+    [InlineData(null, Config.UpdateMode.Manual)]
+    public void An_unrecognised_mode_reads_as_manual_never_as_consent(string? text, Config.UpdateMode expected)
+        => Assert.Equal(expected, Config.UpdateCfg.ParseMode(text));
+
+    /// <summary>The whole reason Mode is a string and not an enum property.</summary>
+    [Fact]
+    public void A_typo_in_the_mode_costs_nothing_else_in_the_file()
+    {
+        var cfg = Config.FromJson("""{"Update":{"Mode":"nonsense"},"General":{"StartLocked":true}}""");
+
+        Assert.Equal(Config.UpdateMode.Manual, cfg!.Update.ModeValue);
+        Assert.True(cfg.General.StartLocked);   // the rest of the file survived
+    }
+
+    [Theory]
+    [InlineData("""{"Update":{"AutoCheck":true}}""", Config.UpdateMode.Notify)]
+    [InlineData("""{"Update":{"AutoCheck":false}}""", Config.UpdateMode.Manual)]
+    [InlineData("""{"Update":{}}""", Config.UpdateMode.Manual)]
+    public void The_old_auto_check_flag_migrates_once(string json, Config.UpdateMode expected)
+        => Assert.Equal(expected, Config.FromJson(json)!.Update.ModeValue);
+
+    /// <summary>A level already chosen wins over a stale flag left in the file.</summary>
+    [Fact]
+    public void An_explicit_mode_beats_the_old_flag()
+    {
+        var cfg = Config.FromJson("""{"Update":{"Mode":"Automatic","AutoCheck":true}}""");
+        Assert.Equal(Config.UpdateMode.Automatic, cfg!.Update.ModeValue);
+    }
+
+    [Fact]
+    public void The_old_flag_is_gone_from_the_next_save()
+    {
+        var cfg = Config.FromJson("""{"Update":{"AutoCheck":true}}""");
+        Assert.DoesNotContain("AutoCheck", cfg!.ToJson());
     }
 }

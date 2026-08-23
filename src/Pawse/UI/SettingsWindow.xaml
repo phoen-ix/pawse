@@ -244,11 +244,26 @@
                                    Foreground="#FF2B2F36" />
                         <TextBlock Text="A cat-proof keyboard lock for Windows." Margin="0,6,0,0"
                                    Foreground="#FF7A808A" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0">
+                            <Hyperlink NavigateUri="https://pawse.at"
+                                       RequestNavigate="OnOpenLink">pawse.at</Hyperlink>
+                            <Run Text="  -  " />
+                            <Hyperlink NavigateUri="https://github.com/phoen-ix/pawse"
+                                       RequestNavigate="OnOpenLink">github.com/phoen-ix/pawse</Hyperlink>
+                        </TextBlock>
 
                         <TextBlock Text="Updates" Style="{StaticResource SubHeader}" />
-                        <CheckBox x:Name="ChkAutoUpdate" Content="Check for updates once a day" />
+                        <RadioButton x:Name="RbUpdManual" GroupName="UpdateMode"
+                                     Content="Only when I ask" Margin="0,4,0,2" />
+                        <RadioButton x:Name="RbUpdNotify" GroupName="UpdateMode"
+                                     Content="Tell me when an update is ready" Margin="0,4,0,2" />
+                        <RadioButton x:Name="RbUpdAuto" GroupName="UpdateMode"
+                                     Content="Download and install updates automatically" Margin="0,4,0,2" />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="Off by default. Pawse contacts pawse.at only when you press Check now - or, with this on, once a day while it's running. A daily check only tells you an update exists; installing always asks first." />
+                                   Text="Only when I ask is the default: nothing leaves this machine until you press Check now. The other two look once a day while Pawse is running. A check asks github.com; installing also asks pawse.at, to cross-check the download against a second host." />
+                        <!-- Filled in code when this copy cannot install updates on its own, so
+                             "automatically" never silently means "notify". -->
+                        <TextBlock x:Name="LblUpdateCaveat" Style="{StaticResource Warn}" />
                         <!-- A Grid, not a horizontal StackPanel: that measures its children with
                              infinite width, so the status text would never wrap however long the
                              message gets. -->

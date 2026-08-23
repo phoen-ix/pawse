@@ -124,32 +124,42 @@ jobs:
         shell: pwsh
         run: |
           $setup = (Resolve-Path packaging/Pawse-Setup-0.0.0.exe).Path
-          Start-Process -FilePath $setup -ArgumentList '/S','/CurrentUser' -Wait
+          # /RESTART too: an automatic update passes it so the tray paw comes back instead of
+          # vanishing, and it is only reachable through a silent run - MUI_FINISHPAGE_RUN
+          # covers the interactive case and never fires here.
+          Start-Process -FilePath $setup -ArgumentList '/S','/CurrentUser','/RESTART' -Wait
           if (-not (Test-Path $env:UNINST_KEY)) { throw "nothing registered at $env:UNINST_KEY" }
           $entry = Get-ItemProperty $env:UNINST_KEY
           "installed to $($entry.InstallLocation)"
           if ($entry.DisplayVersion -ne '0.0.0') { throw "DisplayVersion is '$($entry.DisplayVersion)', expected 0.0.0" }
+          # Recorded so an update offers the build that is actually installed, instead of
+          # inferring it from the exe's size - which misreads a full install whenever the
+          # size cannot be read. UpdateCheck.DetectInstall prefers this.
+          if ($entry.BuildVariant -ne 'full') { throw "BuildVariant is '$($entry.BuildVariant)', expected full" }
           if (-not $entry.QuietUninstallString) { throw "no QuietUninstallString - Windows could not remove this silently" }
           foreach ($f in 'Pawse.exe', 'uninstall.exe', 'pawse.ico', 'LICENSE.txt') {
             if (-not (Test-Path (Join-Path $entry.InstallLocation $f))) { throw "$f missing from the install folder" }
           }
           Add-Content -Path $env:GITHUB_ENV -Value "INSTALL_DIR=$($entry.InstallLocation)"
 
-      - name: The installed app starts
+      - name: /RESTART relaunched the installed app
         shell: pwsh
         run: |
-          # "startup complete" is the last line App.StartupCore logs, so it means the
-          # tray icon, both hooks and the config all came up on a machine that has never
-          # seen Pawse before.
+          # Nothing is started here on purpose: /RESTART above already did it, through
+          # explorer.exe, so it is not this job's child. "startup complete" is the last line
+          # App.StartupCore logs, so reaching it means the tray icon, both hooks and the
+          # config all came up on a machine that has never seen Pawse before.
           $log = Join-Path $env:INSTALL_DIR 'pawse.log'
-          Start-Process -FilePath (Join-Path $env:INSTALL_DIR 'Pawse.exe')
-          $deadline = (Get-Date).AddSeconds(60)
+          $deadline = (Get-Date).AddSeconds(90)
           while ((Get-Date) -lt $deadline) {
-            if ((Test-Path $log) -and (Select-String -Path $log -Pattern 'startup complete' -Quiet)) { exit 0 }
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern 'startup complete' -Quiet)) {
+              if (-not (Get-Process Pawse -ErrorAction SilentlyContinue)) { throw "Pawse logged startup then exited" }
+              exit 0
+            }
             Start-Sleep -Milliseconds 500
           }
           if (Test-Path $log) { Get-Content $log } else { "no pawse.log was written at all" }
-          throw "the installed Pawse never reached 'startup complete'"
+          throw "/RESTART did not relaunch the installed Pawse"
 
       - name: Uninstall silently and leave nothing behind
         shell: pwsh

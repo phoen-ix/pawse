@@ -21,6 +21,15 @@ public partial class App : Application
     private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
     private bool _updateCheckBusy;
 
+    /// <summary>An automatic install that arrived while the keyboard was locked. Installing
+    /// closes Pawse, which hands the keyboard back - so it waits for the unlock instead.
+    /// Deliberately not persisted: the next scheduled check would derive it again anyway.</summary>
+    private UpdatePlan? _pendingUpdate;
+
+    /// <summary>Cancels anything still in flight when Pawse quits - notably a part-finished
+    /// 58 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
+    private readonly System.Threading.CancellationTokenSource _shutdown = new();
+
     internal static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
@@ -71,6 +80,15 @@ public partial class App : Application
 
         Log.Init(Version);
         InstallExceptionHandlers();
+
+        // Clean up after a portable self-replace. Windows is still unmapping the exe we
+        // replaced for a moment after that process let go of the mutex we just took, so
+        // retry quietly off the UI thread and leave it for the next start if it never frees.
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            for (int i = 0; i < 10 && !SelfReplace.SweepLeftovers(); i++)
+                await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        });
 
         // Let the installer/uninstaller ask us to bow out cleanly instead of force-killing
         // us - only OnExit reverts the Win+L and media-key blocks. This deliberately skips
@@ -204,6 +222,13 @@ public partial class App : Application
                 {
                     StopAutoUnlock();
                     _overlay?.HideLocked();
+                    // The keyboard is the user's again, so an update held back while locked
+                    // can go ahead now.
+                    if (_pendingUpdate is { } deferred)
+                    {
+                        _pendingUpdate = null;
+                        ApplyPendingUpdate(deferred);
+                    }
                 }
             }
             catch (Exception ex) { Log.Error("apply lock state", ex); }
@@ -294,6 +319,13 @@ public partial class App : Application
         _tray!.DoubleClickUnlock = config.General.TrayDoubleClickUnlock;
         Autostart.SetEnabled(config.General.Autostart);
         StartAutoUpdateCheck();   // re-armed or stopped to match the new setting
+        // Turning automatic installs back off cancels one that was waiting for the unlock:
+        // the consent it was riding on has just been withdrawn.
+        if (config.Update.ModeValue != Config.UpdateMode.Automatic && _pendingUpdate is not null)
+        {
+            Log.Info("update: dropping the deferred install - automatic updates were switched off");
+            _pendingUpdate = null;
+        }
         // If Block Win+L was just enabled but this PC needs admin to apply it, offer to
         // relaunch elevated (same prompt as startup). On Yes we hand off and stop here.
         if (RelaunchElevatedIfWinLockNeedsIt(config)) return;
@@ -362,92 +394,251 @@ public partial class App : Application
             return;
         }
 
-        Log.Info($"update check ({(interactive ? "requested" : "daily")}): asking {UpdateCheck.FeedUrl} (this copy is {current})");
-        var result = await UpdateCheck.FetchAsync();
+        var kind = UpdateCheck.DetectInstall();
+        Log.Info($"update check ({(interactive ? "requested" : "scheduled")}): this copy is {current} ({kind})");
+
+        var plan = await UpdateCheck.CheckAsync(current, kind, _shutdown.Token);
         StampCheckedNow();
+        Log.Info("update check: " + plan);
 
-        if (result.Info is not { } info)
+        switch (plan.Verdict)
         {
-            Log.Warn($"update check failed: {result.Error}");
-            if (!interactive) return;   // a daily check that can't reach the net says nothing
-            _settingsWindow?.ShowUpdateStatus(result.Error ?? "The check failed.");
-            OfferDownloadsPage((result.Error ?? "The update check failed.") +
-                               "\n\nOpen the downloads page instead?");
-            return;
-        }
+            case UpdateVerdict.UpToDate:
+                if (interactive) _settingsWindow?.ShowUpdateStatus($"Pawse {current} is the latest version.");
+                break;
 
-        if (!UpdateCheck.IsNewer(current, info.Version))
-        {
-            Log.Info($"update check: {current} is current (the feed offers {info.Version})");
-            if (interactive) _settingsWindow?.ShowUpdateStatus($"Pawse {current} is the latest version.");
-            return;
-        }
+            case UpdateVerdict.Available:
+                ReportAvailable(plan, current, interactive);
+                break;
 
+            case UpdateVerdict.Installable:
+                if (interactive) await OfferInstall(plan, current);
+                else await AutoInstall(plan);
+                break;
+
+            default:
+                // A scheduled check that cannot reach the network says nothing at all.
+                if (!interactive) break;
+                _settingsWindow?.ShowUpdateStatus(plan.Error ?? "The check failed.");
+                OfferDownloadsPage((plan.Error ?? "The update check failed.") +
+                                   "\n\nOpen the downloads page instead?");
+                break;
+        }
+    }
+
+    /// <summary>Newer, but nothing this copy can verify or install by itself.</summary>
+    private void ReportAvailable(UpdatePlan plan, string current, bool interactive)
+    {
         if (!interactive)
         {
-            // Opting into the daily check opts into being told, not into a dialog appearing
-            // over whatever you were doing - let alone an install.
-            Log.Info($"update check: {info.Version} available (daily check - notifying only)");
-            _tray?.Notify("Pawse", $"Pawse {info.Version} is available. Settings → About to install it.");
+            _tray?.Notify("Pawse", $"Pawse {plan.Version} is available. Settings → About to install it.");
             return;
         }
+        _settingsWindow?.ShowUpdateStatus($"Pawse {plan.Version} is available.");
+        OfferDownloadsPage(
+            $"Pawse {plan.Version} is available (you have {current}).\n\n" +
+            "This release doesn't offer anything Pawse can verify for this copy, so it won't " +
+            "download it.\n\nOpen the downloads page?", plan.NotesUrl);
+    }
 
-        var kind = UpdateCheck.DetectInstall();
-        var asset = kind switch
-        {
-            InstallKind.InstalledFull => info.Full,
-            InstallKind.InstalledMin => info.Min,
-            _ => null,
-        };
-        Log.Info($"update check: {info.Version} is available (this copy is {kind})");
+    /// <summary>The user pressed Check now and there is something installable.</summary>
+    private async Task OfferInstall(UpdatePlan plan, string current)
+    {
+        _settingsWindow?.ShowUpdateStatus($"Pawse {plan.Version} is available.");
 
-        _settingsWindow?.ShowUpdateStatus($"Pawse {info.Version} is available.");
-
-        if (asset is null)
-        {
-            OfferDownloadsPage(
-                $"Pawse {info.Version} is available (you have {current}).\n\n" +
-                (kind == InstallKind.Portable
-                    ? "This is a portable copy, so it can't replace itself."
-                    : "The update doesn't list an installer for this build.") +
-                "\n\nOpen the downloads page?", info.NotesUrl);
-            return;
-        }
-
+        // Only pawse.at's checksum crosses hosts. Say so when it doesn't, rather than
+        // implying a verification that only proves the transfer wasn't corrupted.
+        string sameHostNote = plan.Checksum == ChecksumSource.GitHubSums
+            ? "\n\nIts checksum comes from the download's own host this time, so it confirms the " +
+              "transfer but not much more."
+            : "";
         string lockedNote = _controller?.IsLocked == true
             ? "\n\nPawse is locked: installing closes it, which releases the keyboard."
             : "";
+        string portableNote = !UpdateCheck.IsInstalled(plan.Kind)
+            ? "\n\nThis is a portable copy, so Pawse will replace its own exe and restart."
+            : "";
+
         if (MessageBox.Show(
-                $"Pawse {info.Version} is available (you have {current}).\n\nDownload and install it now?" + lockedNote,
+                $"Pawse {plan.Version} is available (you have {current}).\n\nDownload and install it now?"
+                    + portableNote + sameHostNote + lockedNote,
                 "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             Log.Info("update: declined by the user");
             return;
         }
+        await ApplyUpdate(plan, unattended: false);
+    }
 
-        _tray?.Notify("Pawse", $"Downloading Pawse {info.Version}…");
-        string variant = kind == InstallKind.InstalledFull ? "full" : "min";
-        var installer = await UpdateCheck.DownloadVerifiedAsync(asset, $"Pawse-Setup-{info.Version}-{variant}.exe");
-        if (installer == null)
+    /// <summary>A scheduled check found something installable. Everything that would surprise
+    /// the user - a UAC prompt, a runtime download, the keyboard being handed back mid-lock -
+    /// declines here instead, and says why in the log.</summary>
+    private async Task AutoInstall(UpdatePlan plan)
+    {
+        if (AutoInstallRefusal(plan) is { } refusal)
         {
-            OfferDownloadsPage("The download failed or didn't match its checksum, so it was discarded.\n\n" +
-                               "Open the downloads page instead?", info.NotesUrl);
+            Log.Info($"update: {plan.Version} available but not installed automatically - {refusal}");
+            _tray?.Notify("Pawse", $"Pawse {plan.Version} is available. Settings → About to install it.");
+            return;
+        }
+        if (_controller?.IsLocked == true)
+        {
+            // Installing closes Pawse, and closing Pawse releases the keyboard. Doing that
+            // unattended because a timer fired is precisely what the lock exists to prevent,
+            // so hold the plan and take it at the next unlock. Nothing has been downloaded
+            // yet, so nothing goes stale while it waits.
+            Log.Info($"update: {plan.Version} is ready but Pawse is locked - deferring until unlock");
+            _pendingUpdate = plan;
+            return;
+        }
+        await ApplyUpdate(plan, unattended: true);
+    }
+
+    /// <summary>Null when a check nobody is watching may install this on its own; otherwise
+    /// the reason it may not.</summary>
+    private string? AutoInstallRefusal(UpdatePlan plan)
+    {
+        var cfg = _controller!.Config.Update;
+        if (cfg.ModeValue != Config.UpdateMode.Automatic)
+            return "the setting is notify-only";
+        if (!UpdateCheck.MayInstallUnattended(plan))
+            return plan.FeedAllowsAuto
+                ? "there is no checksum from pawse.at to cross-check the download against"
+                : "the feed has paused automatic installs";
+        if (!UpdateCheck.MayRetryAutoInstall(plan.Version!, cfg.LastAutoAttemptVersion,
+                                             cfg.LastAutoAttemptUtc, DateTime.UtcNow))
+            return $"{plan.Version} was already tried and did not take";
+        // Per-user installs update themselves; per-machine needs administrator rights, and an
+        // unattended check must never be the thing that raises a UAC prompt.
+        if (UpdateCheck.IsInstalled(plan.Kind) && UpdateCheck.DetectScope() == InstallScope.PerMachine)
+            return "this copy was installed for everyone on this PC, which needs administrator rights";
+        if (!SelfReplace.CanWriteTo(Log.ExeDir()))
+            return "the folder Pawse lives in is not writable";
+        return null;
+    }
+
+    /// <summary>Download, verify, then hand over to the installer or replace the exe.</summary>
+    private async Task ApplyUpdate(UpdatePlan plan, bool unattended)
+    {
+        _tray?.Notify("Pawse", $"Downloading Pawse {plan.Version}…");
+        var file = await UpdateCheck.DownloadVerifiedAsync(plan.Asset!, plan.FileName!, _shutdown.Token);
+        if (file is null)
+        {
+            Log.Error($"update: {plan.Version} failed to download or did not match its checksum");
+            if (unattended)
+                _tray?.Notify("Pawse", $"Pawse {plan.Version} could not be verified, so it was discarded.");
+            else
+                OfferDownloadsPage("The download failed or didn't match its checksum, so it was discarded.\n\n" +
+                                   "Open the downloads page instead?", plan.NotesUrl);
             return;
         }
 
-        // Hand over: the installer asks this instance to quit through the same channel the
-        // installer and uninstaller always use (QuitSignal), so there is nothing left to do
-        // here - including undoing the lock, which OnExit does on the way out.
+        // Stamp the attempt BEFORE handing over: a successful handover kills this process long
+        // before anything after it could run.
+        var cfg = _controller!.Config.Update;
+        cfg.LastAutoAttemptVersion = plan.Version;
+        cfg.LastAutoAttemptUtc = DateTime.UtcNow;
+        _controller.Config.Save();
+
+        if (UpdateCheck.IsInstalled(plan.Kind)) LaunchInstaller(plan, file, unattended);
+        else ReplacePortable(plan, file, unattended);
+    }
+
+    /// <summary>Hand over to the downloaded installer. It asks this instance to quit over
+    /// QuitSignal - the channel every install and uninstall uses - so there is nothing to tear
+    /// down here; OnExit still runs and still reverts the Win+L and media-key blocks.</summary>
+    private void LaunchInstaller(UpdatePlan plan, string installer, bool unattended)
+    {
+        // Only an update nobody asked to watch runs silently. When the user pressed Check now
+        // they get the wizard: it is the visible, cancellable path, and it is what every
+        // previous version did.
+        //
+        // Never silent for a per-machine install either - pawse.nsi's .onInit sets error level
+        // 2 and quits when /S meets an AllUsers install without an admin token. AutoInstallRefusal
+        // already declines those before we get here; this is belt-and-braces.
+        bool silent = unattended && UpdateCheck.DetectScope() != InstallScope.PerMachine;
+        // /RESTART because a silent install never reaches the finish page, so nothing would
+        // bring the tray paw back. /NORUNTIME because EnsureDotnet's prompt defaults to Yes
+        // under /S, and an update must not pull ~55 MB of runtime machine-wide on that default
+        // - the wizard asks that question properly, so the interactive path doesn't need it.
+        string args = silent ? "/S /RESTART /NORUNTIME" : "";
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installer) { UseShellExecute = true });
-            Log.Info($"update: handed over to {installer}");
+            var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = installer,
+                Arguments = args,
+                UseShellExecute = true,
+            });
+            Log.Info($"update: handed over to {installer} {(silent ? args : "(interactive)")}");
+            if (silent) WatchSilentInstaller(process, plan);
         }
         catch (Exception ex)
         {
             Log.Error("update: starting the installer", ex);
-            OfferDownloadsPage("The installer could not be started.\n\nOpen the downloads page instead?", info.NotesUrl);
+            if (unattended)
+                _tray?.Notify("Pawse", $"Pawse {plan.Version} could not be installed - Settings → About to try it yourself.");
+            else
+                OfferDownloadsPage("The installer could not be started.\n\nOpen the downloads page instead?",
+                                   plan.NotesUrl);
         }
+    }
+
+    /// <summary>Portable copies have no installer: swap the exe and restart.</summary>
+    private void ReplacePortable(UpdatePlan plan, string zip, bool unattended)
+    {
+        var outcome = SelfReplace.Run(zip, plan.Kind, plan.Version!);
+        switch (outcome.Result)
+        {
+            case ReplaceResult.Handover:
+                Log.Info($"update: replaced by Pawse {plan.Version}, shutting down");
+                Shutdown();
+                break;
+
+            case ReplaceResult.Stranded:
+                // The one failure the user has to act on, so it gets a dialog whether or not
+                // anyone asked for this update - and Pawse deliberately keeps running, because
+                // this process is the only working copy left.
+                Log.Error("update: stranded after a failed self-replace");
+                MessageBox.Show(outcome.Message, "Pawse", MessageBoxButton.OK, MessageBoxImage.Error);
+                break;
+
+            default:
+                if (unattended) _tray?.Notify("Pawse", $"Pawse {plan.Version} could not be installed. {outcome.Message}");
+                else OfferDownloadsPage(outcome.Message + "\n\nOpen the downloads page instead?", plan.NotesUrl);
+                break;
+        }
+    }
+
+    /// <summary>A silent installer that refuses the job just exits with a code - and we are
+    /// still here to see it, because a successful one would have asked us to quit long before
+    /// this fires. Turns a silent no-op into something the log and the tray mention.</summary>
+    private void WatchSilentInstaller(System.Diagnostics.Process? process, UpdatePlan plan)
+    {
+        if (process is null) return;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            try
+            {
+                if (!process.HasExited || process.ExitCode == 0) return;
+                Log.Error($"update: the silent installer exited with {process.ExitCode} and Pawse is still {Version}");
+                _tray?.Notify("Pawse",
+                    $"Pawse {plan.Version} could not be installed automatically. Settings → About to try it yourself.");
+            }
+            catch (Exception ex) { Log.Error("update: watching the installer", ex); }
+            finally { process.Dispose(); }
+        };
+        timer.Start();
+    }
+
+    /// <summary>Take a deferred update now that the keyboard is free. async void because it is
+    /// called from an event handler; it must never let an exception escape onto the dispatcher.</summary>
+    private async void ApplyPendingUpdate(UpdatePlan plan)
+    {
+        try { await ApplyUpdate(plan, unattended: true); }
+        catch (Exception ex) { Log.Error("update: applying the deferred update", ex); }
     }
 
     /// <summary>Remember that a check happened, so the daily one doesn't run again on every
@@ -468,12 +659,13 @@ public partial class App : Application
     private void StartAutoUpdateCheck()
     {
         StopAutoUpdateCheck();
-        if (_controller?.Config.Update.AutoCheck != true) return;
+        if (_controller?.Config.Update.ModeValue is not (Config.UpdateMode.Notify or Config.UpdateMode.Automatic)) return;
         _autoUpdate = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _autoUpdate.Tick += (_, _) =>
         {
             _autoUpdate!.Interval = TimeSpan.FromHours(1);
-            if (_controller?.Config.Update.AutoCheck != true) { StopAutoUpdateCheck(); return; }
+            if (_controller?.Config.Update.ModeValue is not (Config.UpdateMode.Notify or Config.UpdateMode.Automatic))
+            { StopAutoUpdateCheck(); return; }
             if (!UpdateCheck.IsCheckDue(_controller.Config.Update.LastCheckUtc, DateTime.UtcNow)) return;
             CheckForUpdates(interactive: false);
         };
@@ -567,6 +759,8 @@ public partial class App : Application
         // Stop listening first - we're already on our way out, and a second request
         // arriving mid-teardown would only re-enter Shutdown.
         try { _quitChannel?.Dispose(); } catch { /* ignore */ }
+        // Abandon any download still running: it has nowhere to report back to now.
+        try { _shutdown.Cancel(); } catch { /* ignore */ }
         StopAutoUpdateCheck();
         try { _controller?.Disengage("shutdown"); } catch { /* ignore */ }
         // Disengage's UI-thread dispatch may not run before we exit, so revert the
