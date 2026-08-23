@@ -16,7 +16,26 @@ namespace Pawse.Core;
 /// namespace as the single-instance mutex. It carries a default DACL, so only processes
 /// running as the same user in the same session can signal it - precisely the processes
 /// that could already <c>taskkill</c> us, so this hands nobody any new power.</para>
+///
+/// <para>Two things signal it: the installer and uninstaller (through raw Win32 in
+/// packaging/pawse.nsi), and a second Pawse whose user chose to take over from the running
+/// one - see App.StartupCore. Both need the same thing, which is for the outgoing instance
+/// to run OnExit rather than be killed.</para>
 /// </summary>
+/// <summary>What came of asking a running Pawse to quit.</summary>
+public enum QuitRequest
+{
+    /// <summary>The request was delivered. The instance is on its way out.</summary>
+    Delivered,
+
+    /// <summary>Nobody is listening - no Pawse running, or one built before this channel
+    /// existed.</summary>
+    NoListener,
+
+    /// <summary>A Pawse is running with higher privileges than us, so it cannot be asked.</summary>
+    AccessDenied,
+}
+
 public static class QuitSignal
 {
     /// <summary>Also hard-coded in packaging/pawse.nsi - change both or neither.</summary>
@@ -71,20 +90,29 @@ public static class QuitSignal
     /// Ask a running Pawse to quit. False means nobody is listening - no instance running,
     /// or one built before this channel existed.
     /// </summary>
-    public static bool Signal() => Signal(EventName);
+    public static QuitRequest Signal() => Signal(EventName);
 
     /// <summary>Test seam - see <see cref="Listen(Action, string)"/>.</summary>
-    internal static bool Signal(string eventName)
+    internal static QuitRequest Signal(string eventName)
     {
         try
         {
-            if (!EventWaitHandle.TryOpenExisting(eventName, out var handle)) return false;
-            using (handle) return handle.Set();
+            if (!EventWaitHandle.TryOpenExisting(eventName, out var handle))
+                return QuitRequest.NoListener;
+            using (handle) return handle.Set() ? QuitRequest.Delivered : QuitRequest.NoListener;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The event exists but we may not write to it. Setting an event IS a write, and
+            // Windows' integrity policy forbids writing "up" - so this is an elevated Pawse
+            // seen from an un-elevated process. Worth telling the caller apart from "nothing
+            // is listening", because the advice differs and taskkill would fail too.
+            return QuitRequest.AccessDenied;
         }
         catch (Exception ex)
         {
             Log.Error("quit channel signal", ex);
-            return false;
+            return QuitRequest.NoListener;
         }
     }
 

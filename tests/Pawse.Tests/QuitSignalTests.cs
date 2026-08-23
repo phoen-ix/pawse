@@ -28,16 +28,19 @@ public class QuitSignalTests
         using var listener = QuitSignal.Listen(fired.Set, name);
         Assert.NotNull(listener);
 
-        Assert.True(QuitSignal.Signal(name));
+        Assert.Equal(QuitRequest.Delivered, QuitSignal.Signal(name));
         Assert.True(fired.Wait(Patience), "the listener was never invoked");
     }
 
+    /// <summary>Told apart from AccessDenied on purpose: a second Pawse offering to take over
+    /// gives different advice for "that build is too old to ask" than for "that one is running
+    /// as administrator". AccessDenied needs a real elevated process, so it stays untested.</summary>
     [Fact]
-    public void Signal_is_false_when_nothing_is_listening()
+    public void Signal_reports_when_nothing_is_listening()
     {
         // A fresh name nobody has opened - unlike the production name, which a Pawse
         // running in this session WOULD be listening on.
-        Assert.False(QuitSignal.Signal(TestName()));
+        Assert.Equal(QuitRequest.NoListener, QuitSignal.Signal(TestName()));
     }
 
     [Fact]
@@ -61,7 +64,7 @@ public class QuitSignalTests
         // ten-second wait for a quit that already happened.
         var name = TestName();
         using var held = new EventWaitHandle(false, EventResetMode.AutoReset, name);
-        Assert.True(QuitSignal.Signal(name));
+        Assert.Equal(QuitRequest.Delivered, QuitSignal.Signal(name));
 
         using var fired = new ManualResetEventSlim(false);
         using var listener = QuitSignal.Listen(fired.Set, name);

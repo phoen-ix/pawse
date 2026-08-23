@@ -61,18 +61,11 @@ public partial class App : Application
         _singleton = new Mutex(true, @"Local\Pawse-single-instance-2b8f9c", out bool created);
         if (!created)
         {
-            // If we were relaunched elevated (--replace), wait briefly for the old
-            // instance to exit and release the mutex before giving up.
-            bool acquired = false;
-            if (e.Args.Contains(Elevation.ReplaceArg))
+            // Relaunched by an outgoing instance (--replace): it is already on its way out and
+            // told us so, no need to ask anyone anything.
+            bool acquired = e.Args.Contains(Elevation.ReplaceArg) && WaitForMutex(TimeSpan.FromSeconds(5));
+            if (!acquired && !TakeOverFromRunningInstance())
             {
-                try { acquired = _singleton.WaitOne(TimeSpan.FromSeconds(5)); }
-                catch (AbandonedMutexException) { acquired = true; }
-            }
-            if (!acquired)
-            {
-                MessageBox.Show("Pawse is already running - look for the paw in the system tray.",
-                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
                 Shutdown();
                 return;
             }
@@ -233,6 +226,74 @@ public partial class App : Application
             }
             catch (Exception ex) { Log.Error("apply lock state", ex); }
         }));
+    }
+
+    /// <summary>
+    /// Another Pawse holds the single-instance mutex. Offer to close it and take over, so a
+    /// copy you just downloaded - or unzipped somewhere else - can actually be run instead of
+    /// only being told no. Returns true when the mutex is ours and startup may continue.
+    /// </summary>
+    private bool TakeOverFromRunningInstance()
+    {
+        // Default No: the safe answer is to leave a working Pawse alone.
+        var answer = MessageBox.Show(
+            "Pawse is already running - the paw is in the system tray.\n\n" +
+            "Close that one and start this copy instead?\n\n" +
+            "If it has the keyboard locked right now, closing it hands the keyboard back.",
+            "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+        {
+            Log.Info("startup: another instance is running and the user kept it");
+            return false;
+        }
+
+        // The quit channel, not taskkill: only the other instance's OnExit reverts the Win+L
+        // policy value and the Keyboard Filter rules, so killing it could leave Win+L disabled
+        // on a machine whose Pawse is gone.
+        var request = QuitSignal.Signal();
+        Log.Info($"startup: asked the running instance to quit - {request}");
+
+        switch (request)
+        {
+            case QuitRequest.AccessDenied:
+                MessageBox.Show(
+                    "The Pawse that's running has administrator rights, so this copy can't ask "
+                        + "it to close.\n\nQuit it from the tray (right-click the paw, then Quit) "
+                        + "and start this one again.",
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+
+            case QuitRequest.NoListener:
+                // Either it exited between the mutex check and now, or it predates the quit
+                // channel. The first case resolves itself, so try the mutex before giving up.
+                if (WaitForMutex(TimeSpan.FromSeconds(2))) return true;
+                MessageBox.Show(
+                    "Pawse is running but didn't answer - it may be an older build that can't be "
+                        + "asked to close.\n\nQuit it from the tray (right-click the paw, then "
+                        + "Quit) and start this one again.",
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+
+            default:
+                // Same budget the installer allows itself for this (pawse.nsi polls 20x500ms).
+                // A clean shutdown is well under a second; blocking here is fine because no
+                // window exists yet.
+                if (WaitForMutex(TimeSpan.FromSeconds(10))) return true;
+                MessageBox.Show(
+                    "Pawse was asked to close but is still running.\n\nQuit it from the tray "
+                        + "(right-click the paw, then Quit) and start this one again.",
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+        }
+    }
+
+    /// <summary>Wait for the outgoing instance to release the single-instance mutex. An
+    /// abandoned mutex counts as acquired: the previous owner died without releasing it, which
+    /// leaves the name free either way.</summary>
+    private bool WaitForMutex(TimeSpan timeout)
+    {
+        try { return _singleton!.WaitOne(timeout); }
+        catch (AbandonedMutexException) { return true; }
     }
 
     private void StartAutoUnlock()
