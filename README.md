@@ -51,6 +51,10 @@ installers are built from [`packaging/`](packaging/).
   in Settings.)
 - **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
   (Quit asks for confirmation while locked).
+- **Starting a second copy** - a portable build you just unzipped, say - offers to close the
+  one already running and take over, rather than simply refusing. It asks first, and closing
+  a Pawse that currently has the keyboard locked hands the keyboard back, so the prompt says
+  so. Answer No and the running copy is left alone.
 - **Settings → About** is the only thing in Pawse that goes online, and it offers three
   levels: **Only when I ask** (the default - nothing leaves the machine until you press
   **Check now**), **Tell me when an update is ready**, and **Download and install updates
@@ -61,8 +65,10 @@ installers are built from [`packaging/`](packaging/).
   build you have - those still ask. See [Privacy](#privacy).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
-While locked, a small floating popup shows on your chosen monitor (you can turn it
-off, move it, and set its opacity). The desktop stays visible around it.
+While locked, a small floating popup shows on the displays you choose - one, several, or
+**All displays**, which picks up a monitor you plug in later without you touching anything.
+You can also turn it off, move it up or down, and set its opacity. The desktop stays visible
+around it.
 
 ### Unlock methods (each independently toggleable in Settings)
 
