@@ -219,9 +219,14 @@
                         <TextBlock Text="Lock popup" Style="{StaticResource PageTitle}" />
                         <CheckBox x:Name="ChkOverlay" Content="Show the floating lock popup" />
                         <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
-                            <TextBlock Text="Display" VerticalAlignment="Center" Width="70" />
-                            <ComboBox x:Name="CmbMonitor" Width="220" />
+                            <TextBlock Text="Show on" VerticalAlignment="Center" Width="70" />
+                            <ComboBox x:Name="CmbDisplayMode" Width="220"
+                                      SelectionChanged="OnDisplayModeChanged" />
                         </StackPanel>
+                        <!-- Filled in code from the displays attached right now, the same way
+                             the monitor list always has been. Disabled in "All displays" mode,
+                             where the set is worked out fresh each time the popup is built. -->
+                        <StackPanel x:Name="PnlDisplays" Margin="92,2,0,2" />
                         <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
                             <TextBlock Text="Opacity" VerticalAlignment="Center" Width="70" />
                             <Slider x:Name="SldOpacity" Maximum="1.0" Width="200"

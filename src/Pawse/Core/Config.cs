@@ -145,8 +145,46 @@ public sealed class Config
 
         public bool Enabled { get; set; } = true;
         public double Opacity { get; set; } = 0.92;
-        public int Monitor { get; set; }
+
+        /// <summary>Read only to migrate configs written before <see cref="Displays"/> existed,
+        /// where the popup lived on one monitor. Never written back, so the key drops out of
+        /// pawse.json the first time this build saves.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Monitor { get; set; }
+
+        /// <summary>Show on every attached display, re-evaluated each time the popup is built -
+        /// so plugging a monitor in is picked up without touching settings. Beats listing every
+        /// index, which freezes the answer at whatever was attached that day.</summary>
+        public bool AllDisplays { get; set; }
+
+        /// <summary>Which displays to show on when <see cref="AllDisplays"/> is off. Zero-based,
+        /// and deliberately allowed to name displays that are not attached right now: an
+        /// undocked laptop must not permanently forget the monitors it was set up for.</summary>
+        public List<int> Displays { get; set; } = new() { 0 };
+
         public int VerticalPercent { get; set; } = 50;
+
+        /// <summary>
+        /// Which displays the popup actually goes on, given how many are attached. Pure so the
+        /// awkward combinations are testable without a screen.
+        /// </summary>
+        public static IReadOnlyList<int> ResolveDisplays(OverlayCfg cfg, int screenCount)
+        {
+            if (screenCount <= 0) return Array.Empty<int>();
+            if (cfg.AllDisplays) return Enumerable.Range(0, screenCount).ToList();
+
+            var chosen = (cfg.Displays ?? new())
+                .Where(i => i >= 0 && i < screenCount)
+                .Distinct()
+                .OrderBy(i => i)
+                .ToList();
+
+            // Everything chosen is unplugged - someone picked display 2 only and then undocked.
+            // Falling back to the primary beats showing nothing: the popup is the only thing on
+            // screen saying how to unlock, so losing it is worse than putting it somewhere
+            // unexpected.
+            return chosen.Count > 0 ? chosen : new List<int> { 0 };
+        }
     }
 
     /// <summary>
@@ -263,6 +301,18 @@ public sealed class Config
         Unlock.MouseHold ??= new();
         Unlock.Timer ??= new();
         Overlay ??= new();
+        Overlay.Displays ??= new();
+        // Configs written before multi-display carry "Monitor": N and no "Displays". Its mere
+        // presence dates the file: no build has ever written both, and this clears it, so the
+        // key cannot outlive one save. Testing the value rather than the count matters -
+        // Displays has an initializer of [0], so an absent key leaves a NON-empty list and a
+        // count test would silently drop the user's chosen monitor.
+        if (Overlay.Monitor is { } monitor && !Overlay.AllDisplays)
+            Overlay.Displays = new List<int> { Math.Max(0, monitor) };
+        Overlay.Monitor = null;
+        // A hand-edited "Displays": [-1, 2, 2] is valid JSON, so the .bad recovery never fires
+        // and a bad value would come back every start. Scrub instead.
+        Overlay.Displays = Overlay.Displays.Where(i => i >= 0).Distinct().OrderBy(i => i).ToList();
         SystemBlock ??= new();
         Update ??= new();
         Update.Mode ??= nameof(UpdateMode.Manual);
@@ -314,7 +364,9 @@ public sealed class Config
     public string Summary() =>
         $"gui=tray lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
         $"block_screen_keyboard={General.BlockScreenKeyboard} " +
-        $"overlay.enabled={Overlay.Enabled} unlock=[chord={Unlock.Chord.Enabled} " +
+        $"overlay.enabled={Overlay.Enabled} " +
+        $"overlay.displays={(Overlay.AllDisplays ? "all" : string.Join("+", Overlay.Displays))} " +
+        $"unlock=[chord={Unlock.Chord.Enabled} " +
         $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
         $"update_mode={Update.ModeValue} " +

@@ -13,9 +13,14 @@ public partial class SettingsWindow : Window
 {
     private readonly Config _cfg;
 
-    /// <summary>What the monitor combo was set to on load (the stored index clamped to
-    /// the displays attached right now) - OnSave persists only a departure from this.</summary>
-    private int _loadedMonitorIndex;
+    /// <summary>One checkbox per attached display, its Tag holding the zero-based index.</summary>
+    private readonly List<System.Windows.Controls.CheckBox> _displayBoxes = new();
+
+    /// <summary>The display set as it was on load. The checkbox list can only offer displays
+    /// attached right now, so saving just what is ticked would silently drop every configured
+    /// display that happens to be unplugged - an undocked laptop would forget its monitors.
+    /// OnSave unions the ticked set with the detached part of this.</summary>
+    private List<int> _configuredDisplays = new();
 
     /// <summary>Raised after Save has written control values back into the config.</summary>
     public event Action? Applied;
@@ -61,19 +66,39 @@ public partial class SettingsWindow : Window
         UpdateWarnings();
     }
 
+    /// <summary>One checkbox per display attached right now, plus the two-entry mode list.
+    /// Displays that are configured but currently unplugged cannot be shown - see
+    /// <see cref="_configuredDisplays"/> for how they survive a save anyway.</summary>
     private void LoadMonitors()
     {
-        CmbMonitor.Items.Clear();
+        CmbDisplayMode.Items.Clear();
+        CmbDisplayMode.Items.Add("All displays");
+        CmbDisplayMode.Items.Add("Selected displays");
+
+        PnlDisplays.Children.Clear();
+        _displayBoxes.Clear();
         var screens = System.Windows.Forms.Screen.AllScreens;
-        for (int i = 0; i < screens.Length; i++)
+        int count = Math.Max(1, screens.Length);
+        for (int i = 0; i < count; i++)
         {
-            var b = screens[i].Bounds;
-            string primary = screens[i].Primary ? " (primary)" : "";
-            CmbMonitor.Items.Add($"Display {i + 1} - {b.Width}×{b.Height}{primary}");
+            string label = $"Display {i + 1}";
+            if (i < screens.Length)
+            {
+                var b = screens[i].Bounds;
+                label += $" - {b.Width}×{b.Height}{(screens[i].Primary ? " (primary)" : "")}";
+            }
+            var box = new System.Windows.Controls.CheckBox { Content = label, Tag = i };
+            _displayBoxes.Add(box);
+            PnlDisplays.Children.Add(box);
         }
-        if (screens.Length == 0)
-            CmbMonitor.Items.Add("Display 1");
     }
+
+    private void OnDisplayModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        => PnlDisplays.IsEnabled = CmbDisplayMode.SelectedIndex == 1;
+
+    /// <summary>The displays ticked right now.</summary>
+    private List<int> TickedDisplays() =>
+        _displayBoxes.Where(b => b.IsChecked == true).Select(b => (int)b.Tag!).ToList();
 
     private void LoadFromConfig()
     {
@@ -114,9 +139,11 @@ public partial class SettingsWindow : Window
             : "Never checked";
 
         ChkOverlay.IsChecked = _cfg.Overlay.Enabled;
-        int count = Math.Max(1, CmbMonitor.Items.Count);
-        _loadedMonitorIndex = Math.Clamp(_cfg.Overlay.Monitor, 0, count - 1);
-        CmbMonitor.SelectedIndex = _loadedMonitorIndex;
+        _configuredDisplays = new List<int>(_cfg.Overlay.Displays);
+        CmbDisplayMode.SelectedIndex = _cfg.Overlay.AllDisplays ? 0 : 1;
+        PnlDisplays.IsEnabled = !_cfg.Overlay.AllDisplays;
+        foreach (var box in _displayBoxes)
+            box.IsChecked = _configuredDisplays.Contains((int)box.Tag!);
         SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         SldVertical.Value = Math.Clamp(_cfg.Overlay.VerticalPercent, 0, 100);
     }
@@ -154,12 +181,14 @@ public partial class SettingsWindow : Window
             Config.UpdateMode.Manual;
 
         _cfg.Overlay.Enabled = ChkOverlay.IsChecked == true;
-        // Persist the display only when the user actually changed it. The combo can only
-        // show the displays attached right now, so with the laptop undocked the stored
-        // index is clamped for display - writing that clamp back on an unrelated save
-        // would permanently forget which monitor the user picked.
-        if (CmbMonitor.SelectedIndex != _loadedMonitorIndex)
-            _cfg.Overlay.Monitor = Math.Max(0, CmbMonitor.SelectedIndex);
+        _cfg.Overlay.AllDisplays = CmbDisplayMode.SelectedIndex == 0;
+        // Ticked now, plus whatever was configured for displays that are not attached: the list
+        // can only offer what is plugged in, and dropping the rest would make an unrelated save
+        // from an undocked laptop permanently forget its monitors.
+        int attached = _displayBoxes.Count;
+        _cfg.Overlay.Displays = TickedDisplays()
+            .Concat(_configuredDisplays.Where(i => i >= attached))
+            .Distinct().OrderBy(i => i).ToList();
         _cfg.Overlay.Opacity = SldOpacity.Value;
         _cfg.Overlay.VerticalPercent = (int)Math.Round(SldVertical.Value);
 
@@ -167,6 +196,10 @@ public partial class SettingsWindow : Window
         // method for the whole config - a parseable chord, a fully-typeable passphrase,
         // mouse-hold only when the overlay is shown AND the mouse isn't blocked, or a timer
         // with a positive delay (see Config.HasUsableUnlock).
+        // The popup's own two guard rails, before the unlock check below - turning the popup
+        // off here can change whether mouse-hold still counts as a usable unlock method.
+        FixUpDisplaySelection();
+
         if (_cfg.EnsureUsableUnlockFallback(out bool reseeded))
         {
             MessageBox.Show(this,
@@ -212,6 +245,42 @@ public partial class SettingsWindow : Window
         BtnCheckUpdates.Content = "Check now";
         BtnCheckUpdates.IsEnabled = true;
         BtnDownloadsPage.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Correct two selections that cannot mean what they say, and explain each. Both only apply
+    /// to "Selected displays": in "All displays" the set is worked out fresh every time.
+    /// </summary>
+    private void FixUpDisplaySelection()
+    {
+        if (_cfg.Overlay.AllDisplays) return;
+        int attached = _displayBoxes.Count;
+
+        // Nothing ticked - "show the popup, nowhere" is not a state worth keeping.
+        if (_cfg.Overlay.Displays.Count == 0)
+        {
+            if (_cfg.Overlay.Enabled)
+            {
+                _cfg.Overlay.Enabled = false;
+                MessageBox.Show(this,
+                    "No display is selected for the lock popup, so it was switched off.\n\n"
+                        + "Pick at least one display to show it again.",
+                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            return;
+        }
+
+        // Every attached display ticked means "all of them" - store it as that, so a monitor
+        // plugged in later is covered instead of being silently left out.
+        bool everyOne = attached > 0 && Enumerable.Range(0, attached).All(_cfg.Overlay.Displays.Contains);
+        if (everyOne)
+        {
+            _cfg.Overlay.AllDisplays = true;
+            MessageBox.Show(this,
+                "Every display was selected, so the lock popup is set to \"All displays\".\n\n"
+                    + "It will follow any monitor you plug in or unplug from now on.",
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     /// <summary>Say up front when this copy cannot take an update on its own, so choosing

@@ -35,6 +35,11 @@ public partial class OverlayWindow : Window
         HoldButton.MouseLeave += (_, _) => CancelHold();
     }
 
+    /// <summary>Which display this window sits on. One window per selected display, so the
+    /// target lives here rather than being read out of the config - the config holds the whole
+    /// set, and no single window owns it.</summary>
+    public int TargetDisplay { get; set; }
+
     public void Configure(Config cfg)
     {
         _cfg = cfg;
@@ -127,7 +132,7 @@ public partial class OverlayWindow : Window
             var screens = System.Windows.Forms.Screen.AllScreens;
             if (screens.Length == 0) return;
 
-            int idx = Math.Clamp(_cfg.Overlay.Monitor, 0, screens.Length - 1);
+            int idx = Math.Clamp(TargetDisplay, 0, screens.Length - 1);
             var b = screens[idx].Bounds; // physical pixels (per-monitor-v2 aware)
 
             double scale = 1.0;

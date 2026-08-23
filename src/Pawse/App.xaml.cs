@@ -14,7 +14,9 @@ public partial class App : Application
     private SystemBlock? _systemBlock;
     private HookThread? _hooks;
     private TrayIcon? _tray;
-    private OverlayWindow? _overlay;
+    /// <summary>One popup per selected display. Empty whenever the popup is switched off -
+    /// a hidden-but-alive window is what let a disabled popup reappear on the next lock.</summary>
+    private readonly List<OverlayWindow> _overlays = new();
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _autoUnlock;
     private DispatcherTimer? _autoUpdate;
@@ -129,7 +131,7 @@ public partial class App : Application
         Autostart.Repair();
 
         if (config.Overlay.Enabled)
-            CreateOverlay(config);
+            CreateOverlays(config);
 
         _controller.LockedChanged += OnLockedChanged;
 
@@ -186,11 +188,53 @@ public partial class App : Application
         return true;
     }
 
-    private void CreateOverlay(Config config)
+    /// <summary>Build one popup per display the config resolves to, reusing the existing set
+    /// when it already matches - rebuilding on every save would flash the popup while locked.</summary>
+    private void CreateOverlays(Config config)
     {
-        _overlay = new OverlayWindow();
-        _overlay.Configure(config);
-        _overlay.UnlockByHold += () => _controller!.Disengage("hold");
+        int screens = Math.Max(1, System.Windows.Forms.Screen.AllScreens.Length);
+        var targets = Config.OverlayCfg.ResolveDisplays(config.Overlay, screens);
+        if (!config.Overlay.AllDisplays && config.Overlay.Displays.Count > 0
+            && targets.Count == 1 && targets[0] == 0 && !config.Overlay.Displays.Contains(0))
+        {
+            Log.Warn("overlay: none of the chosen displays are attached - falling back to the primary");
+        }
+
+        if (_overlays.Count == targets.Count && _overlays.Select(o => o.TargetDisplay).SequenceEqual(targets))
+        {
+            foreach (var existing in _overlays) existing.Configure(config);
+            return;
+        }
+
+        DestroyOverlays();
+        foreach (int target in targets)
+        {
+            var overlay = new OverlayWindow { TargetDisplay = target };
+            overlay.Configure(config);
+            overlay.UnlockByHold += () => _controller!.Disengage("hold");
+            _overlays.Add(overlay);
+        }
+        Log.Info($"overlay: {_overlays.Count} popup(s) on display(s) {string.Join(", ", targets.Select(t => t + 1))}");
+    }
+
+    private void ShowOverlays()
+    {
+        foreach (var overlay in _overlays) overlay.ShowLocked();
+    }
+
+    private void HideOverlays()
+    {
+        foreach (var overlay in _overlays) overlay.HideLocked();
+    }
+
+    private void DestroyOverlays()
+    {
+        foreach (var overlay in _overlays)
+        {
+            try { overlay.AllowClose = true; overlay.Close(); }
+            catch (Exception ex) { Log.Error("overlay close", ex); }
+        }
+        _overlays.Clear();
     }
 
     private void OnLockedChanged(bool locked)
@@ -208,13 +252,17 @@ public partial class App : Application
                 _systemBlock?.Apply(locked, background: true, notify: true);
                 if (locked)
                 {
-                    _overlay?.ShowLocked();
+                    // Check the setting, don't just check that a window exists. Turning the
+                    // popup off used to hide the window without destroying it, so the next
+                    // lock showed it again - the setting was honoured only at startup, which
+                    // made a restart look like the fix.
+                    if (_controller!.Config.Overlay.Enabled) ShowOverlays();
                     StartAutoUnlock();
                 }
                 else
                 {
                     StopAutoUnlock();
-                    _overlay?.HideLocked();
+                    HideOverlays();
                     // The keyboard is the user's again, so an update held back while locked
                     // can go ahead now.
                     if (_pendingUpdate is { } deferred)
@@ -396,13 +444,14 @@ public partial class App : Application
 
         if (config.Overlay.Enabled)
         {
-            if (_overlay == null) CreateOverlay(config);
-            else _overlay.Configure(config);
-            if (_controller.IsLocked) _overlay!.ShowLocked();
+            CreateOverlays(config);
+            if (_controller.IsLocked) ShowOverlays();
         }
         else
         {
-            _overlay?.HideLocked();
+            // Destroy, not just hide: a hidden-but-alive window is exactly what let a
+            // disabled popup come back on the next lock.
+            DestroyOverlays();
         }
 
         Log.Info("config applied: " + config.Summary());
@@ -853,7 +902,7 @@ public partial class App : Application
         // OS-level guards synchronously here (delete the policy value, disable WEKF).
         try { _systemBlock?.Apply(locked: false, background: false); } catch { /* ignore */ }
         try { _hooks?.Stop(); } catch { /* ignore */ }
-        try { if (_overlay != null) { _overlay.AllowClose = true; _overlay.Close(); } } catch { /* ignore */ }
+        try { DestroyOverlays(); } catch { /* ignore */ }
         _tray?.Dispose();
         _singleton?.Dispose();
         Log.Info("shutdown complete");

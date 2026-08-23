@@ -286,3 +286,110 @@ public class ConfigUpdateModeTests
         Assert.DoesNotContain("AutoCheck", cfg!.ToJson());
     }
 }
+
+/// <summary>Which displays the lock popup lands on. Pure, so the awkward combinations - a
+/// chosen monitor that is currently unplugged, a hand-edited list - are testable without a
+/// screen attached.</summary>
+public class OverlayDisplayTests
+{
+    private static Config.OverlayCfg Cfg(bool all, params int[] displays) =>
+        new() { AllDisplays = all, Displays = displays.ToList() };
+
+    [Fact]
+    public void All_displays_covers_every_attached_one()
+        => Assert.Equal(new[] { 0, 1, 2 }, Config.OverlayCfg.ResolveDisplays(Cfg(true), 3));
+
+    /// <summary>Re-evaluated per call, which is the whole point of the option: plug a monitor
+    /// in and it is covered without touching settings.</summary>
+    [Fact]
+    public void All_displays_follows_a_monitor_being_added()
+    {
+        var cfg = Cfg(true);
+        Assert.Single(Config.OverlayCfg.ResolveDisplays(cfg, 1));
+        Assert.Equal(2, Config.OverlayCfg.ResolveDisplays(cfg, 2).Count);
+    }
+
+    [Fact]
+    public void A_selection_is_used_as_given()
+        => Assert.Equal(new[] { 0, 2 }, Config.OverlayCfg.ResolveDisplays(Cfg(false, 0, 2), 3));
+
+    [Fact]
+    public void Displays_that_are_not_attached_are_skipped()
+        => Assert.Equal(new[] { 1 }, Config.OverlayCfg.ResolveDisplays(Cfg(false, 1, 5), 2));
+
+    [Fact]
+    public void A_hand_edited_list_is_deduped_and_ordered()
+        => Assert.Equal(new[] { 0, 1 }, Config.OverlayCfg.ResolveDisplays(Cfg(false, 1, 0, 1), 2));
+
+    /// <summary>Undocked, having chosen only the external monitor. Showing nothing would leave a
+    /// locked machine with no popup and so no on-screen hint of how to unlock it - worse than
+    /// putting it somewhere unexpected.</summary>
+    [Fact]
+    public void Everything_chosen_being_unplugged_falls_back_to_the_primary()
+        => Assert.Equal(new[] { 0 }, Config.OverlayCfg.ResolveDisplays(Cfg(false, 2), 1));
+
+    [Fact]
+    public void An_empty_selection_falls_back_to_the_primary()
+        => Assert.Equal(new[] { 0 }, Config.OverlayCfg.ResolveDisplays(Cfg(false), 2));
+
+    [Fact]
+    public void No_screens_at_all_means_no_popup()
+        => Assert.Empty(Config.OverlayCfg.ResolveDisplays(Cfg(true), 0));
+}
+
+/// <summary>The one-way migration from the single Monitor index.</summary>
+public class OverlayMigrationTests
+{
+    [Fact]
+    public void The_old_monitor_index_becomes_the_selected_display()
+    {
+        var cfg = Config.FromJson("""{"Overlay":{"Monitor":2}}""");
+        Assert.Equal(new[] { 2 }, cfg!.Overlay.Displays);
+        Assert.False(cfg.Overlay.AllDisplays);
+    }
+
+    [Fact]
+    public void The_old_key_is_gone_from_the_next_save()
+        => Assert.DoesNotContain("Monitor", Config.FromJson("""{"Overlay":{"Monitor":1}}""")!.ToJson());
+
+    /// <summary>No build has ever written both keys, so a file carrying Monitor predates
+    /// Displays and Monitor wins. Only reachable by hand-editing, and it self-corrects: the
+    /// next save drops Monitor for good.</summary>
+    [Fact]
+    public void The_old_index_wins_when_a_hand_edited_file_has_both()
+    {
+        var cfg = Config.FromJson("""{"Overlay":{"Monitor":2,"Displays":[0,1]}}""");
+        Assert.Equal(new[] { 2 }, cfg!.Overlay.Displays);
+    }
+
+    [Fact]
+    public void All_displays_beats_the_old_index()
+    {
+        var cfg = Config.FromJson("""{"Overlay":{"Monitor":2,"AllDisplays":true}}""");
+        Assert.True(cfg!.Overlay.AllDisplays);
+    }
+
+    [Fact]
+    public void A_fresh_config_shows_on_the_primary_as_before()
+    {
+        var cfg = new Config();
+        Assert.False(cfg.Overlay.AllDisplays);
+        Assert.Equal(new[] { 0 }, cfg.Overlay.Displays);
+    }
+
+    [Fact]
+    public void A_nulled_or_dirty_display_list_is_scrubbed()
+    {
+        Assert.NotNull(Config.FromJson("""{"Overlay":{"Displays":null}}""")!.Overlay.Displays);
+        Assert.Equal(new[] { 0, 3 },
+            Config.FromJson("""{"Overlay":{"Displays":[3,-1,0,3]}}""")!.Overlay.Displays);
+    }
+
+    [Fact]
+    public void The_display_set_round_trips()
+    {
+        var cfg = new Config();
+        cfg.Overlay.Displays = new List<int> { 0, 2 };
+        Assert.Equal(new[] { 0, 2 }, Config.FromJson(cfg.ToJson())!.Overlay.Displays);
+    }
+}
