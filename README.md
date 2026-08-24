@@ -86,7 +86,7 @@ Blocking **on-screen keyboards** is off by default as well - see
 
 ## Configuration & logs
 
-Both live **next to `Pawse.exe`** (falling back to `%APPDATA%\Pawse` only if that
+These live **next to `Pawse.exe`** (falling back to `%APPDATA%\Pawse` only if that
 folder isn't writable):
 
 - `pawse.json` - settings (edit via the Settings window or by hand).
@@ -160,7 +160,12 @@ a release, Pawse falls back to the release's own `SHA256SUMS.txt`, says so befor
 and refuses to do it unattended.
 
 Decline, or leave the setting alone, and Pawse never touches the network at all. Your
-settings, log and keystrokes stay on the machine either way.
+settings and keystrokes stay on the machine either way.
+
+Nothing is written about what you type. The optional log (off by default, see
+[Configuration & logs](#configuration--logs)) records what Pawse did, not what you pressed -
+the one exception being which keys were still held when a lock engaged, which exists to
+diagnose an unlock chord that won't complete. Your passphrase is never written to it.
 
 ## Build from source
 
