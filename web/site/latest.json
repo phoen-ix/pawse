@@ -1,25 +1,25 @@
 {
-  "version": "0.10.0",
-  "notes": "https://github.com/phoen-ix/pawse/releases/tag/v0.10.0",
+  "version": "0.10.1",
+  "notes": "https://github.com/phoen-ix/pawse/releases/tag/v0.10.1",
   "auto": true,
   "installers": {
     "full": {
-      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.0/Pawse-Setup-0.10.0-full.exe",
-      "sha256": "523beeaddab8508bccc67a0dfa8d655ae8fe6573087cf5cea852b02bf8a54279"
+      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.1/Pawse-Setup-0.10.1-full.exe",
+      "sha256": "e1e0d90d4e6c69c381fedb6d713218e014aa55487277597677d4da874ea8748e"
     },
     "min": {
-      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.0/Pawse-Setup-0.10.0-min.exe",
-      "sha256": "02b92697e071a54cc8aa675cc70e45c56813b8be29ae4e8d7df21d73f6aaf9e2"
+      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.1/Pawse-Setup-0.10.1-min.exe",
+      "sha256": "b529da07ad5a4bd9ba4f301e182182fd000d647227676543723f2eda8f40db90"
     }
   },
   "portable": {
     "full": {
-      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.0/Pawse-0.10.0.zip",
-      "sha256": "2b8b431c8309e26ede7cad10b6103d09547f44b364a507292ee39768a4e43d2b"
+      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.1/Pawse-0.10.1.zip",
+      "sha256": "4770f2abfef03c64912be2a90a24655a20bbdf5c50dd5b7b5f3f720a949810c6"
     },
     "min": {
-      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.0/Pawse-0.10.0-min.zip",
-      "sha256": "129da3b066915f5b0a726b42d91a3fb4ae9d292f89949e177e095d8b919460ea"
+      "url": "https://github.com/phoen-ix/pawse/releases/download/v0.10.1/Pawse-0.10.1-min.zip",
+      "sha256": "72a9bf74490c9e7bc211a56e22018b26a24629eaadae52e227fd631e0d8b6dde"
     }
   }
 }
