@@ -41,6 +41,11 @@ public sealed class LockController
     /// held, and the unlock chord is entitled to count it once the chord is re-formed.</summary>
     private readonly HashSet<int> _staleSinceEngage = new();
 
+    /// <summary>Keys already reported as a skipped stale repeat this lock. The OS autorepeats
+    /// many times a second, so without this one held key would fill pawse.log (which resets
+    /// itself past ~1 MB) and bury the very evidence it was added to capture.</summary>
+    private readonly HashSet<int> _staleReported = new();
+
     /// <summary>"Is this normalized VK physically down?" - the OS by default, swappable in
     /// tests. Only meaningful for keys the system actually processed (see OnKeyboard).</summary>
     private readonly Func<int, bool> _isPhysicallyDown;
@@ -79,6 +84,13 @@ public sealed class LockController
         _isPhysicallyDown = isPhysicallyDown ?? PhysicallyDown;
         _clearModifiers = clearModifiers ?? Input.ClearModifiers;
         RebuildMatchers();
+    }
+
+    /// <summary>Key names for a log line, e.g. "Ctrl+L". "-" when nothing is held.</summary>
+    private static string Describe(IEnumerable<int> vks)
+    {
+        var names = vks.Select(Keys.VkToName).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        return names.Count == 0 ? "-" : string.Join("+", names);
     }
 
     /// <summary>Rebuild matchers after a config change.</summary>
@@ -154,6 +166,11 @@ public sealed class LockController
 
             if (_isLocked)
             {
+                if (staleRepeat && _staleReported.Add(nv))
+                {
+                    Log.Info($"lock: {Keys.VkToName(nv)} is still held from the lock - "
+                             + "release it before it counts towards unlocking");
+                }
                 if (!staleRepeat)
                 {
                     if (_unlockChord != null && _unlockChord.Feed(_pressed, nv, isDown))
@@ -211,10 +228,17 @@ public sealed class LockController
         {
             if (_isLocked) return;
             _isLocked = true;
-            Log.Info($"LOCK engaged (source={source})");
+            // Held and stale are logged because between them they decide whether the unlock
+            // chord can match at all: the chord matches EXACTLY, so a phantom left in
+            // _pressed blocks it outright, and a key stuck in _staleSinceEngage makes every
+            // later press of it skip both matchers. Neither is visible any other way.
+            Log.Info($"LOCK engaged (source={source}) held={Describe(_pressed)}");
             _clearModifiers();             // fast; kills stuck-modifier / zoom-on-scroll bug
             _staleSinceEngage.Clear();
+            _staleReported.Clear();
             _staleSinceEngage.UnionWith(_pressed); // their autorepeat must not feed the matchers
+            if (_staleSinceEngage.Count > 0)
+                Log.Info($"lock: ignoring repeats of {Describe(_staleSinceEngage)} until released");
             // _pressed is NOT cleared: it is what the user is physically holding, and while
             // locked nothing else can tell us (see the pruning note in OnKeyboard). Priming
             // the chord instead of resetting it is what keeps a held Ctrl+L from unlocking
@@ -242,6 +266,7 @@ public sealed class LockController
             _pressed.Clear();
             _leakedDown.Clear();
             _staleSinceEngage.Clear();
+            _staleReported.Clear();
             RaiseLocked(false); // inside the lock - see Engage
         }
     }
@@ -259,8 +284,10 @@ public sealed class LockController
         lock (_gate)
         {
             if (_pressed.Count == 0 && _staleSinceEngage.Count == 0) return;
+            Log.Info($"forgetting held keys: held={Describe(_pressed)} stale={Describe(_staleSinceEngage)}");
             _pressed.Clear();
             _staleSinceEngage.Clear();
+            _staleReported.Clear();
             _unlockChord?.Reset();
             _lockHotkey?.Reset();
         }

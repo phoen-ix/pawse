@@ -253,20 +253,21 @@ public partial class SettingsWindow : Window
     /// </summary>
     private void FixUpDisplaySelection()
     {
-        if (_cfg.Overlay.AllDisplays) return;
+        // Nothing to correct about where a popup goes when there is no popup. Without this,
+        // switching the popup off while every display happened to be ticked answered with a
+        // message box about display selection, which is not what the user just asked about.
+        // Re-enabling it runs the corrections then, which is when they mean something.
+        if (!_cfg.Overlay.Enabled || _cfg.Overlay.AllDisplays) return;
         int attached = _displayBoxes.Count;
 
         // Nothing ticked - "show the popup, nowhere" is not a state worth keeping.
         if (_cfg.Overlay.Displays.Count == 0)
         {
-            if (_cfg.Overlay.Enabled)
-            {
-                _cfg.Overlay.Enabled = false;
-                MessageBox.Show(this,
-                    "No display is selected for the lock popup, so it was switched off.\n\n"
-                        + "Pick at least one display to show it again.",
-                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+            _cfg.Overlay.Enabled = false;
+            MessageBox.Show(this,
+                "No display is selected for the lock popup, so it was switched off.\n\n"
+                    + "Pick at least one display to show it again.",
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
