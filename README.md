@@ -90,7 +90,11 @@ Both live **next to `Pawse.exe`** (falling back to `%APPDATA%\Pawse` only if tha
 folder isn't writable):
 
 - `pawse.json` - settings (edit via the Settings window or by hand).
-- `pawse.log` - a plain, timestamped log of what the app did.
+- `pawse.log` - a plain, timestamped log of what the app did. **Off by default** - switch on
+  "Write a log file next to Pawse" in **Settings → General** when something needs explaining.
+  It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck
+  key it records which keys were held when a lock engaged - so it is opt-in rather than
+  something to discover later.
 
 ## What it can and can't block
 

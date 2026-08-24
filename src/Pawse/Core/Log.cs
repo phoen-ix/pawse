@@ -22,9 +22,47 @@ public static class Log
     private static string? _path;
     private static string? _baseDir;
 
+    /// <summary>Whether anything reaches the file. Off until <see cref="Enable"/> says
+    /// otherwise, and off is what a config that never mentions it means.</summary>
+    private static volatile bool _enabled;
+
+    /// <summary><see cref="Enable"/> has been called, so silence is now a decision rather
+    /// than "the config hasn't been read yet".</summary>
+    private static volatile bool _decided;
+
+    /// <summary>
+    /// Resolve where the log would go and record the banner - but write nothing yet. Whether
+    /// a log exists at all is a user setting, and the config carrying it is not loaded for
+    /// another twenty-odd lines of startup; buffering until <see cref="Enable"/> decides is
+    /// what keeps those early lines when the answer turns out to be yes.
+    /// </summary>
     public static void Init(string version)
     {
         _path = ResolvePath("pawse.log");
+        Info(new string('=', 60));
+        Info($"Pawse v{version} starting - log at {_path}");
+    }
+
+    /// <summary>
+    /// Turn the log on or off. Called once the config is known and again whenever the setting
+    /// changes. Off by default: Pawse sees every keystroke, so a file recording what it did
+    /// is something to opt into rather than find later.
+    /// </summary>
+    public static void Enable(bool on)
+    {
+        if (!on)
+        {
+            // Order matters: _decided first, so a concurrent Write drops rather than
+            // enqueueing behind the drain below and surviving into a log nobody asked for.
+            _decided = true;
+            _enabled = false;
+            while (Queue.TryTake(out _)) { /* discard what was buffered pre-decision */ }
+            return;
+        }
+
+        // ...and the other way round here, so a Write racing this is buffered, not dropped.
+        _enabled = true;
+        _decided = true;
         try
         {
             // Keep the log small: start fresh if it grew past ~1 MB.
@@ -38,9 +76,6 @@ public static class Log
             _writer = new Thread(WriterLoop) { IsBackground = true, Name = "pawse-log" };
             _writer.Start();
         }
-
-        Info(new string('=', 60));
-        Info($"Pawse v{version} starting - log at {_path}");
     }
 
     /// <summary>Directory the running exe lives in.</summary>
@@ -121,6 +156,8 @@ public static class Log
 
     private static void Write(string level, string msg)
     {
+        // Decided and off: nothing is kept. Before the decision, lines are buffered - see Init.
+        if (_decided && !_enabled) return;
         // Timestamp at enqueue time so lines stay ordered even though the write is deferred.
         var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {level,-5} {msg}";
         try { System.Diagnostics.Debug.WriteLine(line); } catch { /* ignore */ }

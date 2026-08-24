@@ -123,6 +123,14 @@ jobs:
       - name: Install silently, per-user
         shell: pwsh
         run: |
+          # Logging is off by default, and the step below proves the app booted by watching
+          # pawse.log - so seed a config that turns it on. Dropped into the default per-user
+          # install folder BEFORE the install, because /RESTART launches the app the moment
+          # the install finishes, leaving no gap to write it in afterwards. The installer
+          # only copies settings forward when the target has none, so this survives.
+          $seed = Join-Path $env:LOCALAPPDATA 'Programs\Pawse'
+          New-Item -ItemType Directory -Force -Path $seed | Out-Null
+          '{"General":{"Logging":true}}' | Set-Content (Join-Path $seed 'pawse.json') -Encoding utf8
           $setup = (Resolve-Path packaging/Pawse-Setup-0.0.0.exe).Path
           # /RESTART too: an automatic update passes it so the tray paw comes back instead of
           # vanishing, and it is only reachable through a silent run - MUI_FINISHPAGE_RUN

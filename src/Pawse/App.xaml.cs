@@ -97,6 +97,9 @@ public partial class App : Application
             })));
 
         var config = Config.Load();
+        // Everything logged so far has only been buffered - commit it or drop it now that
+        // the setting is known. Config.Load's own lines are in that buffer too.
+        Log.Enable(config.General.Logging);
         bool unlockRepaired = EnsureUsableUnlock(config);
         Log.Info("config: " + config.Summary());
 
@@ -412,6 +415,7 @@ public partial class App : Application
     {
         var config = _controller!.Config;
         config.Save();
+        Log.Enable(config.General.Logging);
         _controller.RebuildMatchers();
         // The mouse hook only exists while BlockMouse is on (HookThread.SyncMouse) -
         // tell the hook thread to reconcile now rather than on its next periodic tick.

@@ -107,6 +107,7 @@ public partial class SettingsWindow : Window
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
         ChkBlockScreenKeyboard.IsChecked = _cfg.General.BlockScreenKeyboard;
         ChkTrayDoubleClick.IsChecked = _cfg.General.TrayDoubleClickUnlock;
+        ChkLogging.IsChecked = _cfg.General.Logging;
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
         ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
@@ -155,6 +156,7 @@ public partial class SettingsWindow : Window
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
         _cfg.General.BlockScreenKeyboard = ChkBlockScreenKeyboard.IsChecked == true;
         _cfg.General.TrayDoubleClickUnlock = ChkTrayDoubleClick.IsChecked == true;
+        _cfg.General.Logging = ChkLogging.IsChecked == true;
 
         _cfg.SystemBlock.WinLock = ChkWinLock.IsChecked == true;
         _cfg.SystemBlock.LaunchMediaKeys = ChkLaunchMedia.IsChecked == true;

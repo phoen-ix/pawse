@@ -200,6 +200,15 @@ public class ConfigDefaultsTests
     public void The_mouse_is_not_blocked_by_default()
         => Assert.False(new Config().General.BlockMouse);
 
+    /// <summary>Pawse sees every keystroke, so a file recording what it did is opt-in.</summary>
+    [Fact]
+    public void Logging_is_off_by_default()
+        => Assert.False(new Config().General.Logging);
+
+    [Fact]
+    public void A_config_that_never_mentions_logging_leaves_it_off()
+        => Assert.False(Config.FromJson("""{"General":{"StartLocked":true}}""")!.General.Logging);
+
     /// <summary>The network stays untouched until the user asks for it - see UpdateCheck.</summary>
     [Fact]
     public void The_automatic_update_check_is_off_by_default()

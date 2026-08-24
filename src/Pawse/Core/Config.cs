@@ -36,6 +36,13 @@ public sealed class Config
         /// click shows a hint), so a stray paw-click can't undo the lock. Off =
         /// classic single-click toggle. Locking is always a single click.</summary>
         public bool TrayDoubleClickUnlock { get; set; } = true;
+
+        /// <summary>Write pawse.log next to the exe. Off by default and opt-in on purpose:
+        /// Pawse sees every keystroke, so a plaintext file recording what it did - including,
+        /// while chasing a stuck-key problem, which keys were held when a lock engaged - is
+        /// not something to leave switched on by default in an app whose whole claim is that
+        /// nothing leaves the machine.</summary>
+        public bool Logging { get; set; }
     }
 
     /// <summary>How far Pawse may go about updates on its own.</summary>
@@ -362,7 +369,7 @@ public sealed class Config
     }
 
     public string Summary() =>
-        $"gui=tray lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
+        $"gui=tray logging={General.Logging} lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
         $"block_screen_keyboard={General.BlockScreenKeyboard} " +
         $"overlay.enabled={Overlay.Enabled} " +
         $"overlay.displays={(Overlay.AllDisplays ? "all" : string.Join("+", Overlay.Displays))} " +

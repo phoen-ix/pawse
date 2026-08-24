@@ -134,6 +134,9 @@
                         <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />
+                        <CheckBox x:Name="ChkLogging" Content="Write a log file next to Pawse" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Off by default. Writes pawse.log - what Pawse did, and while diagnosing a stuck key, which keys were held when a lock engaged. Nothing is sent anywhere, but it is a plain file on disk, so it is yours to switch on when something needs explaining." />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
