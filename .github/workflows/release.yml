@@ -43,6 +43,9 @@ concurrency:
 
 jobs:
   version:
+    # Only ever from main. A manual run started on another branch would tag and release that
+    # branch, and the feed step's push would land its commits on main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -161,7 +164,7 @@ jobs:
           -p:Version=${{ needs.version.outputs.new_version }}
           -o publish-full
 
-      # Minimal build: a tiny launcher (~0.2 MB) that uses an already-installed
+      # Minimal build: a tiny launcher (~0.3 MB) that uses an already-installed
       # .NET 8 Desktop Runtime.
       - name: Publish minimal (needs .NET Desktop Runtime)
         shell: pwsh
@@ -180,7 +183,7 @@ jobs:
         shell: pwsh
         run: choco install nsis --no-progress -y
 
-      # Same two makensis invocations as packaging/build.bat, at the release version.
+      # Same three makensis invocations as packaging/build.bat, at the release version.
       # -WX: a warning here means the script isn't doing what it reads like it does.
       - name: Build all three installers
         shell: pwsh
@@ -256,19 +259,19 @@ jobs:
             | Portable | Download size | Needs anything installed? |
             | --- | --- | --- |
             | **`Pawse-${{ needs.version.outputs.new_version }}.zip`** | ~58 MB (63 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
-            | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.2 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
+            | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.3 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). |
 
             Every download is the same app; the full build bundles the runtime, the
             `-min` build reuses one you install once. Windows may mark a downloaded file
             as blocked - if an exe won't start, right-click it (or the zip) →
             **Properties → Unblock** first. The tray paw is your control; the
-            config and log are written next to the exe. `SHA256SUMS.txt` holds
-            checksums for every download.
+            config is written next to the exe (the log too, if you switch it on in
+            Settings → General). `SHA256SUMS.txt` holds checksums for every download.
 
             Already have Pawse installed? **Settings → About → Check now**
             offers this build and installs it for you.
 
-      # The update feed the app reads when the user picks "Check for updates…" - published
+      # The update feed the app reads when the user presses Check now (Settings → About) - published
       # on pawse.at, which serves web/site straight from this repo. It has to be written
       # AFTER the release exists, or it would point at assets that 404. The commit carries
       # the skip-ci marker below so publishing a feed doesn't re-run the whole pipeline.
