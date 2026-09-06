@@ -11,6 +11,7 @@ public class UpdateVersionTests
     [InlineData("0.5.0", "0.5.1", true)]
     [InlineData("0.5.0", "v0.5.1", true)]   // release tags carry the v
     [InlineData("0.5.0", "0.5.0", false)]
+    [InlineData("0.5.0", "0.5.0.0", false)] // the SDK's four-part FileVersion names the same release
     [InlineData("0.6.0", "0.5.0", false)]   // never offer a downgrade
     [InlineData("0.5.0", "", false)]
     [InlineData("0.5.0", "unreleased", false)]
@@ -19,6 +20,20 @@ public class UpdateVersionTests
     [InlineData("0.5.0", null, false)]
     public void Only_a_parseable_higher_version_counts(string? current, string? latest, bool expected)
         => Assert.Equal(expected, UpdateCheck.IsNewer(current, latest));
+
+    /// <summary>Absent components read as zero: the exe's version resource is four-part while
+    /// tags, the feed and App.Version are three-part, and treating "0.8.0.0" as a different
+    /// release from "0.8.0" is what refused every real portable self-update.</summary>
+    [Theory]
+    [InlineData("0.8.0", "0.8.0", true)]
+    [InlineData("0.8.0.0", "0.8.0", true)]
+    [InlineData("v0.8.0", "0.8.0", true)]
+    [InlineData("0.8.1", "0.8.0", false)]
+    [InlineData("0.8.0.1", "0.8.0", false)]
+    [InlineData("nonsense", "0.8.0", false)]
+    [InlineData(null, "0.8.0", false)]
+    public void Same_version_ignores_how_many_components_were_written(string? a, string? b, bool expected)
+        => Assert.Equal(expected, UpdateCheck.SameVersion(a, b));
 }
 
 public class UpdateFeedTests
@@ -88,6 +103,19 @@ public class UpdateFeedTests
         var info = UpdateCheck.Parse("""{"version":"0.6.0"}""");
         Assert.Equal(UpdateCheck.ReleasesUrl, info!.NotesUrl);
     }
+
+    /// <summary>The parser tolerates a "v" and whitespace; what comes out must be the bare
+    /// three-part form, or asset names would be built with the "v" in twice.</summary>
+    [Theory]
+    [InlineData("v0.6.0", "0.6.0")]
+    [InlineData(" 0.6.0 ", "0.6.0")]
+    [InlineData("0.6.0.0", "0.6.0")]
+    public void The_feed_version_comes_out_normalised(string written, string expected)
+        => Assert.Equal(expected, UpdateCheck.Parse($$"""{"version":"{{written}}"}""")!.Version);
+
+    [Fact]
+    public void A_two_part_version_is_no_answer()
+        => Assert.Null(UpdateCheck.Parse("""{"version":"0.6"}"""));
 }
 
 public class UpdateInstallKindTests
@@ -195,20 +223,32 @@ public class UpdateScheduleTests
 
 public class UpdateHashTests
 {
+    /// <summary>The download is hashed as it is written, so the bytes on disk and the hash that
+    /// vouches for them come out of the same pass.</summary>
     [Fact]
-    public void Hashes_a_file_as_lower_case_hex()
+    public async Task Copies_and_hashes_as_lower_case_hex()
     {
-        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        try
-        {
-            File.WriteAllText(path, "abc");
-            Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-                UpdateCheck.Sha256File(path));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        using var source = new MemoryStream("abc"u8.ToArray());
+        using var destination = new MemoryStream();
+
+        var hash = await UpdateCheck.CopyAndHashAsync(source, destination, CancellationToken.None);
+
+        Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hash);
+        Assert.Equal("abc"u8.ToArray(), destination.ToArray());
+    }
+
+    [Fact]
+    public async Task Hashes_a_payload_longer_than_one_buffer()
+    {
+        var bytes = new byte[200_000];
+        new Random(42).NextBytes(bytes);
+        using var source = new MemoryStream(bytes);
+        using var destination = new MemoryStream();
+
+        var hash = await UpdateCheck.CopyAndHashAsync(source, destination, CancellationToken.None);
+
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant(), hash);
+        Assert.Equal(bytes, destination.ToArray());
     }
 }
 
@@ -369,6 +409,31 @@ public class UpdatePlanTests
         Assert.Null(plan.Asset);
     }
 
+    /// <summary>"Nothing verifiable" because a host did not answer is different advice from
+    /// "this release offers nothing", so the reason travels with the verdict.</summary>
+    [Fact]
+    public void An_available_verdict_keeps_the_reason_nothing_could_be_verified()
+    {
+        const string why = "The release's SHA256SUMS.txt could not be fetched.";
+        var plan = UpdateCheck.Plan(Current, InstallKind.InstalledFull, "0.8.0", null, null, why);
+        Assert.Equal(UpdateVerdict.Available, plan.Verdict);
+        Assert.Equal(why, plan.Error);
+    }
+
+    /// <summary>Only the checksum crosses hosts. The feed's own URL is never downloaded from -
+    /// otherwise a compromised pawse.at could name a binary AND the hash that vouches for it,
+    /// and the two-host argument would rest on one host.</summary>
+    [Theory]
+    [InlineData(InstallKind.InstalledFull, "Pawse-Setup-0.8.0-full.exe")]
+    [InlineData(InstallKind.PortableMin, "Pawse-0.8.0-min.zip")]
+    public void The_download_always_comes_from_this_repositorys_release(InstallKind kind, string asset)
+    {
+        var plan = UpdateCheck.Plan(Current, kind, "0.8.0", Feed("0.8.0"), null, null);   // feed URLs point at x/y
+        Assert.Equal(ChecksumSource.Feed, plan.Checksum);
+        Assert.Equal(UpdateCheck.AssetUrl("0.8.0", asset), plan.Asset!.Url);
+        Assert.Equal(Sha, plan.Asset.Sha256);
+    }
+
     [Fact]
     public void Github_alone_still_installs_via_the_sums()
     {
@@ -468,6 +533,10 @@ public class UpdateAutoRetryTests
     [Fact]
     public void The_same_version_is_not_retried_the_next_day()
         => Assert.False(UpdateCheck.MayRetryAutoInstall("0.8.0", "0.8.0", Now.AddDays(-1), Now));
+
+    [Fact]
+    public void The_same_version_written_differently_is_still_the_same_version()
+        => Assert.False(UpdateCheck.MayRetryAutoInstall("0.8.0", "v0.8.0.0", Now.AddDays(-1), Now));
 
     [Fact]
     public void A_different_version_is_always_worth_a_try()

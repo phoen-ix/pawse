@@ -125,13 +125,25 @@ public static class SelfReplace
     private static ReplaceOutcome Undo(string exe, string previous, string staged,
                                        bool newExeInPlace, string message)
     {
+        // Two renames, two failure stories: the advice has to describe what is actually on disk.
+        if (newExeInPlace && File.Exists(exe))
+        {
+            try { File.Move(exe, staged); }
+            catch (Exception ex)
+            {
+                // The new exe still holds the real name, so "rename .old back" on its own would
+                // collide with it - say so.
+                Log.Error($"update: ROLLBACK FAILED - the new exe at {exe} could not be moved aside", ex);
+                return new(ReplaceResult.Stranded,
+                    "The updated Pawse could not be started, and the previous one could not be put " +
+                    "back because the new exe is in the way.\n\n" +
+                    $"Do not close Pawse yet. Delete or rename\n\n{exe}\n\n(the update that would not " +
+                    $"start), then rename\n\n{previous}\n\nback to\n\n{exe}\n\nand it will start normally again.");
+            }
+        }
         try
         {
-            if (newExeInPlace && File.Exists(exe)) File.Move(exe, staged);
             File.Move(previous, exe);
-            TryDelete(staged);
-            Log.Warn("update: rolled back - " + message);
-            return new(ReplaceResult.RolledBack, message);
         }
         catch (Exception ex)
         {
@@ -143,6 +155,9 @@ public static class SelfReplace
                 $"Do not close Pawse yet. Rename\n\n{previous}\n\nback to\n\n{exe}\n\n" +
                 "and it will start normally again.");
         }
+        TryDelete(staged);
+        Log.Warn("update: rolled back - " + message);
+        return new(ReplaceResult.RolledBack, message);
     }
 
     /// <summary>Launch the replacement, telling it to wait for our single-instance mutex -

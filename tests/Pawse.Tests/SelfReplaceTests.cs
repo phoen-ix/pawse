@@ -202,4 +202,24 @@ public class SelfReplaceExtractTests : IDisposable
         Assert.False(Extract(Zip(("Pawse.exe", notAnExe)), InstallKind.PortableFull, out var error));
         Assert.Contains("not a Windows program", error);
     }
+
+    /// <summary>The one path FakeExe cannot reach: a real Windows exe carries a version resource,
+    /// and the SDK stamps it FOUR-part ("0.0.0.0") while the release is named three-part. That
+    /// mismatch refused every real portable update until SameVersion learned to normalise. The
+    /// test output carries the referenced app's own apphost, built from the csproj's 0.0.0-dev
+    /// placeholder, so this needs no network and no release.</summary>
+    [Fact]
+    public void A_real_exe_with_a_four_part_file_version_matches_its_three_part_release()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "Pawse.exe");
+        Assert.True(File.Exists(exe), $"{exe} is missing - the referenced project's apphost is expected in the test output");
+
+        var fileVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(exe).FileVersion;
+        Assert.Matches(@"^\d+\.\d+\.\d+\.\d+$", fileVersion);       // four parts, as the SDK writes it
+        var release = Version.Parse(fileVersion!).ToString(3);      // three parts, as the tag names it
+
+        bool ok = SelfReplace.ExtractSingleExe(Zip(("Pawse-min.exe", File.ReadAllBytes(exe))),
+            Path.Combine(_dir, "out.exe"), InstallKind.PortableMin, release, out var error);
+        Assert.True(ok, error);
+    }
 }

@@ -2,7 +2,6 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Threading;
 using Microsoft.Win32;
 
 namespace Pawse.Core;
@@ -39,6 +38,19 @@ public enum InstallScope
     None,
     PerUser,
     PerMachine,
+}
+
+/// <summary>Why this copy cannot take an update on its own - a property of where it is
+/// installed, not of any release. Shared by the About page's caveat and the unattended
+/// refusal, so the UI never promises an install the check would decline.</summary>
+public enum LocalObstacle
+{
+    /// <summary>Installed for everyone on the PC: the installer needs administrator rights, and
+    /// an unattended check must never be the thing that raises a UAC prompt.</summary>
+    PerMachine,
+
+    /// <summary>The exe's folder cannot be written, so a portable copy cannot replace itself.</summary>
+    FolderNotWritable,
 }
 
 /// <summary>Where the SHA-256 an update is verified against came from.</summary>
@@ -99,7 +111,10 @@ public sealed record UpdatePlan(
 /// a hash served by the same host as the binary only proves the transfer was not corrupted.
 /// Two hosts means two TLS chains and two delivery paths, which is real protection against a
 /// compromised edge or a MITM - but not against a compromised source, since this repository
-/// serves both. Authenticode signing is the answer to that, and Pawse does not have it yet.</para>
+/// serves both. Authenticode signing is the answer to that, and Pawse does not have it yet.
+/// The download URL is never taken from the feed: it is always this repository's release asset
+/// for the decided version, so pawse.at contributes a hash and nothing else - a feed allowed to
+/// name the host as well would make that one host enough.</para>
 ///
 /// <para>Everything above <see cref="FetchAsync"/> is pure and unit-tested; the network and
 /// registry sit behind it.</para>
@@ -173,12 +188,21 @@ public static class UpdateCheck
     /// <paramref name="current"/>. Anything unparseable answers false: an update prompt off
     /// the back of a version string we don't understand would be worse than silence.</summary>
     public static bool IsNewer(string? current, string? latest) =>
-        TryParseVersion(current, out var now) && TryParseVersion(latest, out var next) && next > now;
+        TryParseVersion(current, out var now) && TryParseVersion(latest, out var next)
+        && Normalize(next) > Normalize(now);
 
     /// <summary>True when both strings name the same release. Used to decide whether the
-    /// feed is talking about the version GitHub just reported, or lagging behind it.</summary>
+    /// feed is talking about the version GitHub just reported, or lagging behind it - and, in
+    /// SelfReplace, whether the exe just unpacked is the release it claims to be.</summary>
     public static bool SameVersion(string? a, string? b) =>
-        TryParseVersion(a, out var x) && TryParseVersion(b, out var y) && x == y;
+        TryParseVersion(a, out var x) && TryParseVersion(b, out var y) && Normalize(x) == Normalize(y);
+
+    /// <summary>Read absent components as zero. The SDK stamps a FOUR-part FileVersion into the
+    /// exe ("0.11.0.0") while the tag, the feed and App.Version are three-part ("0.11.0"), and
+    /// System.Version ranks an absent component (-1) below 0 - so without this the unpacked
+    /// exe never matched its own release and every portable self-update was refused.</summary>
+    private static Version Normalize(Version v) =>
+        new(v.Major, v.Minor, Math.Max(0, v.Build), Math.Max(0, v.Revision));
 
     /// <summary>
     /// The version out of the Location a <c>/releases/latest</c> request redirects to,
@@ -312,21 +336,31 @@ public static class UpdateCheck
             return new(UpdateVerdict.UpToDate, version, notes, null, null, kind,
                        ChecksumSource.None, allowsAuto, null);
 
-        // The feed's checksum only counts if the feed is talking about THIS release.
+        var name = AssetName(kind, version);
+        var url = AssetUrl(version, name);
+
+        // The feed's checksum only counts if the feed is talking about THIS release - and only
+        // its checksum counts, never its URL. The download is always this repository's release
+        // asset: taking the URL from pawse.at as well would let that one host name a binary AND
+        // the hash that vouches for it, the single point of failure the two-host split removes.
         if (feed is not null && SameVersion(feed.Version, version)
             && FeedAssetFor(feed, kind) is { } feedAsset)
-            return new(UpdateVerdict.Installable, version, notes, feedAsset,
-                       AssetName(kind, version), kind, ChecksumSource.Feed, allowsAuto, null);
+        {
+            if (!string.Equals(feedAsset.Url, url, StringComparison.OrdinalIgnoreCase))
+                Log.Warn($"update: the feed names {feedAsset.Url} for {name}; downloading {url} instead");
+            return new(UpdateVerdict.Installable, version, notes, new UpdateAsset(url, feedAsset.Sha256),
+                       name, kind, ChecksumSource.Feed, allowsAuto, null);
+        }
 
-        var name = AssetName(kind, version);
         if (Sha256From(sumsText, name) is { } sha)
-            return new(UpdateVerdict.Installable, version, notes,
-                       new UpdateAsset(AssetUrl(version, name), sha), name, kind,
+            return new(UpdateVerdict.Installable, version, notes, new UpdateAsset(url, sha), name, kind,
                        ChecksumSource.GitHubSums, allowsAuto, null);
 
-        // Newer, but nothing verifiable - say so rather than downloading on trust.
+        // Newer, but nothing verifiable - say so rather than downloading on trust. The error,
+        // when there is one, says WHY (pawse.at unreachable, SHA256SUMS.txt not fetched): that
+        // is "try again later", not "this release offers nothing".
         return new(UpdateVerdict.Available, version, notes, null, null, kind,
-                   ChecksumSource.None, allowsAuto, null);
+                   ChecksumSource.None, allowsAuto, error);
     }
 
     /// <summary>Whether a check nobody is watching may install this on its own. Requires a
@@ -339,7 +373,7 @@ public static class UpdateCheck
     /// <summary>Whether an unattended install of this version may be attempted again. Mirrors
     /// <see cref="IsCheckDue"/> on a moved clock.</summary>
     public static bool MayRetryAutoInstall(string version, string? lastVersion, DateTime? lastUtc, DateTime nowUtc) =>
-        !string.Equals(version, lastVersion, StringComparison.OrdinalIgnoreCase)
+        !SameVersion(version, lastVersion)
         || lastUtc is not { } last || last > nowUtc || nowUtc - last >= AutoRetryInterval;
 
     /// <summary>Parse the feed. Returns null for anything malformed - a broken feed must
@@ -356,8 +390,12 @@ public static class UpdateCheck
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return null;
 
+            // Normalised to the three-part form everything else uses (tags, App.Version, asset
+            // names): TryParseVersion tolerates a "v" and whitespace, and passing the raw string
+            // on would build asset URLs with the "v" in twice.
             var version = Text(root, "version");
-            if (!TryParseVersion(version, out _)) return null;
+            if (!TryParseVersion(version, out var parsedVersion) || parsedVersion.Build < 0) return null;
+            version = parsedVersion.ToString(3);
 
             var notes = Text(root, "notes");
             if (!IsHttpsUrl(notes)) notes = ReleasesUrl;
@@ -382,7 +420,7 @@ public static class UpdateCheck
             bool allowsAuto = !(root.TryGetProperty("auto", out var auto)
                                 && auto.ValueKind == JsonValueKind.False);
 
-            return new UpdateInfo(version!, notes!, full, min, portableFull, portableMin, allowsAuto);
+            return new UpdateInfo(version, notes!, full, min, portableFull, portableMin, allowsAuto);
         }
         catch (JsonException)
         {
@@ -390,7 +428,7 @@ public static class UpdateCheck
         }
     }
 
-    /// <summary>Fetch and parse the feed. The one outbound request Pawse ever makes.</summary>
+    /// <summary>Fetch and parse the pawse.at feed - the checksum side of a check.</summary>
     public static async Task<FetchResult> FetchAsync(CancellationToken ct = default)
     {
         try
@@ -476,10 +514,6 @@ public static class UpdateCheck
     }
 
     /// <summary>
-    /// One whole check: GitHub for the version, the feed for the checksum, and SHA256SUMS.txt
-    /// only when the feed cannot supply one. The result says what may be done about it.
-    /// </summary>
-    /// <summary>
     /// One check, retried while nothing at all answers. Only the <see cref="UpdateVerdict.Unknown"/>
     /// verdict is retried: every other one already has a usable answer, and GitHub timing out
     /// while the feed replies is the fallback doing its job, not a failure.
@@ -507,6 +541,10 @@ public static class UpdateCheck
         return plan;
     }
 
+    /// <summary>
+    /// One whole check: GitHub for the version, the feed for the checksum, and SHA256SUMS.txt
+    /// only when the feed cannot supply one. The result says what may be done about it.
+    /// </summary>
     private static async Task<UpdatePlan> CheckOnceAsync(string current, InstallKind kind, CancellationToken ct)
     {
         var githubVersion = await FetchGitHubVersionAsync(ct).ConfigureAwait(false);
@@ -527,18 +565,34 @@ public static class UpdateCheck
                         "Pawse could not reach github.com or pawse.at.");
 
         string? sums = null;
+        string? error = feed.Error;
         if (NeedsSums(current, kind, githubVersion, feed.Info))
         {
             var version = githubVersion ?? feed.Info!.Version;
             Log.Info($"update: the feed cannot vouch for {version}, asking the release's SHA256SUMS.txt");
             sums = await FetchSumsAsync(version, ct).ConfigureAwait(false);
+            if (sums is null) error ??= "The release's SHA256SUMS.txt could not be fetched.";
         }
-        return Plan(current, kind, githubVersion, feed.Info, sums, feed.Error);
+        return Plan(current, kind, githubVersion, feed.Info, sums, error);
     }
 
-    /// <summary>Installed (and which build) or portable - see <see cref="InstallKind"/>.</summary>
-    public static InstallKind DetectInstall() =>
-        DetectInstall(Log.ExeDir(), ProcessSizeBytes(), ReadInstallLocation, ReadBuildVariant);
+    /// <summary>Installed (and which build) or portable - see <see cref="InstallKind"/>. Read from
+    /// the hive whose entry names THIS folder (<see cref="ScopeOf"/>): taking whichever hive
+    /// answers first would call a per-machine copy portable whenever a stale per-user entry for
+    /// some other folder is still around.</summary>
+    public static InstallKind DetectInstall()
+    {
+        var exeDir = Log.ExeDir();
+        RegistryKey? hive = DetectScope() switch
+        {
+            InstallScope.PerUser => Registry.CurrentUser,
+            InstallScope.PerMachine => Registry.LocalMachine,
+            _ => null,
+        };
+        return DetectInstall(exeDir, ProcessSizeBytes(),
+                             () => hive is null ? null : ReadInstallLocationIn(hive),
+                             () => hive is null ? null : ReadValue(hive, "BuildVariant")?.Trim().ToLowerInvariant());
+    }
 
     /// <summary>Test seam for <see cref="DetectInstall()"/>: the registry and the exe on disk
     /// are the only things it consults.</summary>
@@ -577,6 +631,15 @@ public static class UpdateCheck
     public static bool IsInstalled(InstallKind kind) =>
         kind is InstallKind.InstalledFull or InstallKind.InstalledMin;
 
+    /// <summary>What, if anything, about THIS copy's location keeps it from installing an
+    /// update by itself - see <see cref="LocalObstacle"/>. Null when nothing does.</summary>
+    public static LocalObstacle? LocalInstallObstacle(InstallKind kind)
+    {
+        if (IsInstalled(kind) && DetectScope() == InstallScope.PerMachine) return LocalObstacle.PerMachine;
+        if (!SelfReplace.CanWriteTo(Log.ExeDir())) return LocalObstacle.FolderNotWritable;
+        return null;
+    }
+
     /// <summary>Which hive this install is registered in. Per-machine needs administrator
     /// rights to update, which an unattended check must never demand on its own.</summary>
     public static InstallScope DetectScope() =>
@@ -594,28 +657,49 @@ public static class UpdateCheck
         return InstallScope.None;
     }
 
-    /// <summary>Download to %TEMP% and verify the SHA-256 from the feed. Returns the file's
-    /// path, or null when anything at all went wrong (already logged). A file that fails the
-    /// checksum is deleted rather than left lying around next to a working one.</summary>
+    /// <summary>Name prefix of the per-download %TEMP% subfolders, so the startup sweep can find
+    /// what an earlier run left behind.</summary>
+    private const string DownloadDirPrefix = "Pawse-update-";
+
+    /// <summary>Download and verify the SHA-256 from the feed. Returns the file's path, or null
+    /// when anything at all went wrong (already logged). A file that fails the checksum is
+    /// deleted rather than left lying around next to a working one.
+    /// <para>The file lands in a fresh, randomly named subfolder of %TEMP% rather than at a
+    /// predictable path: the installer it holds may run elevated a moment later, and a same-user
+    /// process should not know in advance where to swap the bytes. The folder is removed by
+    /// <see cref="SweepDownloads"/> on the next start - an installer we handed over to is still
+    /// running from it when this process exits.</para>
+    /// <para>Two timeouts on purpose: with ResponseHeadersRead, HttpClient.Timeout stops
+    /// counting once the headers are in, so the body copy carries its own linked token - a
+    /// server that stalled mid-download would otherwise hold the update busy flag until
+    /// restart.</para></summary>
     public static async Task<string?> DownloadVerifiedAsync(UpdateAsset asset, string fileName, CancellationToken ct = default)
     {
-        var path = Path.Combine(Path.GetTempPath(), fileName);
+        string? dir = null;
         try
         {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(DownloadTimeout);
+            var token = timeout.Token;
+
+            dir = Directory.CreateDirectory(
+                Path.Combine(Path.GetTempPath(), DownloadDirPrefix + Path.GetRandomFileName())).FullName;
+            var path = Path.Combine(dir, fileName);
+
             using var http = NewClient(DownloadTimeout);
-            using var response = await http.GetAsync(asset.Url, HttpCompletionOption.ResponseHeadersRead, ct)
+            using var response = await http.GetAsync(asset.Url, HttpCompletionOption.ResponseHeadersRead, token)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            using (var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
+            string actual;
+            using (var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false))
             using (var file = File.Create(path))
-                await source.CopyToAsync(file, ct).ConfigureAwait(false);
+                actual = await CopyAndHashAsync(source, file, token).ConfigureAwait(false);
 
-            var actual = Sha256File(path);
             if (!string.Equals(actual, asset.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 Log.Error($"update download rejected: sha256 {actual} != {asset.Sha256}");
-                TryDelete(path);
+                TryDeleteDir(dir);
                 return null;
             }
             Log.Info($"update downloaded and verified: {path}");
@@ -624,16 +708,40 @@ public static class UpdateCheck
         catch (Exception ex)
         {
             Log.Error("update download", ex);
-            TryDelete(path);
+            if (dir is not null) TryDeleteDir(dir);
             return null;
         }
     }
 
-    /// <summary>Lowercase hex SHA-256 of a file.</summary>
-    internal static string Sha256File(string path)
+    /// <summary>Copy <paramref name="source"/> to <paramref name="destination"/>, hashing the
+    /// bytes as they pass - the ~58 MB file is read from the network once and from disk never.
+    /// Returns the lowercase hex SHA-256.</summary>
+    internal static async Task<string> CopyAndHashAsync(Stream source, Stream destination, CancellationToken ct)
     {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            hasher.AppendData(buffer, 0, read);
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+        }
+        return Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    /// <summary>Remove the download folders earlier runs left in %TEMP%. Called from the startup
+    /// sweep; true when nothing is left. An installer launched from one of them may still be
+    /// exiting, so the caller retries a failure rather than treating it as an error.</summary>
+    public static bool SweepDownloads()
+    {
+        bool clean = true;
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), DownloadDirPrefix + "*"))
+                clean &= TryDeleteDir(dir);
+        }
+        catch { /* %TEMP% unreadable - nothing to sweep */ }
+        return clean;
     }
 
     // ---- internals -----------------------------------------------------------
@@ -698,20 +806,28 @@ public static class UpdateCheck
         catch { return false; }
     }
 
-    private static string? ReadInstallLocation() =>
-        // Per-user install first, then per-machine - the same order the installer's own
-        // previous-install detection uses.
-        ReadInstallLocationIn(Registry.CurrentUser) ?? ReadInstallLocationIn(Registry.LocalMachine);
-
     private static string? ReadInstallLocationIn(RegistryKey root) => ReadValue(root, "InstallLocation");
 
-    /// <summary>"full" | "min", written by the installer since v0.8. Absent for anything
-    /// older, and for a portable copy.</summary>
-    private static string? ReadBuildVariant() =>
-        (ReadValue(Registry.CurrentUser, "BuildVariant") ?? ReadValue(Registry.LocalMachine, "BuildVariant"))
-            ?.Trim().ToLowerInvariant();
-
+    /// <summary>A value under the Add/Remove entry, or null. "BuildVariant" is "full" | "min",
+    /// written by the installer since v0.8 - absent for anything older and for a portable copy.
+    /// The installer is a 32-bit NSIS exe, so a per-machine entry lands in HKLM's WOW6432Node
+    /// view, which this x64 process does not see by default - HKLM is read in both views.</summary>
     private static string? ReadValue(RegistryKey root, string name)
+    {
+        var value = ReadValueIn(root, name);
+        if (value is null && root.Name == Registry.LocalMachine.Name)
+        {
+            try
+            {
+                using var hklm32 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
+                value = ReadValueIn(hklm32, name);
+            }
+            catch { /* no 32-bit view to read - not installed there */ }
+        }
+        return value;
+    }
+
+    private static string? ReadValueIn(RegistryKey root, string name)
     {
         try
         {
@@ -732,8 +848,13 @@ public static class UpdateCheck
         catch { return 0; }
     }
 
-    private static void TryDelete(string path)
+    private static bool TryDeleteDir(string dir)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* best effort */ }
+        try
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            return true;
+        }
+        catch { return false; }
     }
 }
