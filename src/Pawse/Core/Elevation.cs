@@ -28,6 +28,26 @@ public static class Elevation
     }
 
     /// <summary>
+    /// True when a UAC prompt would elevate THIS account: the process runs on the filtered half
+    /// of an administrator's split token, and consenting hands it the full half. False for a
+    /// standard user, whose prompt asks for someone else's credentials and runs the child AS
+    /// that someone else - a different HKCU, so a DisableLockWorkstation written there is never
+    /// consulted for this user's session, and Pawse would report success while blocking nothing.
+    /// </summary>
+    public static bool CanElevateSelf()
+    {
+        try
+        {
+            using var id = WindowsIdentity.GetCurrent();
+            if (NativeMethods.GetTokenInformation(id.Token, NativeMethods.TokenElevationType,
+                    out int type, sizeof(int), out _))
+                return type == NativeMethods.TokenElevationTypeLimited;
+        }
+        catch { /* fall through */ }
+        return false;
+    }
+
+    /// <summary>
     /// Relaunch Pawse elevated via a UAC prompt. Returns true if the elevated
     /// process was started (the caller should then shut down so the new instance
     /// takes over); false if the user declined UAC or it failed (stay running).

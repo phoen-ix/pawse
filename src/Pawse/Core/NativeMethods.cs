@@ -47,16 +47,6 @@ internal static class NativeMethods
         public int y;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct MSLLHOOKSTRUCT
-    {
-        public POINT pt;
-        public uint mouseData;
-        public uint flags;
-        public uint time;
-        public nuint dwExtraInfo;
-    }
-
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetWindowsHookExW(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
 
@@ -90,6 +80,15 @@ internal static class NativeMethods
 
     [DllImport("kernel32.dll")]
     public static extern uint GetCurrentThreadId();
+
+    // ---- Token elevation type (is a UAC prompt going to elevate THIS account?) -------
+    public const int TokenElevationType = 18;      // TOKEN_INFORMATION_CLASS.TokenElevationType
+    public const int TokenElevationTypeLimited = 3; // the filtered half of an administrator's split token
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass,
+        out int tokenInformation, int tokenInformationLength, out int returnLength);
 
     /// <summary>High bit set = key physically down right now. Only knows about events the
     /// system actually processed - a key-down a LL hook swallowed never registers - so

@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace Pawse.Core;
 
 /// <summary>
@@ -17,8 +15,6 @@ namespace Pawse.Core;
 /// </summary>
 public sealed class SystemBlock
 {
-    private static readonly string[] AllManagedIds = KeyboardFilterGuard.LaunchMediaIds;
-
     private readonly Config _cfg;
     private readonly KeyboardFilterGuard _kf = new();
     private readonly Action<string, string>? _notify;
@@ -44,7 +40,7 @@ public sealed class SystemBlock
     {
         // Each call supersedes the last: still-queued background KF work bails once it
         // sees a newer generation.
-        long gen = System.Threading.Interlocked.Increment(ref _generation);
+        long gen = Interlocked.Increment(ref _generation);
 
         // Win+L - registry, fast, inline.
         if (locked && S.WinLock)
@@ -64,30 +60,26 @@ public sealed class SystemBlock
         }
 
         // Keyboard Filter - WMI, possibly slow, off-thread.
-        var enable = locked ? EnabledFilterIds() : Array.Empty<string>();
-        ApplyFilter(enable, gen, background, notify);
+        ApplyFilter(enable: locked && S.LaunchMediaKeys, gen, background, notify);
     }
 
-    private string[] EnabledFilterIds() =>
-        S.LaunchMediaKeys ? KeyboardFilterGuard.LaunchMediaIds : Array.Empty<string>();
-
-    private void ApplyFilter(string[] enableIds, long gen, bool background, bool notify)
+    /// <summary>Enable Pawse's Keyboard Filter rules, or revert them. There is one group of rules
+    /// (<see cref="KeyboardFilterGuard.LaunchMediaIds"/>), so this is an on/off switch.</summary>
+    private void ApplyFilter(bool enable, long gen, bool background, bool notify)
     {
-        var enableSet = new HashSet<string>(enableIds, StringComparer.OrdinalIgnoreCase);
-        var disableIds = AllManagedIds.Where(id => !enableSet.Contains(id)).ToArray();
-
         void Work()
         {
             lock (_kfGate)
             {
                 // A newer Apply has superseded us - don't fight it.
-                if (gen != System.Threading.Interlocked.Read(ref _generation)) return;
+                if (gen != Interlocked.Read(ref _generation)) return;
+                bool owed = HasWekfMarker();
                 // Pure revert with no marker = Pawse never enabled anything: don't
                 // touch rules another tool may have set (and skip the WMI probe).
-                if (enableIds.Length == 0 && !HasWekfMarker()) return;
+                if (!enable && !owed) return;
                 if (!_kf.IsAvailable())
                 {
-                    if (notify && enableIds.Length > 0)
+                    if (notify && enable)
                         NotifyOnce("kf-unavailable", Elevation.IsElevated()
                             ? "Blocking browser / calculator / media keys needs the Windows Keyboard Filter " +
                               "feature (Enterprise, Education or IoT) - it isn't available on this PC."
@@ -95,39 +87,83 @@ public sealed class SystemBlock
                               "(tray menu → Restart as administrator), on Windows Enterprise, Education or IoT.");
                     return;
                 }
-                // Disable-then-enable, in order, so the final state is exact even if a
-                // previous toggle is still settling. The marker is written BEFORE
-                // enabling and cleared only after a full revert: WEKF rules are
-                // persistent machine-wide state, so a crash-while-locked leaves them
-                // on, and only the marker lets the next start know Pawse owes a
-                // revert (a non-elevated restart can't even read WEKF to find out).
-                // "Full revert" is taken literally: a disable pass where any Put
-                // failed keeps the marker, so the revert stays owed and the next
-                // sweep retries instead of orphaning the rules machine-wide.
-                if (enableIds.Length > 0) SetWekfMarker(true);
-                bool reverted = _kf.Set(disableIds, enabled: false);
-                _kf.Set(enableIds, enabled: true);
-                if (enableIds.Length == 0 && reverted) SetWekfMarker(false);
+                // WEKF rules are persistent machine-wide state, so a crash-while-locked leaves
+                // them on and only the marker lets the next start know Pawse owes a revert (a
+                // non-elevated restart can't even read WEKF to find out). The marker is written
+                // BEFORE enabling and cleared only after a full revert - "full" taken literally:
+                // a disable pass where any Put failed keeps the marker, so the revert stays owed
+                // and the next sweep retries instead of orphaning the rules machine-wide.
+                //
+                // Alongside the marker, the rules that were ALREADY on when Pawse first enabled
+                // its set: those are IT's or another tool's, and reverting must leave them on -
+                // the same ownership rule WorkstationLock applies to the Win+L policy value.
+                if (enable)
+                {
+                    if (!owed)
+                    {
+                        var already = _kf.ReadEnabled(KeyboardFilterGuard.LaunchMediaIds);
+                        if (already is null)
+                        {
+                            Log.Warn("keyboard-filter: could not read the current rules, so not enabling any");
+                            return;
+                        }
+                        SetWekfMarker(already);
+                    }
+                    _kf.Set(KeyboardFilterGuard.LaunchMediaIds, enabled: true);
+                }
+                else
+                {
+                    var keep = new HashSet<string>(ReadWekfPreEnabled(), StringComparer.OrdinalIgnoreCase);
+                    var toDisable = KeyboardFilterGuard.LaunchMediaIds.Where(id => !keep.Contains(id)).ToArray();
+                    if (keep.Count > 0)
+                        Log.Info($"keyboard-filter: leaving on what was on before Pawse: [{string.Join(", ", keep)}]");
+                    if (_kf.Set(toDisable, enabled: false)) ClearWekfMarker();
+                }
             }
         }
 
-        if (background) System.Threading.Tasks.Task.Run(Work);
+        if (background) Task.Run(Work);
         else Work();
     }
 
     // Same HKCU key WorkstationLock uses for its ownership marker.
     private const string OwnerKey = @"Software\Pawse";
     private const string WekfMarkerName = "WekfLeftOn";
+    private const string WekfPreEnabledName = "WekfPreEnabled";
 
-    private static void SetWekfMarker(bool on)
+    /// <summary>Record that Pawse owes a revert, and which managed rules were already on.</summary>
+    private static void SetWekfMarker(IReadOnlyCollection<string> preEnabled)
     {
         try
         {
             using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(OwnerKey);
-            if (on) key?.SetValue(WekfMarkerName, 1, Microsoft.Win32.RegistryValueKind.DWord);
-            else key?.DeleteValue(WekfMarkerName, throwOnMissingValue: false);
+            key?.SetValue(WekfPreEnabledName, preEnabled.ToArray(), Microsoft.Win32.RegistryValueKind.MultiString);
+            key?.SetValue(WekfMarkerName, 1, Microsoft.Win32.RegistryValueKind.DWord);
         }
         catch (Exception ex) { Log.Warn("wekf marker: " + ex.Message); }
+    }
+
+    private static void ClearWekfMarker()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(OwnerKey);
+            key?.DeleteValue(WekfMarkerName, throwOnMissingValue: false);
+            key?.DeleteValue(WekfPreEnabledName, throwOnMissingValue: false);
+        }
+        catch (Exception ex) { Log.Warn("wekf marker: " + ex.Message); }
+    }
+
+    /// <summary>The rules that were on before Pawse's. Empty for a marker an older build wrote,
+    /// which then reverts everything - the only honest reading of a marker with no snapshot.</summary>
+    private static string[] ReadWekfPreEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(OwnerKey);
+            return key?.GetValue(WekfPreEnabledName) as string[] ?? Array.Empty<string>();
+        }
+        catch { return Array.Empty<string>(); }
     }
 
     private static bool HasWekfMarker()

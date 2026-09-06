@@ -42,8 +42,17 @@ public static class WorkstationLock
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(PolicyKey);
-            if (key?.GetValue(ValueName) is int cur && cur == 1)
+            object? existing = key?.GetValue(ValueName);
+            if (existing is int cur && cur == 1)
                 return true; // already blocked (admin policy, or our own re-apply) - nothing to record or write
+            if (existing is not null && existing is not int)
+            {
+                // A string "1", a QWORD, whatever someone put there by hand: not a value Pawse
+                // understands, so not one it may overwrite with a DWORD and later delete as
+                // "absent" (the marker only knows 0, 1 and absent). Leave it exactly as found.
+                Log.Warn($"win+l: DisableLockWorkstation exists as {key!.GetValueKind(ValueName)}, not a DWORD - leaving it alone, so Win+L is not blocked by Pawse");
+                return true;
+            }
 
             // Record the prior state FIRST: a crash after this point leaves the marker
             // in place, so Restore() (startup sweep / uninstaller) can still revert.

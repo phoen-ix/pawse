@@ -67,6 +67,37 @@ public sealed class KeyboardFilterGuard
         }
     }
 
+    /// <summary>Which of <paramref name="ids"/> are enabled right now - what a revert has to
+    /// leave alone, because Pawse did not turn them on. Null when the feature is unavailable or
+    /// the query failed, which the caller treats as "do not enable anything". One query, like
+    /// <see cref="Set"/>.</summary>
+    public IReadOnlyCollection<string>? ReadEnabled(IReadOnlyCollection<string> ids)
+    {
+        if (!IsAvailable()) return null;
+        var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+        var enabled = new List<string>();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                WmiScope, $"SELECT Id, Enabled FROM {PredefinedClass}");
+            using var col = searcher.Get();
+            foreach (ManagementObject mo in col)
+            {
+                using (mo)
+                {
+                    if (mo["Id"] is string id && wanted.Contains(id) && mo["Enabled"] is true)
+                        enabled.Add(id);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("keyboard-filter read", ex);
+            return null;
+        }
+        return enabled;
+    }
+
     /// <summary>
     /// Enable or disable the given predefined key combinations. No-op (safe) when
     /// the feature is unavailable. Intended to be called off the UI thread.
