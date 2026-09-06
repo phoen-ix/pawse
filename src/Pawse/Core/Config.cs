@@ -15,16 +15,23 @@ namespace Pawse.Core;
 public sealed class Config
 {
     public GeneralCfg General { get; set; } = new();
-    public ChordCfg LockHotkey { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
+    public ChordCfg LockHotkey { get; set; } = DefaultChord();
     public UnlockCfg Unlock { get; set; } = new();
     public OverlayCfg Overlay { get; set; } = new();
     public SystemBlockCfg SystemBlock { get; set; } = new();
     public UpdateCfg Update { get; set; } = new();
 
+    /// <summary>The out-of-the-box chord - lock hotkey, unlock chord and the lockout fallback all
+    /// use it. One place, so the sites that need it cannot drift apart.</summary>
+    internal static List<string> DefaultChordKeys() => new() { "Ctrl", "L" };
+
+    private static ChordCfg DefaultChord() => new() { Enabled = true, Keys = DefaultChordKeys() };
+
+    /// <summary>Start-at-sign-in is deliberately NOT here: the Run key is the setting, Settings
+    /// reads it from there, and an "Autostart" key an older build wrote is ignored on load.</summary>
     public sealed class GeneralCfg
     {
         public bool StartLocked { get; set; }
-        public bool Autostart { get; set; }
         public bool BlockMouse { get; set; }
 
         /// <summary>Off by default: an on-screen / touch keyboard keeps working while the
@@ -55,8 +62,8 @@ public sealed class Config
         /// <summary>A once-a-day check that does no more than tell you.</summary>
         Notify = 1,
 
-        /// <summary>Download, verify and install it. Still refuses anything that would need
-        /// a UAC prompt, a runtime download, or a guess about which build is installed.</summary>
+        /// <summary>Download, verify and install it. Still refuses anything that would need a
+        /// UAC prompt or a runtime download, and anything pawse.at has not vouched for.</summary>
         Automatic = 2,
     }
 
@@ -113,7 +120,7 @@ public sealed class Config
 
     public sealed class UnlockCfg
     {
-        public ChordCfg Chord { get; set; } = new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
+        public ChordCfg Chord { get; set; } = Config.DefaultChord();
         public PassphraseCfg Passphrase { get; set; } = new();
         public MouseHoldCfg MouseHold { get; set; } = new();
         public TimerCfg Timer { get; set; } = new();
@@ -134,12 +141,21 @@ public sealed class Config
 
     public sealed class MouseHoldCfg
     {
+        /// <summary>What Settings lets through, and what a hand-edited file is clamped to on
+        /// load - a HoldMs of 0 would make hold-to-unlock a plain click.</summary>
+        public const int MinHoldMs = 100, MaxHoldMs = 10000;
+
         public bool Enabled { get; set; } = true;
         public int HoldMs { get; set; } = 1200;
     }
 
     public sealed class TimerCfg
     {
+        /// <summary>A day. Also the ceiling for a hand-edited file: DispatcherTimer refuses an
+        /// interval above int.MaxValue milliseconds (about 24.8 days), so a larger value passed
+        /// HasUsableUnlock and then never armed.</summary>
+        public const int MaxSeconds = 86400;
+
         public bool Enabled { get; set; }
         public int Seconds { get; set; } = 300;
     }
@@ -180,7 +196,7 @@ public sealed class Config
             if (screenCount <= 0) return Array.Empty<int>();
             if (cfg.AllDisplays) return Enumerable.Range(0, screenCount).ToList();
 
-            var chosen = (cfg.Displays ?? new())
+            var chosen = cfg.Displays
                 .Where(i => i >= 0 && i < screenCount)
                 .Distinct()
                 .OrderBy(i => i)
@@ -226,9 +242,26 @@ public sealed class Config
         var path = PathOnDisk();
         if (File.Exists(path))
         {
+            // A file that cannot be READ is not a broken file. A sync client, an antivirus or a
+            // backup agent holding pawse.json open at sign-in - routine for a portable copy in
+            // Downloads - must not cost the user their settings: retry briefly, then run on
+            // defaults this once WITHOUT saving. (The .bad copy would fail on the same lock, and
+            // saving defaults over the file the moment the lock clears is exactly the loss.)
+            string? json = null;
+            for (int attempt = 1; json is null; attempt++)
+            {
+                try { json = File.ReadAllText(path); }
+                catch (Exception ex)
+                {
+                    if (attempt < 5) { Thread.Sleep(200); continue; }
+                    Log.Error($"config unreadable ({path}); using defaults for this run, file left alone", ex);
+                    return new Config();
+                }
+            }
+
             try
             {
-                var cfg = FromJson(File.ReadAllText(path));
+                var cfg = FromJson(json);
                 if (cfg != null)
                 {
                     Log.Info($"config loaded from {path}");
@@ -240,7 +273,7 @@ public sealed class Config
             {
                 Log.Error($"config load failed ({path}); using defaults", ex);
             }
-            // Keep the unreadable file - a hand-edit typo must not silently wipe the
+            // Keep the unparseable file - a hand-edit typo must not silently wipe the
             // user's settings when the defaults below are saved over the live path.
             try
             {
@@ -256,20 +289,28 @@ public sealed class Config
         return fresh;
     }
 
-    public void Save()
+    /// <summary>Persist. False when the write failed (already logged) - the caller that acts
+    /// on a user's Save tells them, because settings that silently do not stick teach the user
+    /// that Pawse forgets things.</summary>
+    public bool Save()
     {
         var path = PathOnDisk();
         try
         {
+            // The folder can go missing under us (%APPDATA%\Pawse tidied away by hand);
+            // a no-op when it is there.
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             // Write-to-temp + move so a crash or full disk mid-write can't truncate the
             // live file (a truncated pawse.json would load as defaults on the next start).
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, ToJson());
             File.Move(tmp, path, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error($"config save failed ({path})", ex);
+            return false;
         }
     }
 
@@ -296,17 +337,21 @@ public sealed class Config
     private void NormalizeAfterLoad()
     {
         General ??= new();
-        LockHotkey ??= new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
+        LockHotkey ??= DefaultChord();
         LockHotkey.Keys ??= new();
         LockHotkey.Keys.RemoveAll(string.IsNullOrWhiteSpace);
         Unlock ??= new();
-        Unlock.Chord ??= new() { Enabled = true, Keys = new() { "Ctrl", "L" } };
+        Unlock.Chord ??= DefaultChord();
         Unlock.Chord.Keys ??= new();
         Unlock.Chord.Keys.RemoveAll(string.IsNullOrWhiteSpace);
         Unlock.Passphrase ??= new();
         Unlock.Passphrase.Text ??= "";
         Unlock.MouseHold ??= new();
         Unlock.Timer ??= new();
+        // The same limits Settings enforces on save, so a hand-edited file cannot slip a value
+        // through that the UI would have refused (see the constants for what each one broke).
+        Unlock.MouseHold.HoldMs = Math.Clamp(Unlock.MouseHold.HoldMs, MouseHoldCfg.MinHoldMs, MouseHoldCfg.MaxHoldMs);
+        Unlock.Timer.Seconds = Math.Min(Unlock.Timer.Seconds, TimerCfg.MaxSeconds);
         Overlay ??= new();
         Overlay.Displays ??= new();
         // Configs written before multi-display carry "Monitor": N and no "Displays". Its mere
@@ -362,14 +407,14 @@ public sealed class Config
         Unlock.Chord.Enabled = true;
         if (Keys.ParseChord(Unlock.Chord.Keys).Count == 0)
         {
-            Unlock.Chord.Keys = new() { "Ctrl", "L" };
+            Unlock.Chord.Keys = DefaultChordKeys();
             reseeded = true;
         }
         return true;
     }
 
     public string Summary() =>
-        $"gui=tray logging={General.Logging} lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
+        $"logging={General.Logging} lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
         $"block_screen_keyboard={General.BlockScreenKeyboard} " +
         $"overlay.enabled={Overlay.Enabled} " +
         $"overlay.displays={(Overlay.AllDisplays ? "all" : string.Join("+", Overlay.Displays))} " +

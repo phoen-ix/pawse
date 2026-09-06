@@ -22,6 +22,17 @@ public partial class SettingsWindow : Window
     /// OnSave unions the ticked set with the detached part of this.</summary>
     private List<int> _configuredDisplays = new();
 
+    /// <summary>The Run key as it stood on load. Start-at-sign-in is the one setting that lives
+    /// in the registry rather than in pawse.json - the Run value IS the setting - and it is
+    /// written back only when the user changed the checkbox: SetEnabled(true) points the value at
+    /// THIS exe, so a portable copy saving an unrelated setting must not re-point the installed
+    /// copy's autostart at itself.</summary>
+    private bool _autostartAtLoad;
+
+    /// <summary>What Save decided about start-at-sign-in: null when the checkbox was left as it
+    /// was, otherwise the new state for App to write to the Run key.</summary>
+    public bool? AutostartChange { get; private set; }
+
     /// <summary>Raised after Save has written control values back into the config.</summary>
     public event Action? Applied;
 
@@ -60,6 +71,8 @@ public partial class SettingsWindow : Window
         TxtLockHotkey.ChordChanged += (_, _) => UpdateWarnings();
         TxtChord.RecordBlocked += (_, _) => ShowBlocked(LblChordWarn);
         TxtLockHotkey.RecordBlocked += (_, _) => ShowBlocked(LblLockHotkeyWarn);
+        TxtChord.KeyRejected += (_, key) => ShowRejected(LblChordWarn, key);
+        TxtLockHotkey.KeyRejected += (_, key) => ShowRejected(LblLockHotkeyWarn, key);
         TxtPassphrase.TextChanged += (_, _) => UpdateWarnings();
         ChkPassphrase.Checked += (_, _) => UpdateWarnings();
         ChkPassphrase.Unchecked += (_, _) => UpdateWarnings();
@@ -103,7 +116,7 @@ public partial class SettingsWindow : Window
     private void LoadFromConfig()
     {
         ChkStartLocked.IsChecked = _cfg.General.StartLocked;
-        ChkAutostart.IsChecked = Autostart.IsEnabled();
+        ChkAutostart.IsChecked = _autostartAtLoad = Autostart.IsEnabled();
         ChkBlockMouse.IsChecked = _cfg.General.BlockMouse;
         ChkBlockScreenKeyboard.IsChecked = _cfg.General.BlockScreenKeyboard;
         ChkTrayDoubleClick.IsChecked = _cfg.General.TrayDoubleClickUnlock;
@@ -111,9 +124,6 @@ public partial class SettingsWindow : Window
 
         ChkWinLock.IsChecked = _cfg.SystemBlock.WinLock;
         ChkLaunchMedia.IsChecked = _cfg.SystemBlock.LaunchMediaKeys;
-        LblFilterStatus.Text =
-            "Most of these are already blocked by the lock. This also engages the Windows Keyboard "
-            + "Filter to catch any that bypass the hook - that part needs Enterprise/Education/IoT + admin.";
 
         ChkLockHotkey.IsChecked = _cfg.LockHotkey.Enabled;
         TxtLockHotkey.Chord = _cfg.LockHotkey.Keys;
@@ -152,7 +162,8 @@ public partial class SettingsWindow : Window
     private void OnSave(object sender, RoutedEventArgs e)
     {
         _cfg.General.StartLocked = ChkStartLocked.IsChecked == true;
-        _cfg.General.Autostart = ChkAutostart.IsChecked == true;
+        bool autostart = ChkAutostart.IsChecked == true;
+        AutostartChange = autostart == _autostartAtLoad ? null : autostart;
         _cfg.General.BlockMouse = ChkBlockMouse.IsChecked == true;
         _cfg.General.BlockScreenKeyboard = ChkBlockScreenKeyboard.IsChecked == true;
         _cfg.General.TrayDoubleClickUnlock = ChkTrayDoubleClick.IsChecked == true;
@@ -172,10 +183,11 @@ public partial class SettingsWindow : Window
         _cfg.Unlock.Passphrase.ResetOnWrongKey = ChkResetWrong.IsChecked == true;
 
         _cfg.Unlock.MouseHold.Enabled = ChkMouseHold.IsChecked == true;
-        _cfg.Unlock.MouseHold.HoldMs = ParseInt(TxtHoldMs.Text, _cfg.Unlock.MouseHold.HoldMs, 100, 10000);
+        _cfg.Unlock.MouseHold.HoldMs = ParseInt(TxtHoldMs.Text, _cfg.Unlock.MouseHold.HoldMs,
+            Config.MouseHoldCfg.MinHoldMs, Config.MouseHoldCfg.MaxHoldMs);
 
         _cfg.Unlock.Timer.Enabled = ChkTimer.IsChecked == true;
-        _cfg.Unlock.Timer.Seconds = ParseInt(TxtTimerSeconds.Text, _cfg.Unlock.Timer.Seconds, 1, 86400);
+        _cfg.Unlock.Timer.Seconds = ParseInt(TxtTimerSeconds.Text, _cfg.Unlock.Timer.Seconds, 1, Config.TimerCfg.MaxSeconds);
 
         _cfg.Update.ModeValue =
             RbUpdAuto.IsChecked == true ? Config.UpdateMode.Automatic :
@@ -291,14 +303,15 @@ public partial class SettingsWindow : Window
     /// Pawse is installed, so neither can change while the window is open.</summary>
     private void ShowUpdateCaveat()
     {
-        string? reason = null;
-        if (UpdateCheck.IsInstalled(UpdateCheck.DetectInstall())
-            && UpdateCheck.DetectScope() == InstallScope.PerMachine)
-            reason = "This copy is installed for everyone on this PC, so updates are offered "
-                   + "rather than installed - installing needs administrator rights.";
-        else if (!SelfReplace.CanWriteTo(Log.ExeDir()))
-            reason = "Pawse can't write to its own folder, so it can only tell you about "
-                   + "updates - installing one is up to you.";
+        // The same test App.AutoInstallRefusal applies, so the two cannot drift apart.
+        string? reason = UpdateCheck.LocalInstallObstacle(UpdateCheck.DetectInstall()) switch
+        {
+            LocalObstacle.PerMachine => "This copy is installed for everyone on this PC, so updates are offered "
+                                      + "rather than installed - installing needs administrator rights.",
+            LocalObstacle.FolderNotWritable => "Pawse can't write to its own folder, so it can only tell you about "
+                                             + "updates - installing one is up to you.",
+            _ => null,
+        };
 
         LblUpdateCaveat.Text = reason ?? "";
         LblUpdateCaveat.Visibility = reason is null ? Visibility.Collapsed : Visibility.Visible;
@@ -309,13 +322,7 @@ public partial class SettingsWindow : Window
     /// and these two are the only things that should ever reach it.</summary>
     private void OnOpenLink(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
-        try
-        {
-            if (e.Uri.Scheme == Uri.UriSchemeHttps)
-                System.Diagnostics.Process.Start(
-                    new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-        }
-        catch (Exception ex) { Log.Error("open link", ex); }
+        if (e.Uri.Scheme == Uri.UriSchemeHttps) ShellOpen.Open(e.Uri.AbsoluteUri, "link");
         e.Handled = true;
     }
 
@@ -376,6 +383,13 @@ public partial class SettingsWindow : Window
     private static void ShowBlocked(System.Windows.Controls.TextBlock label)
     {
         label.Text = "Unlock Pawse first to record a shortcut.";
+        label.Visibility = Visibility.Visible;
+    }
+
+    private static void ShowRejected(System.Windows.Controls.TextBlock label, string key)
+    {
+        label.Text = $"{key} can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, " +
+                     "Enter, Esc or Backspace with the modifiers. The previous shortcut was kept.";
         label.Visibility = Visibility.Visible;
     }
 

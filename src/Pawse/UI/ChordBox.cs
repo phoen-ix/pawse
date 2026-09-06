@@ -1,4 +1,3 @@
-using System.Windows;
 using System.Windows.Input;
 // This project enables both WPF and WinForms, so these names are ambiguous with
 // their System.Windows.Forms twins (cf. the aliases in GlobalUsings.cs). Pin the
@@ -31,12 +30,18 @@ public sealed class ChordBox : TextBox
     private readonly List<string> _captured = new(); // built during the current capture
     private List<string> _snapshot = new();        // value at capture start (for Esc/empty)
     private bool _capturing;
+    private string? _rejected;                     // a key this capture could not represent
 
     /// <summary>Raised when the committed chord changes (commit or clear); not on cancel.</summary>
     public event EventHandler? ChordChanged;
 
     /// <summary>Raised when a capture attempt was refused (recording blocked).</summary>
     public event EventHandler? RecordBlocked;
+
+    /// <summary>Raised when a pressed key cannot be part of a chord (arrows, Home/End, the
+    /// keypad, OEM keys) - the capture is then abandoned rather than committed without it,
+    /// which used to leave a modifiers-only chord that fired the instant they were held.</summary>
+    public event EventHandler<string>? KeyRejected;
 
     /// <summary>When it returns true, capture is refused (e.g. Pawse is locked). Checked live.</summary>
     public Func<bool>? IsRecordingBlocked { get; set; }
@@ -92,7 +97,7 @@ public sealed class ChordBox : TextBox
     {
         base.OnLostKeyboardFocus(e);
         if (!_capturing) return;
-        if (_captured.Count > 0) CommitCapture();
+        if (_captured.Count > 0 && _rejected is null) CommitCapture();
         else CancelCapture();
     }
 
@@ -111,8 +116,11 @@ public sealed class ChordBox : TextBox
             return;
         }
 
-        // A modifier-less Tab/Shift+Tab as the first key = navigate, don't trap the user.
-        if (key == Key.Tab && _captured.Count == 0 && Keyboard.Modifiers == ModifierKeys.None)
+        // Tab / Shift+Tab as the first real key = navigate, don't trap the user. Shift arrives
+        // first and is captured as a key in its own right, so "nothing captured yet" has to read
+        // "nothing but Shift" - or Shift+Tab out of the box committed the chord Shift+Tab.
+        if (key == Key.Tab && _captured.All(n => n == "Shift")
+            && (Keyboard.Modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
         {
             e.Handled = false;
             CancelCapture();
@@ -122,7 +130,16 @@ public sealed class ChordBox : TextBox
         int vk = KeyInterop.VirtualKeyFromKey(key);
         if (vk == 0) return;                                  // Key.None / IME / dead keys
         string name = Keys.VkToName(Keys.Normalize(vk));
-        if (Keys.NameToVk(name) == null) return;              // 0xNN fallback (numpad/OEM) - not representable
+        if (Keys.NameToVk(name) == null)
+        {
+            // 0xNN fallback (arrows, Home/End, numpad, OEM keys) - not representable in the
+            // config. Say so and poison this capture: dropping the key silently left the chord
+            // as just its modifiers.
+            _rejected = key.ToString();
+            Text = $"({_rejected} can't be part of a shortcut)";
+            KeyRejected?.Invoke(this, _rejected);
+            return;
+        }
 
         if (!_captured.Contains(name))
         {
@@ -135,7 +152,13 @@ public sealed class ChordBox : TextBox
     {
         if (!_capturing) return;
         e.Handled = true;
-        if (_captured.Count == 0) return;                     // only a rejected key so far - keep waiting
+        if (_rejected is not null)
+        {
+            CancelCapture();                                  // keep the old chord, not a maimed one
+            MoveFocusAway();
+            return;
+        }
+        if (_captured.Count == 0) return;                     // nothing captured yet - keep waiting
         CommitCapture();
         MoveFocusAway();
     }
@@ -153,6 +176,7 @@ public sealed class ChordBox : TextBox
         }
         _snapshot = new List<string>(_chord);
         _captured.Clear();
+        _rejected = null;
         _capturing = true;
         Text = PlaceholderCapturing;
     }

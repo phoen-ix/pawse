@@ -1,4 +1,3 @@
-using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Pawse.Core;
@@ -22,6 +21,13 @@ public partial class App : Application
     private DispatcherTimer? _autoUpdate;
     private bool _canLock;   // false if the keyboard hook failed to install (locking disabled)
     private bool _updateCheckBusy;
+    private bool _saveFailureNotified;
+
+    /// <summary>Shown when the running instance is elevated and this copy is not: it cannot be
+    /// asked to quit (setting its event, or even opening its mutex, is refused).</summary>
+    private const string ElevatedInstanceText =
+        "The Pawse that's running has administrator rights, so this copy can't ask it to close.\n\n"
+        + "Quit it from the tray (right-click the paw, then Quit) and start this one again.";
 
     /// <summary>An automatic install that arrived while the keyboard was locked. Installing
     /// closes Pawse, which hands the keyboard back - so it waits for the unlock instead.
@@ -30,9 +36,9 @@ public partial class App : Application
 
     /// <summary>Cancels anything still in flight when Pawse quits - notably a part-finished
     /// 58 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
-    private readonly System.Threading.CancellationTokenSource _shutdown = new();
+    private readonly CancellationTokenSource _shutdown = new();
 
-    internal static string Version =>
+    internal static readonly string Version =
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
     private void OnStartup(object sender, StartupEventArgs e)
@@ -60,12 +66,33 @@ public partial class App : Application
 
     private void StartupCore(StartupEventArgs e)
     {
-        _singleton = new Mutex(true, @"Local\Pawse-single-instance-2b8f9c", out bool created);
+        // First, so nothing logs ahead of the banner. Nothing is written until Enable() has
+        // read the setting; until then every line is only buffered.
+        Log.Init(Version);
+
+        bool created;
+        try
+        {
+            _singleton = new Mutex(true, @"Local\Pawse-single-instance-2b8f9c", out created);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The mutex exists but belongs to a token this one cannot open it with: a Pawse
+            // running as administrator, seen from an un-elevated copy. .NET asks for full
+            // control and has no reduced-rights fallback, so the case surfaces HERE - never in
+            // TakeOverFromRunningInstance, which is only reached once the mutex was opened.
+            Log.Info("startup: another instance is running elevated - this copy cannot ask it to quit");
+            MessageBox.Show(ElevatedInstanceText, "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
         if (!created)
         {
             // Relaunched by an outgoing instance (--replace): it is already on its way out and
-            // told us so, no need to ask anyone anything.
-            bool acquired = e.Args.Contains(Elevation.ReplaceArg) && WaitForMutex(TimeSpan.FromSeconds(5));
+            // told us so, no need to ask anyone anything. Ten seconds, like the other two waits:
+            // its OnExit can legitimately take several (two 2 s thread joins plus an inline
+            // Keyboard Filter revert) before the mutex is released.
+            bool acquired = e.Args.Contains(Elevation.ReplaceArg) && WaitForMutex(TimeSpan.FromSeconds(10));
             if (!acquired && !TakeOverFromRunningInstance())
             {
                 Shutdown();
@@ -73,16 +100,17 @@ public partial class App : Application
             }
         }
 
-        Log.Init(Version);
         InstallExceptionHandlers();
 
         // Clean up after a portable self-replace. Windows is still unmapping the exe we
         // replaced for a moment after that process let go of the mutex we just took, so
         // retry quietly off the UI thread and leave it for the next start if it never frees.
-        _ = System.Threading.Tasks.Task.Run(async () =>
+        // The same loop clears the %TEMP% folders earlier updates downloaded into - an installer
+        // we handed over to may still be exiting from one of them.
+        _ = Task.Run(async () =>
         {
-            for (int i = 0; i < 10 && !SelfReplace.SweepLeftovers(); i++)
-                await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            for (int i = 0; i < 10 && !(SelfReplace.SweepLeftovers() & UpdateCheck.SweepDownloads()); i++)
+                await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         });
 
         // Let the installer/uninstaller ask us to bow out cleanly instead of force-killing
@@ -100,7 +128,7 @@ public partial class App : Application
         // Everything logged so far has only been buffered - commit it or drop it now that
         // the setting is known. Config.Load's own lines are in that buffer too.
         Log.Enable(config.General.Logging);
-        bool unlockRepaired = EnsureUsableUnlock(config);
+        string? unlockRepaired = EnsureUsableUnlock(config);
         Log.Info("config: " + config.Summary());
 
         // If Block Win+L is on but this (managed) PC needs admin to apply it and we're
@@ -116,10 +144,8 @@ public partial class App : Application
         _tray.RestartAsAdminRequested += RestartAsAdmin;
         _tray.QuitRequested += QuitWithConfirm;
 
-        if (unlockRepaired)
-            _tray.Notify("Pawse",
-                "Your saved config had no working unlock method, so the default unlock chord " +
-                "(Ctrl+L) was enabled to keep you from getting locked out.");
+        if (unlockRepaired is not null)
+            _tray.Notify("Pawse", unlockRepaired);
 
         // OS-level Win+L guard (opt-in). Sweep first so a value left behind by a
         // crash-while-locked is reverted before any StartLocked engage re-applies it.
@@ -142,6 +168,15 @@ public partial class App : Application
         // (and keys stay swallowed) no matter how busy this UI thread is, and the
         // thread re-registers the hooks periodically in case the OS removed them.
         _hooks = new HookThread(_controller);
+        // Raised on the hook thread; Notify marshals to the UI thread itself. Only the failure
+        // edge is worth a balloon - the recovery is in the log.
+        _hooks.KeyboardHookAlive += alive =>
+        {
+            if (alive) return;
+            _tray?.Notify("Pawse",
+                "Pawse could not refresh its keyboard hook. If keys get through while locked, " +
+                "unlock and lock again - or restart Pawse.");
+        };
         _canLock = _hooks.Start();
         if (_canLock)
         {
@@ -173,7 +208,7 @@ public partial class App : Application
         };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
             Log.Error("domain exception", ex.ExceptionObject as Exception ?? new Exception($"{ex.ExceptionObject}"));
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, ex) =>
+        TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
             Log.Error("task exception", ex.Exception);
             ex.SetObserved();
@@ -181,14 +216,20 @@ public partial class App : Application
     }
 
     /// <summary>If the loaded config has no usable unlock method (hand-edited pawse.json, or
-    /// all methods disabled/misconfigured), enable the default chord so a lock can always be
-    /// undone. Returns true if it repaired anything.</summary>
-    private static bool EnsureUsableUnlock(Config config)
+    /// all methods disabled/misconfigured), enable the chord so a lock can always be undone.
+    /// Returns the balloon text saying what changed, or null when nothing did. The text names
+    /// the chord that actually works: the fallback only falls back to Ctrl+L when the saved
+    /// keys do not parse - a merely disabled Ctrl+Shift+U is re-enabled as it is, and telling
+    /// the user "Ctrl+L" then would be a lockout instruction.</summary>
+    private static string? EnsureUsableUnlock(Config config)
     {
-        if (!config.EnsureUsableUnlockFallback(out _)) return false;
-        Log.Warn("config has no usable unlock method - enabling the default chord to prevent lockout");
+        if (!config.EnsureUsableUnlockFallback(out bool reseeded)) return null;
+        string chord = Keys.ChordToText(config.Unlock.Chord.Keys);
+        Log.Warn($"config has no usable unlock method - enabling the chord ({chord}) to prevent lockout");
         config.Save();
-        return true;
+        return "Your saved config had no working unlock method, so the keyboard chord "
+             + (reseeded ? $"was enabled and set to {chord}" : $"({chord}) was enabled")
+             + " to keep you from getting locked out.";
     }
 
     /// <summary>Build one popup per display the config resolves to, reusing the existing set
@@ -259,7 +300,15 @@ public partial class App : Application
                     // popup off used to hide the window without destroying it, so the next
                     // lock showed it again - the setting was honoured only at startup, which
                     // made a restart look like the fix.
-                    if (_controller!.Config.Overlay.Enabled) ShowOverlays();
+                    if (_controller!.Config.Overlay.Enabled)
+                    {
+                        // Re-resolve the display set on every lock: "All displays" promises to
+                        // follow a monitor plugged in or unplugged since startup, and this is the
+                        // one cheap, certain place to keep that promise. CreateOverlays reuses the
+                        // windows when the set is unchanged, so a repeat lock does not flash.
+                        CreateOverlays(_controller.Config);
+                        ShowOverlays();
+                    }
                     StartAutoUnlock();
                 }
                 else
@@ -307,11 +356,7 @@ public partial class App : Application
         switch (request)
         {
             case QuitRequest.AccessDenied:
-                MessageBox.Show(
-                    "The Pawse that's running has administrator rights, so this copy can't ask "
-                        + "it to close.\n\nQuit it from the tray (right-click the paw, then Quit) "
-                        + "and start this one again.",
-                    "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(ElevatedInstanceText, "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
 
             case QuitRequest.NoListener:
@@ -414,7 +459,14 @@ public partial class App : Application
     private void ApplyConfigChange()
     {
         var config = _controller!.Config;
-        config.Save();
+        if (!config.Save() && !_saveFailureNotified)
+        {
+            // Once per session: the settings apply now but will not survive a restart, and a
+            // save that fails silently teaches the user that Pawse forgets things.
+            _saveFailureNotified = true;
+            _tray?.Notify("Pawse",
+                $"Your settings could not be saved to {Config.PathOnDisk()}. They apply now but will be lost when Pawse quits.");
+        }
         Log.Enable(config.General.Logging);
         _controller.RebuildMatchers();
         // The mouse hook only exists while BlockMouse is on (HookThread.SyncMouse) -
@@ -431,7 +483,8 @@ public partial class App : Application
             StartAutoUnlock();
         }
         _tray!.DoubleClickUnlock = config.General.TrayDoubleClickUnlock;
-        Autostart.SetEnabled(config.General.Autostart);
+        // Only when the checkbox changed - see SettingsWindow.AutostartChange for why.
+        if (_settingsWindow?.AutostartChange is { } autostart) Autostart.SetEnabled(autostart);
         StartAutoUpdateCheck();   // re-armed or stopped to match the new setting
         // Turning automatic installs back off cancels one that was waiting for the unlock:
         // the consent it was riding on has just been withdrawn.
@@ -512,6 +565,16 @@ public partial class App : Application
         var kind = UpdateCheck.DetectInstall();
         Log.Info($"update check ({(interactive ? "requested" : "scheduled")}): this copy is {current} ({kind})");
 
+        // A scheduled check supersedes whatever an earlier one deferred: if this one still finds
+        // the release installable and the keyboard still locked, AutoInstall defers it again; if
+        // the feed has since paused automatic installs, the release was pulled, or the verdict
+        // changed, the old plan must not outlive the check that would have refused it.
+        if (!interactive && _pendingUpdate is not null)
+        {
+            Log.Info($"update: dropping the deferred install of {_pendingUpdate.Version} - re-deciding from this check");
+            _pendingUpdate = null;
+        }
+
         // Only from the second attempt on: a check that works first time - almost all of them -
         // should look exactly as it always has.
         var progress = interactive
@@ -558,14 +621,17 @@ public partial class App : Application
     {
         if (!interactive)
         {
-            _tray?.Notify("Pawse", $"Pawse {plan.Version} is available. Settings → About to install it.");
+            _tray?.Notify("Pawse", AvailableNotice(plan.Version));
             return;
         }
         _settingsWindow?.ShowUpdateStatus($"Pawse {plan.Version} is available.");
-        OfferDownloadsPage(
-            $"Pawse {plan.Version} is available (you have {current}).\n\n" +
-            "This release doesn't offer anything Pawse can verify for this copy, so it won't " +
-            "download it.\n\nOpen the downloads page?", plan.NotesUrl);
+        // Say why, when the reason is a host that did not answer rather than a release with
+        // nothing to offer - "try again later" and "get it yourself" are different advice.
+        string why = plan.Error is null
+            ? "This release doesn't offer anything Pawse can verify for this copy, so it won't download it."
+            : $"{plan.Error} Without a checksum Pawse won't download it - try again later, or get it yourself.";
+        OfferDownloadsPage($"Pawse {plan.Version} is available (you have {current}).\n\n{why}\n\nOpen the downloads page?",
+                           plan.NotesUrl);
     }
 
     /// <summary>The user pressed Check now and there is something installable.</summary>
@@ -605,7 +671,7 @@ public partial class App : Application
         if (AutoInstallRefusal(plan) is { } refusal)
         {
             Log.Info($"update: {plan.Version} available but not installed automatically - {refusal}");
-            _tray?.Notify("Pawse", $"Pawse {plan.Version} is available. Settings → About to install it.");
+            _tray?.Notify("Pawse", AvailableNotice(plan.Version));
             return;
         }
         if (_controller?.IsLocked == true)
@@ -635,14 +701,25 @@ public partial class App : Application
         if (!UpdateCheck.MayRetryAutoInstall(plan.Version!, cfg.LastAutoAttemptVersion,
                                              cfg.LastAutoAttemptUtc, DateTime.UtcNow))
             return $"{plan.Version} was already tried and did not take";
-        // Per-user installs update themselves; per-machine needs administrator rights, and an
-        // unattended check must never be the thing that raises a UAC prompt.
-        if (UpdateCheck.IsInstalled(plan.Kind) && UpdateCheck.DetectScope() == InstallScope.PerMachine)
-            return "this copy was installed for everyone on this PC, which needs administrator rights";
-        if (!SelfReplace.CanWriteTo(Log.ExeDir()))
-            return "the folder Pawse lives in is not writable";
-        return null;
+        // The installer relaunches Pawse through explorer.exe, i.e. un-elevated: a copy the user
+        // restarted as administrator (Win+L on a managed PC, the media-key block) would come back
+        // without the rights it was restarted for. Interactively the user is there to restart it.
+        if (UpdateCheck.IsInstalled(plan.Kind) && Elevation.IsElevated())
+            return "Pawse is running as administrator, and the copy the installer relaunches would not be";
+        // The same two obstacles the About page warns about up front (SettingsWindow.ShowUpdateCaveat).
+        return UpdateCheck.LocalInstallObstacle(plan.Kind) switch
+        {
+            LocalObstacle.PerMachine => "this copy was installed for everyone on this PC, which needs administrator rights",
+            LocalObstacle.FolderNotWritable => "the folder Pawse lives in is not writable",
+            _ => null,
+        };
     }
+
+    private static string AvailableNotice(string? version) =>
+        $"Pawse {version} is available. Settings → About to install it.";
+
+    private static string NotInstalledNotice(string? version) =>
+        $"Pawse {version} could not be installed automatically. Settings → About to try it yourself.";
 
     /// <summary>Download, verify, then hand over to the installer or replace the exe.</summary>
     private async Task ApplyUpdate(UpdatePlan plan, bool unattended)
@@ -660,12 +737,17 @@ public partial class App : Application
             return;
         }
 
-        // Stamp the attempt BEFORE handing over: a successful handover kills this process long
-        // before anything after it could run.
-        var cfg = _controller!.Config.Update;
-        cfg.LastAutoAttemptVersion = plan.Version;
-        cfg.LastAutoAttemptUtc = DateTime.UtcNow;
-        _controller.Config.Save();
+        // Stamp an UNATTENDED attempt BEFORE handing over: a successful handover kills this
+        // process long before anything after it could run. An interactive install is not
+        // stamped - the user watching the wizard may cancel it, and that must not park the
+        // automatic retry of the same version for a week (see MayRetryAutoInstall).
+        if (unattended)
+        {
+            var cfg = _controller!.Config.Update;
+            cfg.LastAutoAttemptVersion = plan.Version;
+            cfg.LastAutoAttemptUtc = DateTime.UtcNow;
+            _controller.Config.Save();
+        }
 
         if (UpdateCheck.IsInstalled(plan.Kind)) LaunchInstaller(plan, file, unattended);
         else ReplacePortable(plan, file, unattended);
@@ -704,7 +786,7 @@ public partial class App : Application
         {
             Log.Error("update: starting the installer", ex);
             if (unattended)
-                _tray?.Notify("Pawse", $"Pawse {plan.Version} could not be installed - Settings → About to try it yourself.");
+                _tray?.Notify("Pawse", NotInstalledNotice(plan.Version));
             else
                 OfferDownloadsPage("The installer could not be started.\n\nOpen the downloads page instead?",
                                    plan.NotesUrl);
@@ -751,8 +833,7 @@ public partial class App : Application
             {
                 if (!process.HasExited || process.ExitCode == 0) return;
                 Log.Error($"update: the silent installer exited with {process.ExitCode} and Pawse is still {Version}");
-                _tray?.Notify("Pawse",
-                    $"Pawse {plan.Version} could not be installed automatically. Settings → About to try it yourself.");
+                _tray?.Notify("Pawse", NotInstalledNotice(plan.Version));
             }
             catch (Exception ex) { Log.Error("update: watching the installer", ex); }
             finally { process.Dispose(); }
@@ -761,11 +842,28 @@ public partial class App : Application
     }
 
     /// <summary>Take a deferred update now that the keyboard is free. async void because it is
-    /// called from an event handler; it must never let an exception escape onto the dispatcher.</summary>
+    /// called from an event handler; it must never let an exception escape onto the dispatcher.
+    /// Holds the same busy flag as a check, so a Check-now cannot start a second download while
+    /// this one is in flight, and asks <see cref="AutoInstallRefusal"/> again: the setting or the
+    /// retry stamp may have changed while the plan waited.</summary>
     private async void ApplyPendingUpdate(UpdatePlan plan)
     {
+        if (_updateCheckBusy)
+        {
+            // A check is running right now; a scheduled one re-derives (or drops) the deferral
+            // itself, and an interactive one has the user's attention already.
+            Log.Info("update: a check is in progress - the deferred install yields to it");
+            return;
+        }
+        if (AutoInstallRefusal(plan) is { } refusal)
+        {
+            Log.Info($"update: {plan.Version} was deferred but is not installed automatically now - {refusal}");
+            return;
+        }
+        _updateCheckBusy = true;
         try { await ApplyUpdate(plan, unattended: true); }
         catch (Exception ex) { Log.Error("update: applying the deferred update", ex); }
+        finally { _updateCheckBusy = false; }
     }
 
     /// <summary>Remember that a check happened, so the daily one doesn't run again on every
@@ -808,15 +906,7 @@ public partial class App : Application
 
     /// <summary>The downloads page, straight up - no dialog. Used by the button that appears
     /// after a failed check, where the user has already been told what happened.</summary>
-    private static void OpenDownloadsPage()
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo(UpdateCheck.ReleasesUrl) { UseShellExecute = true });
-        }
-        catch (Exception ex) { Log.Error("open downloads page", ex); }
-    }
+    private static void OpenDownloadsPage() => ShellOpen.Open(UpdateCheck.ReleasesUrl, "downloads page");
 
     /// <summary>Every dead end in the update flow ends the same way: say what happened, and
     /// offer the page the user would have gone to anyway.</summary>
@@ -824,12 +914,7 @@ public partial class App : Application
     {
         if (MessageBox.Show(text, "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
             return;
-        try
-        {
-            System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo(url ?? UpdateCheck.ReleasesUrl) { UseShellExecute = true });
-        }
-        catch (Exception ex) { Log.Error("open downloads page", ex); }
+        ShellOpen.Open(url ?? UpdateCheck.ReleasesUrl, "downloads page");
     }
 
     /// <summary>
@@ -843,6 +928,21 @@ public partial class App : Application
         if (!config.SystemBlock.WinLock) return false;
         if (Elevation.IsElevated()) return false;            // already admin - restart is pointless
         if (!WorkstationLock.NeedsElevation()) return false; // works un-elevated on this PC
+
+        if (!Elevation.CanElevateSelf())
+        {
+            // A standard user. "Run as administrator" would run Pawse as a different account,
+            // whose policy hive winlogon never consults for this session - inert, while the log
+            // would say it worked. Say so instead of asking for credentials that cannot help.
+            Log.Warn("win+l: this PC needs elevation and this account is not an administrator - the block cannot work here");
+            MessageBox.Show(
+                "“Block Win+L” is turned on, but on this PC it needs administrator rights, and this " +
+                "account isn't an administrator. Running Pawse under another account would not block " +
+                "Win+L for you, so the setting can't work here.\n\n" +
+                "Turn it off under Settings → Locking to stop this message.",
+                "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
 
         var choice = MessageBox.Show(
             "“Block Win+L” is turned on, but on this PC it needs administrator rights to " +
@@ -875,6 +975,16 @@ public partial class App : Application
 
     private void RestartAsAdmin()
     {
+        // A standard user's UAC prompt runs the copy as the administrator whose password is
+        // typed. Machine-wide state (the Keyboard Filter) works that way; per-user state (the
+        // Win+L policy) lands in the wrong hive and does nothing. Let them decide, informed.
+        if (!Elevation.CanElevateSelf()
+            && MessageBox.Show(
+                "This account isn't an administrator, so Pawse would run under the administrator " +
+                "account you sign in with. Blocking browser / media keys works that way; blocking " +
+                "Win+L does not - it would apply to that account, not to yours.\n\nContinue?",
+                "Pawse", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
         // Launch an elevated copy; if the user approves UAC, hand off by shutting
         // down so the new instance can take the single-instance mutex. If UAC is
         // declined, RelaunchAsAdmin returns false and we keep running unchanged.
@@ -882,15 +992,7 @@ public partial class App : Application
             Shutdown();
     }
 
-    private void OpenConfigFile()
-    {
-        try
-        {
-            var path = Config.PathOnDisk();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
-        }
-        catch (Exception ex) { Log.Error("open config file", ex); }
-    }
+    private void OpenConfigFile() => ShellOpen.Open(Config.PathOnDisk(), "config file");
 
     private void OnExit(object sender, ExitEventArgs e)
     {

@@ -1,4 +1,3 @@
-using Pawse.Core;
 using Xunit;
 
 namespace Pawse.Tests;
@@ -81,6 +80,25 @@ public class KeysTests
     [Fact]
     public void ParseChordText_canonicalizes_aliases_and_spacing()
         => Assert.Equal(new List<string> { "Ctrl", "L" }, Keys.ParseChordText(" control +  l "));
+
+    [Theory]
+    [InlineData(0x41, 'a')]            // A
+    [InlineData(0x5A, 'z')]            // Z
+    [InlineData(0x30, '0')]            // top-row 0
+    [InlineData(0x39, '9')]            // top-row 9
+    [InlineData(Keys.VK_NUMPAD0, '0')] // keypad 0 (NumLock on)
+    [InlineData(Keys.VK_NUMPAD9, '9')] // keypad 9
+    [InlineData(Keys.VK_SPACE, ' ')]
+    public void TryVkToChar_maps_letters_digits_on_either_pad_and_space(int vk, char expected)
+        => Assert.Equal(expected, Keys.TryVkToChar(vk));
+
+    [Theory]
+    [InlineData(Keys.VK_CONTROL)]
+    [InlineData(0x70)]  // F1
+    [InlineData(0xBA)]  // OEM ;:
+    [InlineData(0x6A)]  // keypad *
+    public void TryVkToChar_has_no_character_for_anything_else(int vk)
+        => Assert.Null(Keys.TryVkToChar(vk));
 
     [Theory]
     [InlineData(null, false)]

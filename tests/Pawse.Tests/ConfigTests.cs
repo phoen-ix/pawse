@@ -186,6 +186,28 @@ public class ConfigJsonTests
     [Fact]
     public void Literal_null_document_yields_null()
         => Assert.Null(Config.FromJson("null"));
+
+    /// <summary>Settings clamps what it saves; the load path did not, and a delay above
+    /// int.MaxValue milliseconds makes DispatcherTimer throw - so a timer HasUsableUnlock had
+    /// accepted never armed. A HoldMs of 0 made hold-to-unlock a plain click.</summary>
+    [Fact]
+    public void Hand_edited_delays_are_clamped_to_what_settings_allows()
+    {
+        var cfg = Config.FromJson("""{"Unlock":{"Timer":{"Seconds":99999999},"MouseHold":{"HoldMs":0}}}""");
+        Assert.Equal(Config.TimerCfg.MaxSeconds, cfg!.Unlock.Timer.Seconds);
+        Assert.Equal(Config.MouseHoldCfg.MinHoldMs, cfg.Unlock.MouseHold.HoldMs);
+        Assert.Equal(300, Config.FromJson("""{"Unlock":{"Timer":{"Seconds":300}}}""")!.Unlock.Timer.Seconds);
+    }
+
+    /// <summary>Start-at-sign-in lives in the Run key, not in pawse.json (the stored flag was
+    /// write-only); a file an older build wrote still loads, the key is simply ignored.</summary>
+    [Fact]
+    public void An_old_autostart_key_is_ignored()
+    {
+        var cfg = Config.FromJson("""{"General":{"Autostart":true,"StartLocked":true}}""");
+        Assert.True(cfg!.General.StartLocked);
+        Assert.DoesNotContain("Autostart", cfg.ToJson());
+    }
 }
 
 public class ConfigDefaultsTests

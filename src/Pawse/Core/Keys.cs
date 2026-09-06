@@ -18,6 +18,7 @@ public static class Keys
 
     public const int VK_SPACE = 0x20, VK_ESCAPE = 0x1B, VK_TAB = 0x09;
     public const int VK_RETURN = 0x0D, VK_BACK = 0x08;
+    public const int VK_NUMPAD0 = 0x60, VK_NUMPAD9 = 0x69;
 
     /// <summary>Collapse left/right modifier variants onto one generic code so a
     /// chord like "Ctrl+Shift+U" matches either Ctrl and either Shift.</summary>
@@ -100,18 +101,22 @@ public static class Keys
 
     public static string ChordToText(IEnumerable<string> names) => string.Join("+", names);
 
-    /// <summary>Best-effort VK→character for passphrase matching (letters, digits, space).</summary>
+    /// <summary>Best-effort VK→character for passphrase matching: letters, digits on either the
+    /// top row or the keypad (with NumLock on they arrive as VK_NUMPAD0-9, not as '0'-'9'), and
+    /// space.</summary>
     public static char? TryVkToChar(int vk)
     {
         if (vk is >= 'A' and <= 'Z') return (char)('a' + (vk - 'A'));
         if (vk is >= '0' and <= '9') return (char)vk;
+        if (vk is >= VK_NUMPAD0 and <= VK_NUMPAD9) return (char)('0' + (vk - VK_NUMPAD0));
         if (vk == VK_SPACE) return ' ';
         return null;
     }
 
     /// <summary>True if every character of the passphrase can actually be typed while
-    /// locked - only a-z, 0-9 and space register through the hook (see <see cref="TryVkToChar"/>),
-    /// so a passphrase with any other character could never complete. Empty text is not usable.</summary>
+    /// locked - only a-z, 0-9 (top row or keypad) and space register through the hook (see
+    /// <see cref="TryVkToChar"/>), so a passphrase with any other character could never
+    /// complete. Empty text is not usable.</summary>
     public static bool IsTypeablePassphrase(string? text)
     {
         if (string.IsNullOrEmpty(text)) return false;

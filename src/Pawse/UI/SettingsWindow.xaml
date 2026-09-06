@@ -163,14 +163,15 @@
                                    Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
                         <CheckBox x:Name="ChkBlockScreenKeyboard" Content="Also block on-screen keyboards while locked" />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse makes an on-screen keyboard unclickable anyway.)" />
+                                   Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse stops a mouse-driven on-screen keyboard, but not taps on a touchscreen.)" />
 
                         <TextBlock Text="System keys" Style="{StaticResource SubHeader}" />
                         <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Disables Win+L only while Pawse is locked; restored on unlock. Most PCs need no admin; managed/corporate PCs will prompt to restart Pawse as administrator." />
                         <CheckBox x:Name="ChkLaunchMedia" Content="Block browser / calculator / media keys" />
-                        <TextBlock x:Name="LblFilterStatus" Style="{StaticResource Hint}" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Most of these are already blocked by the lock. This also engages the Windows Keyboard Filter to catch any that bypass the hook - that part needs Enterprise/Education/IoT + admin." />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
 using System.IO;
-using System.Threading;
 
 namespace Pawse.Core;
 
 /// <summary>
-/// Dead-simple file logger. Writes <c>pawse.log</c> NEXT TO THE EXE so it is
-/// trivial to find (the previous app buried it under %LOCALAPPDATA%). Falls back
-/// to %APPDATA%\Pawse only if the exe directory is not writable.
+/// Opt-in, buffered file logger. Resolves <c>pawse.log</c> next to the exe so it is trivial
+/// to find, falling back to %APPDATA%\Pawse when that folder cannot be written; buffers every
+/// line until <see cref="Enable"/> has read Config.General.Logging, then writes on a dedicated
+/// thread - or drops the buffer when the answer is no.
 ///
 /// <para>Writing is done on a dedicated background thread: callers only enqueue a
 /// preformatted line, never touch the file. This matters because <see cref="Info"/>
@@ -109,29 +109,50 @@ public static class Log
         // process token, so an elevated relaunch from e.g. Program Files would
         // otherwise resolve a DIFFERENT directory than the run that launched it -
         // and silently start from defaults, dropping the very settings (Win+L block)
-        // that motivated elevating. Wherever the config already lives, that's home.
+        // that motivated elevating. Wherever the config already lives, that's home -
+        // with two refinements for the per-machine install whose first run was elevated
+        // and so left a pawse.json in Program Files: a file next to the exe that THIS
+        // token cannot write is copied to %APPDATA% once and used from there (or every
+        // later normal run would load it and never manage to save), and when both
+        // places have one, %APPDATA% wins because every token can write it.
         var exeDir = ExeDir();
         var appDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Pawse");
+        var exeConfig = Path.Combine(exeDir, "pawse.json");
+        var appDataConfig = Path.Combine(appDataDir, "pawse.json");
         try
         {
-            if (File.Exists(Path.Combine(exeDir, "pawse.json"))) return exeDir;
-            if (File.Exists(Path.Combine(appDataDir, "pawse.json"))) return appDataDir;
+            if (File.Exists(appDataConfig)) return appDataDir;
+            if (File.Exists(exeConfig))
+            {
+                if (CanWrite(exeDir)) return exeDir;
+                try
+                {
+                    Directory.CreateDirectory(appDataDir);
+                    File.Copy(exeConfig, appDataConfig);
+                    Warn($"pawse.json next to the exe is read-only for this account - copied it to {appDataDir}");
+                }
+                catch { /* best effort; defaults will be written there below */ }
+                return appDataDir;
+            }
         }
         catch { /* fall through to the probe */ }
 
+        if (CanWrite(exeDir)) return exeDir;
+        try { Directory.CreateDirectory(appDataDir); } catch { /* ignore */ }
+        return appDataDir;
+    }
+
+    private static bool CanWrite(string dir)
+    {
         try
         {
-            var probe = Path.Combine(exeDir, ".pawse-write-test");
+            var probe = Path.Combine(dir, ".pawse-write-test");
             File.WriteAllText(probe, "");
             File.Delete(probe);
-            return exeDir;
+            return true;
         }
-        catch
-        {
-            try { Directory.CreateDirectory(appDataDir); } catch { /* ignore */ }
-            return appDataDir;
-        }
+        catch { return false; }
     }
 
     /// <summary>
