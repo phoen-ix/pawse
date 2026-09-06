@@ -63,6 +63,11 @@ installers are built from [`packaging/`](packaging/).
   installer, a portable one replaces its own exe and restarts. Automatic installs decline
   anything that would need administrator rights or a runtime download, and anything pawse.at
   has not vouched for - those still ask. See [Privacy](#privacy).
+  **One manual step for portable copies on v0.8.0 through v0.11.0:** those builds refuse
+  their own self-update ("reports version X.Y.Z.0, not X.Y.Z" - a version-comparison bug
+  fixed in v0.11.1), so update them once by hand: download the new zip, quit Pawse, replace
+  the exe. From v0.11.1 on, Check now takes it from there. Installed copies were never
+  affected.
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on the displays you choose - one, several, or
