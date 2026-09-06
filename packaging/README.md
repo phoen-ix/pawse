@@ -11,7 +11,7 @@ script - the `FULL_ONLY` / `MINIMAL_ONLY` defines pick which:
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
   - **Full** - self-contained `Pawse.exe` (~63 MB, runtime bundled, needs nothing).
-  - **Minimal** - `Pawse-min.exe` (~0.2 MB); needs the **.NET 8 Desktop Runtime (x64)**.
+  - **Minimal** - `Pawse-min.exe` (~0.3 MB); needs the **.NET 8 Desktop Runtime (x64)**.
 
 Wherever the minimal build is deployed, the installer ensures the .NET 8 Desktop Runtime
 via `winget` (else points to the download page); the all-in-one build skips that code
@@ -53,7 +53,18 @@ even an administrator arrives unelevated — re-launches `$INSTDIR\uninstall.exe
 uninstallers from a copy in `$TEMP`, which is not the one to re-launch. If UAC is declined
 it explains what is needed instead of failing one delete at a time.
 
-Silent runs never elevate: `/S` with a non-admin token simply installs per-user.
+Silent runs never elevate: `/S` with a non-admin token installs per-user. `/S /AllUsers` from
+a non-admin token - or a silent upgrade of an existing per-machine install - exits with code 2
+instead of half-installing into Program Files; a deployment script is expected to run those
+elevated. (`/CurrentUser` and `/AllUsers` are parsed by the script itself, after it has
+worked out the real account type: stock MultiUser parses them first and answers an
+unelevated `/AllUsers` with a message box that has no silent default.)
+
+The uninstaller works out on its own whether it belongs to a machine-wide install (the
+registered uninstall strings carry no `/AllUsers`, and stock MultiUser would otherwise put
+every token into per-user mode): an HKLM entry naming its own folder switches it to all-users,
+so an unelevated launch from "Installed apps" hands off to an elevated copy and an elevated
+one removes the common Start Menu shortcut and the HKLM entry.
 
 ## Closing a running Pawse
 

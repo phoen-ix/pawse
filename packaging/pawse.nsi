@@ -61,13 +61,15 @@ BrandingText "${APP} ${VERSION}${VARIANT}"
 ; ---- per-user / per-machine ----
 !define MULTIUSER_EXECUTIONLEVEL Highest
 !define MULTIUSER_MUI
-!define MULTIUSER_INSTALLMODE_COMMANDLINE
+; No MULTIUSER_INSTALLMODE_COMMANDLINE: /CurrentUser and /AllUsers are parsed by hand in
+; .onInit, AFTER the privilege fib there. Stock MultiUser parses them inside MULTIUSER_INIT
+; and answers an unelevated /AllUsers with an MB_OK box that has no silent default, then
+; quits with exit code 0 - so "/S /AllUsers" from a normal shell hung on a dialog nobody
+; could see and then reported success having installed nothing.
 !define MULTIUSER_USE_PROGRAMFILES64
 !define MULTIUSER_INSTALLMODE_INSTDIR "${APP}"
-; Previous-install detection must read the key -Core actually writes (and the
-; uninstaller deletes) - a bare "${APP}" here would probe a key nobody creates.
-!define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY "${UNINST_KEY}"
-!define MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_VALUENAME "UninstallString"
+; Previous-install detection is done by hand in .onInit (ReadRegStr on ${UNINST_KEY}): stock
+; MultiUser.nsh has no define that reads the key -Core writes.
 ; Install for the current user unless the user asks otherwise - without this MultiUser
 ; preselects per-machine for anyone holding an admin token.
 !define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
@@ -135,7 +137,7 @@ Function BuildPageCreate
   Pop $0
   ${NSD_CreateRadioButton} 0 40u 100% 12u "Full - runtime bundled (~63 MB). Just works, nothing to install."
   Pop $RbFull
-  ${NSD_CreateRadioButton} 0 56u 100% 12u "Minimal - tiny (~0.2 MB). Needs .NET 8 Desktop Runtime (installed via winget if missing)."
+  ${NSD_CreateRadioButton} 0 56u 100% 12u "Minimal - tiny (~0.3 MB). Needs .NET 8 Desktop Runtime (installed via winget if missing)."
   Pop $RbMin
   ${If} $BuildChoice == "min"
     ${NSD_Check} $RbMin
@@ -157,6 +159,24 @@ FunctionEnd
 
 Function un.onInit
   !insertmacro MULTIUSER_UNINIT
+  ; Stock MultiUser decides the mode from the account type alone - and with
+  ; MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER that is CurrentUser for EVERY token: the
+  ; registered uninstall strings carry no /AllUsers, and there is no DEFAULT_REGISTRY_KEY
+  ; define to consult. Left like that, the handoff below never fired: a machine-wide
+  ; uninstall from "Installed apps" ran as the user, failed every Delete under Program Files
+  ; and the HKLM key silently, and reported success. So work out which install this
+  ; uninstaller belongs to: an HKLM entry naming our own folder means machine-wide, and the
+  ; mode (hence SHCTX and the common-folder shortcuts) has to follow. Assigned directly -
+  ; un.MultiUser.InstallMode.AllUsers refuses on a User token, and asInvoker makes us one.
+  ; (HKLM is read in this 32-bit exe's redirected view - the view the install wrote to.)
+  ReadRegStr $0 HKCU "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 != "$INSTDIR"
+    ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+    ${If} $0 == "$INSTDIR"
+      StrCpy $MultiUser.InstallMode AllUsers
+      SetShellVarContext all
+    ${EndIf}
+  ${EndIf}
   ; A machine-wide Pawse lives under Program Files with its ARP entry in HKLM - neither is
   ; removable without admin. "highest" hands a standard user their own token and no prompt,
   ; so say what's needed up front instead of failing one delete at a time and leaving a
@@ -613,8 +633,8 @@ SectionEnd
 
 ; No "start at login" section: under an elevated per-machine install it would write the
 ; *admin's* HKCU Run key, not the target user's (the same reason LaunchApp shells through
-; Explorer). The app itself owns autostart - Settings → "Start Pawse at login" writes the
-; same Run value as the signed-in user (Core/Autostart.cs).
+; Explorer). The app itself owns autostart - Settings → General → "Start Pawse when I sign in
+; to Windows" writes the same Run value as the signed-in user (Core/Autostart.cs).
 
 ; placed after the sections so ${SEC_DESK} is defined
 Function .onInit
@@ -633,6 +653,26 @@ Function .onInit
   ${If} $RealPrivileges != "Admin"
   ${AndIf} $RealPrivileges != "Power"
     StrCpy $MultiUser.Privileges "Admin"
+  ${EndIf}
+
+  Push $R0
+  Push $R1
+  ${GetParameters} $R0
+
+  ; /CurrentUser and /AllUsers, by hand and after the fib (see the MultiUser defines above
+  ; for why not MULTIUSER_INSTALLMODE_COMMANDLINE). A non-admin's /AllUsers is accepted here
+  ; and then either elevated from the mode page (ElevateForAllUsers) or, silently, refused
+  ; with exit code 2 by the guard below. Same order as stock MultiUser: /CurrentUser first,
+  ; so /AllUsers wins when both are given.
+  ClearErrors
+  ${GetOptions} $R0 "/CurrentUser" $R1
+  ${IfNot} ${Errors}
+    Call MultiUser.InstallMode.CurrentUser
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R0 "/AllUsers" $R1
+  ${IfNot} ${Errors}
+    Call MultiUser.InstallMode.AllUsers
   ${EndIf}
 
   ; Upgrade in place. Making per-user the default (v0.3.1) means a machine already carrying
@@ -661,8 +701,8 @@ Function .onInit
     Quit
   ${EndIf}
 
-  ; MULTIUSER_INSTALLMODE_INSTALL_REGISTRY_KEY is inert in stock MultiUser.nsh, so do what
-  ; it advertises: upgrade over the previous copy instead of relocating a custom-directory
+  ; Stock MultiUser.nsh has no previous-install detection for the key -Core writes, so do it
+  ; by hand: upgrade over the previous copy instead of relocating a custom-directory
   ; install into the default folder. Interactively that was only cosmetic - the user sees the
   ; directory page and can correct it - but a silent upgrade has no page, so it would orphan
   ; the old folder (pawse.json, uninstall.exe and all) and leave the Run key pointing at a
@@ -681,10 +721,7 @@ Function .onInit
   ; /NORUNTIME - never provision the .NET runtime. EnsureDotnet's prompt defaults to Yes under
   ; /S so a scripted deploy works unattended, but an automatic UPDATE must not pull ~55 MB
   ; machine-wide without anyone agreeing to it. Pawse passes this on every silent update.
-  Push $R0
-  Push $R1
   StrCpy $RestartApp "0"
-  ${GetParameters} $R0
   ClearErrors
   ${GetOptions} $R0 "/RESTART" $R1
   ${IfNot} ${Errors}
