@@ -205,7 +205,13 @@ public sealed class LockController
 
             if (!_suppressLockHotkey && _lockHotkey != null && _lockHotkey.Feed(_pressed, nv, isDown))
             {
-                Engage("hotkey");
+                // EngageCore, not Engage: the prune above ran with this key exempt (its async
+                // state is not updated yet), and pruning again without the exemption would evict
+                // it - so it would not count as stale, and its autorepeat could complete the
+                // unlock chord. ClearModifiers runs on this thread, the hook's own, where it
+                // cannot wait on anyone.
+                EngageCore("hotkey");
+                _clearModifiers();             // fast; kills stuck-modifier / zoom-on-scroll bug
                 return true; // swallow the completing key so it doesn't leak to the app
             }
 
@@ -222,34 +228,53 @@ public sealed class LockController
         else Engage("toggle");
     }
 
+    /// <summary>Lock, from anywhere but the hook callback (tray, StartLocked, tests). Reconciles
+    /// the held set against the OS first: between key events nothing prunes it, so a Win+L whose
+    /// key-ups happened on the secure desktop and a Windows Hello unlock quicker than the 5 s
+    /// desktop-switch tick leave phantoms behind - and once locked they are frozen in, where the
+    /// exact-match unlock chord can never equal the held set again.</summary>
     public void Engage(string source)
     {
         lock (_gate)
         {
             if (_isLocked) return;
-            _isLocked = true;
-            // Held and stale are logged because between them they decide whether the unlock
-            // chord can match at all: the chord matches EXACTLY, so a phantom left in
-            // _pressed blocks it outright, and a key stuck in _staleSinceEngage makes every
-            // later press of it skip both matchers. Neither is visible any other way.
-            Log.Info($"LOCK engaged (source={source}) held={Describe(_pressed)}");
-            _clearModifiers();             // fast; kills stuck-modifier / zoom-on-scroll bug
-            _staleSinceEngage.Clear();
-            _staleReported.Clear();
-            _staleSinceEngage.UnionWith(_pressed); // their autorepeat must not feed the matchers
-            if (_staleSinceEngage.Count > 0)
-                Log.Info($"lock: ignoring repeats of {Describe(_staleSinceEngage)} until released");
-            // _pressed is NOT cleared: it is what the user is physically holding, and while
-            // locked nothing else can tell us (see the pruning note in OnKeyboard). Priming
-            // the chord instead of resetting it is what keeps a held Ctrl+L from unlocking
-            // the moment it autorepeats - an already-satisfied chord must be broken first.
-            _unlockChord?.Prime(_pressed);
-            _passphrase?.Reset();
-            // Inside the lock on purpose: raised after release, a hook-thread transition
-            // squeezing into that gap could get its notification out first and the UI
-            // would end up showing the stale state (see the class doc).
-            RaiseLocked(true);
+            PruneReleased(exceptNv: -1);
+            EngageCore(source);
         }
+        // Outside the lock: SendInput from a thread other than the hook's waits for the hook
+        // thread to see the injected events, and that thread may be waiting for _gate on a real
+        // key that arrived at the same instant - a wait cycle that runs out the low-level hook
+        // timeout and leaks the key. The injected key-ups never touch state (OnKeyboard passes
+        // them through before taking the lock), so the order does not matter.
+        _clearModifiers();
+    }
+
+    /// <summary>The state flip itself. Caller holds <see cref="_gate"/>; the hook path calls
+    /// this directly, everyone else goes through <see cref="Engage"/>.</summary>
+    private void EngageCore(string source)
+    {
+        if (_isLocked) return;
+        _isLocked = true;
+        // Held and stale are logged because between them they decide whether the unlock
+        // chord can match at all: the chord matches EXACTLY, so a phantom left in
+        // _pressed blocks it outright, and a key stuck in _staleSinceEngage makes every
+        // later press of it skip both matchers. Neither is visible any other way.
+        Log.Info($"LOCK engaged (source={source}) held={Describe(_pressed)}");
+        _staleSinceEngage.Clear();
+        _staleReported.Clear();
+        _staleSinceEngage.UnionWith(_pressed); // their autorepeat must not feed the matchers
+        if (_staleSinceEngage.Count > 0)
+            Log.Info($"lock: ignoring repeats of {Describe(_staleSinceEngage)} until released");
+        // _pressed is NOT cleared: it is what the user is physically holding, and while
+        // locked nothing else can tell us (see the pruning note in OnKeyboard). Priming
+        // the chord instead of resetting it is what keeps a held Ctrl+L from unlocking
+        // the moment it autorepeats - an already-satisfied chord must be broken first.
+        _unlockChord?.Prime(_pressed);
+        _passphrase?.Reset();
+        // Inside the lock on purpose: raised after release, a hook-thread transition
+        // squeezing into that gap could get its notification out first and the UI
+        // would end up showing the stale state (see the class doc).
+        RaiseLocked(true);
     }
 
     public void Disengage(string source)
@@ -259,16 +284,24 @@ public sealed class LockController
             if (!_isLocked) return;
             _isLocked = false;
             Log.Info($"UNLOCK ({source})");
-            _clearModifiers();
-            // Clearing is truthful here: ClearModifiers has just made the OS-level modifier
-            // state "up", so the foreground app holds nothing either. Real keys still held
-            // announce themselves again on their next event.
+            // Re-arm the lock hotkey against what is held right now. Its edge latch was set by
+            // the press that locked (or is stale from before), and while locked it is never
+            // fed - so a single-key hotkey such as F12 would otherwise be ignored on its first
+            // press after a tray, timer or hold unlock (and, unlocked, reach the app). Priming
+            // rather than resetting keeps a hotkey that is still physically held latched, so
+            // its autorepeat cannot lock again on its own.
+            _lockHotkey?.Prime(_pressed);
+            // Clearing is truthful here: ClearModifiers (below, outside the lock) makes the
+            // OS-level modifier state "up", so the foreground app holds nothing either. Real
+            // keys still held announce themselves again on their next event, and while
+            // unlocked every event reconciles against the OS anyway.
             _pressed.Clear();
             _leakedDown.Clear();
             _staleSinceEngage.Clear();
             _staleReported.Clear();
             RaiseLocked(false); // inside the lock - see Engage
         }
+        _clearModifiers();      // outside the lock - see Engage
     }
 
     /// <summary>

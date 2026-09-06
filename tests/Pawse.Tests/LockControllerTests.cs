@@ -147,6 +147,45 @@ public class LockControllerTests
         Assert.False(h.Controller.IsLocked); // a lone L must not complete the lock hotkey
     }
 
+    /// <summary>Win+L, then a Windows Hello unlock quicker than the desktop-switch tick: both
+    /// key-downs passed through, both key-ups happened on the secure desktop where no hook of
+    /// ours runs. Locking from the TRAY - no key event in between, so nothing pruned - used to
+    /// freeze those phantoms into the lock, where the exact-match unlock chord could never equal
+    /// the held set again.</summary>
+    [Fact]
+    public void Locking_from_the_tray_forgets_keys_the_OS_says_are_up()
+    {
+        var h = new Harness();
+        h.Send(Keys.VK_LWIN, true);
+        h.Send(L, true);
+        h.OsDown.Clear();                 // released on the secure desktop - we never saw the ups
+
+        h.Controller.Engage("toggle");    // the tray click
+
+        h.Send(Keys.VK_LCONTROL, true);
+        h.Send(L, true);
+        Assert.False(h.Controller.IsLocked);
+    }
+
+    /// <summary>A single-key lock hotkey after a tray unlock. The edge latch that keeps a held
+    /// hotkey from re-locking used to stay set across the unlock (while locked the hotkey is
+    /// never fed), so the first press was ignored - and, unlocked, delivered to the app.</summary>
+    [Fact]
+    public void A_single_key_lock_hotkey_works_on_its_first_press_after_a_tray_unlock()
+    {
+        const int F12 = 0x7B;
+        var config = new Config();
+        config.LockHotkey.Keys = new() { "F12" };
+        var h = new Harness(config);
+
+        h.Tap(F12);
+        Assert.True(h.Controller.IsLocked);
+        h.Controller.Disengage("toggle");
+
+        Assert.True(h.Send(F12, true));   // locks again, and the completing key is swallowed
+        Assert.True(h.Controller.IsLocked);
+    }
+
     [Fact]
     public void Locked_keys_are_swallowed_but_a_leaked_key_up_gets_through()
     {

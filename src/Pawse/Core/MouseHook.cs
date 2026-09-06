@@ -25,26 +25,31 @@ public sealed class MouseHook : IDisposable
         _proc = Proc;
     }
 
-    public bool Install(bool quiet = false)
+    public bool Install()
     {
-        IntPtr hMod = NativeMethods.GetModuleHandleW(null);
-        _hook = NativeMethods.SetWindowsHookExW(NativeMethods.WH_MOUSE_LL, _proc, hMod, 0);
+        _hook = Hook();
         if (_hook == IntPtr.Zero)
         {
-            if (!quiet) Log.Error($"mouse hook install FAILED (err={Marshal.GetLastWin32Error()})");
+            Log.Error($"mouse hook install FAILED (err={Marshal.GetLastWin32Error()})");
             return false;
         }
-        if (!quiet) Log.Info("mouse hook installed");
+        Log.Info("mouse hook installed");
         return true;
     }
 
-    /// <summary>See <see cref="KeyboardHook.Reinstall"/>.</summary>
+    /// <summary>See <see cref="KeyboardHook.Reinstall"/>: new hook first, old handle second.</summary>
     public bool Reinstall()
     {
-        if (_hook != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(_hook);
-        _hook = IntPtr.Zero;
-        return Install(quiet: true);
+        IntPtr fresh = Hook();
+        if (fresh == IntPtr.Zero) return false;   // keep whatever we had
+        IntPtr old = _hook;
+        _hook = fresh;
+        if (old != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(old);
+        return true;
     }
+
+    private IntPtr Hook() =>
+        NativeMethods.SetWindowsHookExW(NativeMethods.WH_MOUSE_LL, _proc, NativeMethods.GetModuleHandleW(null), 0);
 
     private IntPtr Proc(int nCode, IntPtr wParam, IntPtr lParam)
     {

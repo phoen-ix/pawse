@@ -1,5 +1,3 @@
-using System.Threading;
-
 namespace Pawse.Core;
 
 /// <summary>
@@ -44,12 +42,20 @@ public sealed class HookThread
     private MouseHook? _mouse;
     private bool _installOk;
     private bool _rehookFailureLogged;
+    private bool _keyboardAlive = true;
     private bool _wasAwayFromInputDesktop;
 
     public HookThread(LockController controller) => _controller = controller;
 
-    /// <summary>Start the thread and install both hooks on it. Returns the
-    /// keyboard hook's install result - without it locking must stay disabled.</summary>
+    /// <summary>Raised on the hook thread when the keyboard hook's periodic re-registration
+    /// first fails (false) and when it recovers (true). The old hook is kept on a failure, but
+    /// whether the OS still honours it cannot be known - and a lock that says "locked" while
+    /// swallowing nothing is the one failure the user must hear about, so App tells them.</summary>
+    public event Action<bool>? KeyboardHookAlive;
+
+    /// <summary>Start the thread and install the keyboard hook on it (the mouse hook follows
+    /// BlockMouse - see <see cref="SyncMouse"/>). Returns the keyboard hook's install result -
+    /// without it locking must stay disabled.</summary>
     public bool Start()
     {
         _thread = new Thread(Run) { IsBackground = true, Name = "Pawse hooks" };
@@ -156,21 +162,29 @@ public sealed class HookThread
     private void Rehook()
     {
         // Silent on success - this runs every few seconds for the process lifetime.
-        bool ok = _kb!.Reinstall() & (_mouse?.Reinstall() ?? true);
-        if (!ok)
+        bool keyboard = _kb!.Reinstall();
+        bool mouse = _mouse?.Reinstall() ?? true;
+        if (!keyboard || !mouse)
         {
             if (!_rehookFailureLogged)
             {
                 _rehookFailureLogged = true;
-                Log.Error("periodic hook re-registration FAILED - will keep retrying");
+                Log.Error($"periodic hook re-registration FAILED (keyboard={keyboard} mouse={mouse}) - will keep retrying");
             }
         }
         else if (_rehookFailureLogged)
         {
             _rehookFailureLogged = false;
-            // We were blind for at least a tick: key-ups may have come and gone unseen.
+            // We may have been blind for at least a tick: key-ups may have come and gone unseen.
             _controller.ForgetHeldKeys();
             Log.Info("periodic hook re-registration recovered");
+        }
+        // The keyboard hook is the lock; its health is the one worth telling the user about.
+        if (keyboard != _keyboardAlive)
+        {
+            _keyboardAlive = keyboard;
+            try { KeyboardHookAlive?.Invoke(keyboard); }
+            catch (Exception ex) { Log.Error("KeyboardHookAlive handler", ex); }
         }
     }
 }

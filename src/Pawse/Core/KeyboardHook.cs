@@ -22,27 +22,37 @@ public sealed class KeyboardHook : IDisposable
         _proc = Proc;
     }
 
-    public bool Install(bool quiet = false)
+    public bool Install()
     {
-        IntPtr hMod = NativeMethods.GetModuleHandleW(null);
-        _hook = NativeMethods.SetWindowsHookExW(NativeMethods.WH_KEYBOARD_LL, _proc, hMod, 0);
+        _hook = Hook();
         if (_hook == IntPtr.Zero)
         {
-            if (!quiet) Log.Error($"keyboard hook install FAILED (err={Marshal.GetLastWin32Error()})");
+            Log.Error($"keyboard hook install FAILED (err={Marshal.GetLastWin32Error()})");
             return false;
         }
-        if (!quiet) Log.Info("keyboard hook installed");
+        Log.Info("keyboard hook installed");
         return true;
     }
 
-    /// <summary>Unhook + hook again, from the owning thread. The OS removes LL hooks
-    /// it deems slow without telling anyone; this makes removal self-healing.</summary>
+    /// <summary>Hook again, then unhook the old handle - from the owning thread. The OS removes
+    /// LL hooks it deems slow without telling anyone; this makes removal self-healing. New one
+    /// first on purpose: a re-install that FAILS must not take a still-working hook down with
+    /// it, or the lock keeps saying "locked" while blocking nothing. The two never process the
+    /// same key: callbacks for this thread's hooks run on this thread, which is busy in here for
+    /// the whole overlap, and by the time it pumps again the old hook is gone. Unhooking a
+    /// handle the OS already removed just returns false.</summary>
     public bool Reinstall()
     {
-        if (_hook != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(_hook);
-        _hook = IntPtr.Zero;
-        return Install(quiet: true);
+        IntPtr fresh = Hook();
+        if (fresh == IntPtr.Zero) return false;   // keep whatever we had
+        IntPtr old = _hook;
+        _hook = fresh;
+        if (old != IntPtr.Zero) NativeMethods.UnhookWindowsHookEx(old);
+        return true;
     }
+
+    private IntPtr Hook() =>
+        NativeMethods.SetWindowsHookExW(NativeMethods.WH_KEYBOARD_LL, _proc, NativeMethods.GetModuleHandleW(null), 0);
 
     private IntPtr Proc(int nCode, IntPtr wParam, IntPtr lParam)
     {
