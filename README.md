@@ -61,8 +61,8 @@ installers are built from [`packaging/`](packaging/).
   automatically**. An update is downloaded from GitHub Releases and its checksum
   cross-checked against pawse.at before anything runs; an installed copy runs the matching
   installer, a portable one replaces its own exe and restarts. Automatic installs decline
-  anything that would need administrator rights, a runtime download, or a guess about which
-  build you have - those still ask. See [Privacy](#privacy).
+  anything that would need administrator rights or a runtime download, and anything pawse.at
+  has not vouched for - those still ask. See [Privacy](#privacy).
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on the displays you choose - one, several, or
@@ -89,7 +89,8 @@ Blocking **on-screen keyboards** is off by default as well - see
 These live **next to `Pawse.exe`** (falling back to `%APPDATA%\Pawse` only if that
 folder isn't writable):
 
-- `pawse.json` - settings (edit via the Settings window or by hand).
+- `pawse.json` - settings (edit via the Settings window or by hand). Start-at-sign-in is the
+  one setting that is not in here: the Run key is the setting, and Settings reads it from there.
 - `pawse.log` - a plain, timestamped log of what the app did. **Off by default** - switch on
   "Write a log file next to Pawse" in **Settings → General** when something needs explaining.
   It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck

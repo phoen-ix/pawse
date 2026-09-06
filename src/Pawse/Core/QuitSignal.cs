@@ -22,20 +22,6 @@ namespace Pawse.Core;
 /// one - see App.StartupCore. Both need the same thing, which is for the outgoing instance
 /// to run OnExit rather than be killed.</para>
 /// </summary>
-/// <summary>What came of asking a running Pawse to quit.</summary>
-public enum QuitRequest
-{
-    /// <summary>The request was delivered. The instance is on its way out.</summary>
-    Delivered,
-
-    /// <summary>Nobody is listening - no Pawse running, or one built before this channel
-    /// existed.</summary>
-    NoListener,
-
-    /// <summary>A Pawse is running with higher privileges than us, so it cannot be asked.</summary>
-    AccessDenied,
-}
-
 public static class QuitSignal
 {
     /// <summary>Also hard-coded in packaging/pawse.nsi - change both or neither.</summary>
@@ -86,10 +72,8 @@ public static class QuitSignal
         }
     }
 
-    /// <summary>
-    /// Ask a running Pawse to quit. False means nobody is listening - no instance running,
-    /// or one built before this channel existed.
-    /// </summary>
+    /// <summary>Ask a running Pawse to quit. See <see cref="QuitRequest"/> for what each
+    /// answer means.</summary>
     public static QuitRequest Signal() => Signal(EventName);
 
     /// <summary>Test seam - see <see cref="Listen(Action, string)"/>.</summary>
@@ -136,4 +120,18 @@ public static class QuitSignal
             try { _handle.Dispose(); } catch { /* ignore */ }
         }
     }
+}
+
+/// <summary>What came of asking a running Pawse to quit.</summary>
+public enum QuitRequest
+{
+    /// <summary>The request was delivered. The instance is on its way out.</summary>
+    Delivered,
+
+    /// <summary>Nobody is listening - no Pawse running, or one built before this channel
+    /// existed.</summary>
+    NoListener,
+
+    /// <summary>A Pawse is running with higher privileges than us, so it cannot be asked.</summary>
+    AccessDenied,
 }

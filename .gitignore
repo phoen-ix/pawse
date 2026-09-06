@@ -12,5 +12,6 @@ publish/
 # Local build artifacts downloaded from CI
 dist/
 
-# Installers handed over for release upload (dropped in the repo root, then deleted)
+# Installer output moved to the repo root (release.yml does this on the runner; a local
+# packaging/build.* run is covered by packaging/.gitignore)
 Pawse-Setup-*.exe

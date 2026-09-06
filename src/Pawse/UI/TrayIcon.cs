@@ -1,11 +1,10 @@
-using System.Windows.Forms;
 using Timer = System.Windows.Forms.Timer; // implicit usings also bring System.Threading.Timer
 
 namespace Pawse.UI;
 
 /// <summary>
-/// System tray icon using WinForms <see cref="NotifyIcon"/> - event-driven, so
-/// (unlike the previous render-loop tray) it can never freeze. Left-click locks;
+/// System tray icon using WinForms <see cref="NotifyIcon"/> - event-driven, so it
+/// can never freeze. Left-click locks;
 /// while locked a DOUBLE-click unlocks and a lone click only shows a hint, so a
 /// stray paw-click on the tray can't undo the lock with zero friction (the user
 /// can switch back to the classic single-click toggle, see
