@@ -4,20 +4,24 @@
     <!-- Must match Pawse.csproj's TFM to reference it. Compiles anywhere via
          EnableWindowsTargeting; the WindowsDesktop runtime only exists on Windows,
          so the tests EXECUTE on the Windows CI job (ci.yml). -->
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- net10.0 audits the whole transitive closure, not just direct references, and this
+         project's closure is mostly Test.Sdk's. Without this, an advisory against something
+         four levels down turns a green build red with no change of our own. -->
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>

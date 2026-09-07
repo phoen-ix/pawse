@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -31,14 +31,24 @@
     <!-- We set PerMonitorV2 DPI awareness in app.manifest (WPF needs process-level
          awareness for the overlay's physical-pixel placement). The WinForms analyzer
          flags the manifest DPI settings, but since we boot through WPF and never call
-         SetHighDpiMode there is no conflict - suppress that one warning. -->
-    <NoWarn>WFAC010</NoWarn>
+         SetHighDpiMode there is no conflict - suppress that one warning.
+         Both IDs on purpose: the analyzer ships in the Microsoft.WindowsDesktop.App.Ref
+         targeting pack, so the ID is versioned by the TFM - WFAC010 up to net8.0, renamed
+         to WFO0003 from net9.0 on. Dropping either one breaks a build on that TFM, and
+         TreatWarningsAsErrors below turns the miss into an error rather than a warning. -->
+    <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
+
+    <!-- net10.0 flips NuGetAuditMode from "direct" to "all", so restore starts reporting
+         advisories against the whole transitive closure. With TreatWarningsAsErrors that
+         would turn an advisory published by a third party into a red build on a day nobody
+         touched this repo. Keep the audit (it is worth seeing) but as a warning. -->
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- WMI, used only for the Keyboard Filter block (browser/calculator/media keys) in
          Core/KeyboardFilterGuard.cs. Windows-only at runtime; restores fine on Linux. -->
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.Management" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>

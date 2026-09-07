@@ -137,7 +137,7 @@ public static class UpdateCheck
     /// neither, or an installed Pawse starts reading as portable.</summary>
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pawse";
 
-    /// <summary>The self-contained exe is ~63 MB, the launcher ~0.2 MB - anything in
+    /// <summary>The self-contained exe is ~66 MB, the launcher ~0.7 MB - anything in
     /// between is a build nobody ships, so the midpoint is a safe divider. Only a fallback
     /// now: installs made by a current installer record BuildVariant instead.</summary>
     internal const long FullBuildMinBytes = 20L * 1024 * 1024;
@@ -714,7 +714,7 @@ public static class UpdateCheck
     }
 
     /// <summary>Copy <paramref name="source"/> to <paramref name="destination"/>, hashing the
-    /// bytes as they pass - the ~58 MB file is read from the network once and from disk never.
+    /// bytes as they pass - the ~61 MB file is read from the network once and from disk never.
     /// Returns the lowercase hex SHA-256.</summary>
     internal static async Task<string> CopyAndHashAsync(Stream source, Stream destination, CancellationToken ct)
     {

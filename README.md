@@ -5,7 +5,7 @@ keyboard so a cat walking across it can't wreak havoc, close your work, or leave
 a modifier "stuck". Unlock it deliberately - a chord, a passphrase, a
 hold-to-unlock button, or an auto-timer.
 
-This is a native Windows app (C# / .NET 8, WPF + a WinForms tray).
+This is a native Windows app (C# / .NET 10, WPF + a WinForms tray).
 
 ## Install
 
@@ -27,14 +27,14 @@ and asks you nothing about builds.
 
 | Installer | Size | Needs anything installed? |
 | --- | --- | --- |
-| **`Pawse-Setup-<version>-full.exe`** | ~58 MB | **No** - all-in-one, the runtime is inside. |
-| **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), fetched via `winget` if it's missing. |
-| **`Pawse-Setup-<version>.exe`** | ~58 MB | It asks which of the two builds above to install. |
+| **`Pawse-Setup-<version>-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. |
+| **`Pawse-Setup-<version>-min.exe`** | ~0.6 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched via `winget` if it's missing. |
+| **`Pawse-Setup-<version>.exe`** | ~61 MB | It asks which of the two builds above to install. |
 
 | Portable | Size | Needs anything installed? |
 | --- | --- | --- |
-| **`Pawse-<version>.zip`** → `Pawse.exe` | ~58 MB zipped (63 MB unzipped) | **No** - the runtime is bundled. Just run it. |
-| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64), installed once. |
+| **`Pawse-<version>.zip`** → `Pawse.exe` | ~61 MB zipped (66 MB unzipped) | **No** - the runtime is bundled. Just run it. |
+| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once. |
 
 Same app in every row. `Pawse.exe` is self-contained (bundled + compressed);
 `Pawse-min.exe` is a tiny launcher that reuses a runtime you install once. Every
@@ -68,6 +68,14 @@ installers are built from [`packaging/`](packaging/).
   fixed in v0.11.1), so update them once by hand: download the new zip, quit Pawse, replace
   the exe. From v0.11.1 on, Check now takes it from there. Installed copies were never
   affected.
+  **One manual step for minimal copies updating from v0.11.1 or earlier:** the minimal
+  build now needs the **.NET 10** Desktop Runtime instead of .NET 8. Install it first
+  (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
+  [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update. An
+  installed minimal copy will decline the automatic update until the runtime is there and
+  tell you so; a **portable** minimal copy cannot check, so install the runtime *before*
+  you press Check now - or switch to the full build, which needs nothing. Full and
+  portable-full copies are unaffected and update as usual.
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 
 While locked, a small floating popup shows on the displays you choose - one, several, or

@@ -262,30 +262,31 @@
     <p class="intro">Windows 10 or 11, 64-bit. <b>Not sure which? Take the all-in-one installer</b> - it carries everything and asks you nothing. Nothing here needs administrator rights unless you choose to install for every account on the PC.</p>
     <!-- Every row links to releases/latest rather than a versioned asset: GitHub resolves
          that to the newest release, so nothing here needs touching on release day. The
-         filenames keep the x.y.z placeholder for the same reason; sizes track v0.10.0. -->
+         filenames keep the x.y.z placeholder for the same reason; sizes measured on the
+         first .NET 10 build. -->
     <div class="rows">
       <a class="row pick" href="https://github.com/phoen-ix/pawse/releases/latest">
-        <span class="name">Pawse-Setup-x.y.z-full.exe</span><span class="chip rec">Recommended · ~58 MB</span>
+        <span class="name">Pawse-Setup-x.y.z-full.exe</span><span class="chip rec">Recommended · ~61 MB</span>
         <span class="what">All-in-one installer. The .NET runtime is inside; nothing else to install.</span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
-        <span class="name">Pawse-Setup-x.y.z-min.exe</span><span class="chip">~0.5 MB</span>
-        <span class="what">Tiny installer. Needs the .NET 8 Desktop Runtime, which it fetches for you if it's missing.</span>
+        <span class="name">Pawse-Setup-x.y.z-min.exe</span><span class="chip">~0.6 MB</span>
+        <span class="what">Tiny installer. Needs the .NET 10 Desktop Runtime, which it fetches for you if it's missing.</span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
-        <span class="name">Pawse-Setup-x.y.z.exe</span><span class="chip">~58 MB</span>
+        <span class="name">Pawse-Setup-x.y.z.exe</span><span class="chip">~61 MB</span>
         <span class="what">Carries both builds and asks which one to install.</span>
       </a>
     </div>
     <p class="sub">Or stay portable</p>
     <div class="rows">
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
-        <span class="name">Pawse-x.y.z.zip</span><span class="chip">~58 MB</span>
+        <span class="name">Pawse-x.y.z.zip</span><span class="chip">~61 MB</span>
         <span class="what">Unzip, run <code>Pawse.exe</code>. Self-contained; settings (and the optional log) live in the same folder.</span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-x.y.z-min.zip</span><span class="chip">~0.3 MB</span>
-        <span class="what">The small launcher. Needs the .NET 8 Desktop Runtime installed once.</span>
+        <span class="what">The small launcher. Needs the .NET 10 Desktop Runtime installed once.</span>
       </a>
     </div>
     <p class="note">Already have Pawse? <b>Settings → About → Check now</b> offers the new version and installs it for you - that's the only time Pawse goes online, unless you move the update setting up a level. It checks GitHub for the newest release and cross-checks the download's checksum against pawse.at. Every release is built and published by CI, with a <code>SHA256SUMS.txt</code> covering all five downloads. Windows may mark a downloaded file as blocked - if an exe won't start, right-click it (or the zip) → <b>Properties → Unblock</b> first. Installing or uninstalling asks a running Pawse to quit properly, so anything it blocked is always put back.</p>
@@ -308,7 +309,7 @@
   </section>
 
   <footer>
-    <span><svg class="paw" viewBox="0 0 256 256"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 8. MIT-licensed.</span>
+    <span><svg class="paw" viewBox="0 0 256 256"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 10. MIT-licensed.</span>
     <span>© 2026 · <a href="https://pawse.at">pawse.at</a></span>
   </footer>
 </main>

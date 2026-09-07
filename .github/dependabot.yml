@@ -1,0 +1,35 @@
+# Nothing watched these pins before: the test packages sat two majors behind for ~24 months
+# and only surfaced during the .NET 10 upgrade. Actions are pinned to commit SHAs, which is
+# the right call for supply-chain reasons but means a human has to notice a new release -
+# so let Dependabot be that human.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      # ci: keeps these out of the release bump inference in release.yml - an action bump
+      # must not cut a release on its own.
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+    groups:
+      # The three test packages move together; a lone runner bump is rarely useful.
+      test-stack:
+        patterns:
+          - Microsoft.NET.Test.Sdk
+          - xunit
+          - xunit.*
+    ignore:
+      # Deliberate: xunit v3 is a separate package set and a migration, not an update.
+      - dependency-name: xunit
+        update-types: [version-update:semver-major]

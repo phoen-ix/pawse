@@ -35,7 +35,7 @@ public partial class App : Application
     private UpdatePlan? _pendingUpdate;
 
     /// <summary>Cancels anything still in flight when Pawse quits - notably a part-finished
-    /// 58 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
+    /// 61 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
     private readonly CancellationTokenSource _shutdown = new();
 
     internal static readonly string Version =
@@ -768,7 +768,7 @@ public partial class App : Application
         bool silent = unattended && UpdateCheck.DetectScope() != InstallScope.PerMachine;
         // /RESTART because a silent install never reaches the finish page, so nothing would
         // bring the tray paw back. /NORUNTIME because EnsureDotnet's prompt defaults to Yes
-        // under /S, and an update must not pull ~55 MB of runtime machine-wide on that default
+        // under /S, and an update must not pull ~57 MB of runtime machine-wide on that default
         // - the wizard asks that question properly, so the interactive path doesn't need it.
         string args = silent ? "/S /RESTART /NORUNTIME" : "";
         try

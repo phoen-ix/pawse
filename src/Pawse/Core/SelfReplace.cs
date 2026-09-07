@@ -37,7 +37,7 @@ public static class SelfReplace
     internal const string StagedSuffix = ".new";
     internal const string PreviousSuffix = ".old";
 
-    /// <summary>A Pawse exe is ~63 MB at the very most; a zip claiming far more is not one of
+    /// <summary>A Pawse exe is ~66 MB at the very most; a zip claiming far more is not one of
     /// ours, and unpacking it could fill the disk pawse.json lives on.</summary>
     private const long MaxExeBytes = 200L * 1024 * 1024;
 

@@ -19,9 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: '8.0.x'
+          # The SDK is chosen by global.json, not here: setup-dotnet installs ALONGSIDE
+          # what the runner image ships and `dotnet` then picks the newest one, so a bare
+          # dotnet-version pins nothing and a new image could swap the SDK under the build.
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore Pawse.sln
@@ -82,9 +85,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: '8.0.x'
+          # The SDK is chosen by global.json, not here: setup-dotnet installs ALONGSIDE
+          # what the runner image ships and `dotnet` then picks the newest one, so a bare
+          # dotnet-version pins nothing and a new image could swap the SDK under the build.
+          global-json-file: global.json
 
       # The exact publishes release.yml runs (minus the version), so a publish-only break is
       # caught here instead of shipping as a broken release after merge - and the exe this job
@@ -108,7 +114,7 @@ jobs:
           Copy-Item publish-min/Pawse.exe  packaging/Pawse-min.exe -Force
           # A silent run deploys the FULL build ($BuildChoice defaults to "full" in .onInit), so
           # the minimal exe rides along for the File directive but is never unpacked here - it
-          # would have winget pull the ~55 MB .NET runtime onto the runner.
+          # would have winget pull the ~57 MB .NET runtime onto the runner.
           # From inside packaging/, so OutFile lands next to the script.
           Push-Location packaging
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /WX /V2 /DVERSION=0.0.0 pawse.nsi

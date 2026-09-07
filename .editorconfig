@@ -1,0 +1,37 @@
+# Pins what `dotnet format --verify-no-changes --severity warn` (ci.yml) enforces.
+#
+# Without this file dotnet format falls back to the SDK's built-in defaults, which move
+# with the Roslyn inside whatever SDK the runner image happens to ship - so CI could go
+# red on code nobody touched, with no diff in this repo to explain it. global.json pins
+# the SDK; this pins the rule set that SDK applies.
+#
+# Deliberately no `dotnet_diagnostic.*.severity` / style severities: the settings below
+# describe what the code already is, so the gate stays a formatting check rather than a
+# lint that has to be argued with. Add a severity here only together with the pass that
+# makes the tree satisfy it.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+# Tab-indented by convention, and Visual Studio rewrites it if told otherwise.
+[*.sln]
+indent_style = tab
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+[*.{cs,xaml}]
+# Matches the tree as it stands: file-scoped namespaces, no BOM, LF, final newline.
+# Verified across every tracked .cs/.xaml at the time of the .NET 10 upgrade.
+csharp_style_namespace_declarations = file_scoped
