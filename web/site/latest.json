@@ -1,7 +1,7 @@
 {
   "version": "0.12.0",
   "notes": "https://github.com/phoen-ix/pawse/releases/tag/v0.12.0",
-  "auto": true,
+  "auto": false,
   "installers": {
     "full": {
       "url": "https://github.com/phoen-ix/pawse/releases/download/v0.12.0/Pawse-Setup-0.12.0-full.exe",
