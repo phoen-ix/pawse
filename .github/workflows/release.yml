@@ -254,7 +254,7 @@ jobs:
             | Installer | Download size | Needs anything installed? |
             | --- | --- | --- |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. Installs straight away. |
-            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.6 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched for you if missing. |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched for you if missing. |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~61 MB | It asks you which of the two builds above to install. |
 
             **Or stay portable** - unzip and run the exe inside, nothing is written outside its folder:

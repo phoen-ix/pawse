@@ -28,7 +28,7 @@ and asks you nothing about builds.
 | Installer | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-Setup-<version>-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. |
-| **`Pawse-Setup-<version>-min.exe`** | ~0.6 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched via `winget` if it's missing. |
+| **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched via `winget` if it's missing. |
 | **`Pawse-Setup-<version>.exe`** | ~61 MB | It asks which of the two builds above to install. |
 
 | Portable | Size | Needs anything installed? |

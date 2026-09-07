@@ -6,7 +6,7 @@ script - the `FULL_ONLY` / `MINIMAL_ONLY` defines pick which:
 - **`Pawse-Setup-<version>-full.exe`** (all-in-one, ~61 MB) - carries only the
   self-contained `Pawse.exe`, no build-choice page and nothing to install alongside it.
   The one to hand someone who just wants Pawse.
-- **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.6 MB) - carries only
+- **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.5 MB) - carries only
   `Pawse-min.exe`, no build-choice page. For people who know they want the small build.
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
