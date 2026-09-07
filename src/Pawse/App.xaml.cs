@@ -70,6 +70,14 @@ public partial class App : Application
         // read the setting; until then every line is only buffered.
         Log.Init(Version);
 
+        // Before ANYTHING that can block - and long before the mutex wait below, which is the
+        // instance we are replacing still holding it. A portable self-replace keeps the old
+        // exe until this lands: getting here at all proves the apphost found a runtime and the
+        // CLR came up, which is the one thing Process.Start cannot tell the outgoing instance.
+        // Stay silent on a normal start; nothing is listening then. See StartupSignal for the
+        // compatibility contract - a build that stops announcing gets rolled back as failed.
+        if (e.Args.Contains(Elevation.ReplaceArg)) StartupSignal.Announce();
+
         bool created;
         try
         {
@@ -750,7 +758,7 @@ public partial class App : Application
         }
 
         if (UpdateCheck.IsInstalled(plan.Kind)) LaunchInstaller(plan, file, unattended);
-        else ReplacePortable(plan, file, unattended);
+        else await ReplacePortable(plan, file, unattended);
     }
 
     /// <summary>Hand over to the downloaded installer. It asks this instance to quit over
@@ -793,10 +801,16 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Portable copies have no installer: swap the exe and restart.</summary>
-    private void ReplacePortable(UpdatePlan plan, string zip, bool unattended)
+    /// <summary>Portable copies have no installer: swap the exe and restart.
+    /// <para>Off the dispatcher, because the swap now waits for the successor to prove it is
+    /// running (SelfReplace.StartSuccessor) and that wait is measured in seconds - on the UI
+    /// thread it would freeze the tray, and the settings window with it, for the whole of a
+    /// failing update. The await resumes on the dispatcher, so everything below still touches
+    /// the tray and dialogs from the right thread.</para></summary>
+    private async Task ReplacePortable(UpdatePlan plan, string zip, bool unattended)
     {
-        var outcome = SelfReplace.Run(zip, plan.Kind, plan.Version!);
+        var outcome = await Task.Run(() => SelfReplace.Run(zip, plan.Kind, plan.Version!))
+                                .ConfigureAwait(true);
         switch (outcome.Result)
         {
             case ReplaceResult.Handover:

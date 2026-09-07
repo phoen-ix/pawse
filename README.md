@@ -73,8 +73,11 @@ installers are built from [`packaging/`](packaging/).
   (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
   [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update. An
   installed minimal copy will decline the automatic update until the runtime is there and
-  tell you so; a **portable** minimal copy cannot check, so install the runtime *before*
-  you press Check now - or switch to the full build, which needs nothing. Full and
+  tell you so. A **portable** minimal copy cannot check, and on *Download and install
+  updates automatically* it will not wait to be asked - so install the runtime now, or
+  switch to the full build, which needs nothing. If one has already replaced itself and
+  won't start, nothing is lost: the previous exe is still beside it as `Pawse.exe.old`
+  - install the runtime, or rename that file back over `Pawse.exe`. Full and
   portable-full copies are unaffected and update as usual.
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
 

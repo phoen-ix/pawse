@@ -107,12 +107,14 @@ public static class SelfReplace
                 "The update could not be put in place, so the previous Pawse was restored.");
         }
 
-        // 3) Start the successor BEFORE this process exits. If it cannot even be started we
-        //    still have a running process and a .old to restore from; having exited first we
-        //    would have neither.
+        // 3) Start the successor BEFORE this process exits, and only believe it once it has
+        //    said so itself - see StartSuccessor. If it cannot be started, or starts and never
+        //    reaches managed code (a missing .NET runtime is exactly that), we still have a
+        //    running process and a .old to restore from; having exited first we would have
+        //    neither, and the machine would be left with no Pawse that runs.
         if (!start(exe))
             return Undo(exe, previous, staged, newExeInPlace: true,
-                "The updated Pawse could not be started, so the previous one was restored.");
+                "The updated Pawse did not start, so the previous one was restored.");
 
         // .old survives until the successor's own startup sweeps it - so the only copy of the
         // old build is deleted by the new one, which proves the new one runs.
@@ -160,14 +162,37 @@ public static class SelfReplace
         return new(ReplaceResult.RolledBack, message);
     }
 
-    /// <summary>Launch the replacement, telling it to wait for our single-instance mutex -
-    /// the same --replace handshake the elevated relaunch uses. Without it the successor
-    /// races us and says "Pawse is already running" instead of starting.</summary>
+    /// <summary>Launch the replacement and prove it actually runs, telling it to wait for our
+    /// single-instance mutex - the same --replace handshake the elevated relaunch uses.
+    /// Without it the successor races us and says "Pawse is already running" instead of
+    /// starting.
+    ///
+    /// <para>Returning true has to mean "the new exe is running", not "CreateProcess did not
+    /// throw". An apphost whose framework is missing starts fine and dies afterwards inside
+    /// hostfxr behind a modal dialog, so <c>Process.Start</c> alone would report a successful
+    /// handover for an exe that never runs - and <see cref="Swap"/> would then discard the
+    /// only working copy. So we wait for the successor to say it reached managed code; see
+    /// <see cref="StartupSignal"/>. Anything else is a failure, and <see cref="Swap"/>'s
+    /// existing rollback puts the old exe back.</para>
+    ///
+    /// <para>The proof is armed BEFORE the process starts, or a fast successor would signal
+    /// before anything was listening. And it is deliberately not the app's "startup complete":
+    /// the successor blocks on OUR mutex partway through its own startup and we only release
+    /// it in OnExit, so waiting for the far side of that would deadlock the pair. Reaching
+    /// managed code is both early enough to avoid that and the exact thing in question.</para></summary>
     private static bool StartSuccessor(string exe)
     {
+        using var proof = StartupSignal.Expect();
+        if (proof is null)
+        {
+            Log.Error("update: could not arm the startup proof channel, so the swap cannot be verified");
+            return false;
+        }
+
+        Process? successor;
         try
         {
-            Process.Start(new ProcessStartInfo
+            successor = Process.Start(new ProcessStartInfo
             {
                 FileName = exe,
                 Arguments = Elevation.ReplaceArg,
@@ -177,13 +202,15 @@ public static class SelfReplace
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(exe) ?? "",
             });
-            return true;
         }
         catch (Exception ex)
         {
             Log.Error("update: starting the replacement", ex);
             return false;
         }
+
+        using (successor)
+            return proof.Wait(StartupSignal.ProofTimeout, successor);
     }
 
     /// <summary>
