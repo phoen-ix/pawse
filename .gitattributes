@@ -1,0 +1,20 @@
+# Line endings are a property of this repo, not of the machine that cloned it.
+#
+# Without this, a Windows clone (core.autocrlf defaults to true there, including on the
+# GitHub Actions windows runners) checks every source file out as CRLF, while .editorconfig
+# asks for LF - so `dotnet format --verify-no-changes` fails on every line of every file,
+# on Windows only, with a tree nobody touched. Pin it here and the two agree everywhere.
+* text=auto eol=lf
+
+# Visual Studio rewrites the solution with CRLF and a UTF-8 BOM every time it touches it.
+# It is stored that way; leave it exactly as-is rather than fight it on every checkout.
+*.sln -text
+
+# Batch is CRLF's native habitat - a label or goto can misbehave with bare LF.
+*.bat text eol=crlf
+
+# Never munge these.
+*.ico binary
+*.png binary
+*.exe binary
+*.zip binary

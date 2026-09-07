@@ -23,9 +23,11 @@ trim_trailing_whitespace = true
 [*.{yml,yaml,json,md}]
 indent_size = 2
 
-# Tab-indented by convention, and Visual Studio rewrites it if told otherwise.
+# Tab-indented by convention, and Visual Studio rewrites it if told otherwise - it also
+# stores the file as CRLF with a BOM, which .gitattributes preserves via `*.sln -text`.
 [*.sln]
 indent_style = tab
+end_of_line = crlf
 
 [*.md]
 # Two trailing spaces are a hard line break in Markdown.
