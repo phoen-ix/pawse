@@ -102,6 +102,12 @@ public partial class SettingsWindow : Window
         }
         UpdateNumberWarnings();
 
+        // Live readouts for the two popup sliders. Wired after LoadFromConfig, so seed them
+        // once by hand - the initial SetValue has already been and gone.
+        SldOpacity.ValueChanged += (_, _) => UpdateSliderReadouts();
+        SldVertical.ValueChanged += (_, _) => UpdateSliderReadouts();
+        UpdateSliderReadouts();
+
         SetLocked(isLocked());
     }
 
@@ -423,6 +429,14 @@ public partial class SettingsWindow : Window
         label.Text = $"Enter a whole number from {min} to {max} {unit} - "
                    + "anything else is corrected when you save.";
         label.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Percent for both: opacity is stored 0-1 and position 0-100, but "0.7" and
+    /// "45" mean nothing next to an unlabelled slider.</summary>
+    private void UpdateSliderReadouts()
+    {
+        LblOpacity.Text = Math.Round(SldOpacity.Value * 100).ToString(CultureInfo.InvariantCulture) + "%";
+        LblVertical.Text = Math.Round(SldVertical.Value).ToString(CultureInfo.InvariantCulture) + "%";
     }
 
     private void UpdateWarnings()

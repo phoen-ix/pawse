@@ -27,6 +27,18 @@
     <!-- The code parses/formats with invariant culture throughout; dropping the ICU
          bundle takes a chunk out of the self-contained single-file build. -->
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- ...but do NOT inherit the PredefinedCulturesOnly=true that InvariantGlobalization
+         turns on by default. With it on, constructing any non-invariant CultureInfo throws
+         CultureNotFoundException - and WPF builds one from the ACTIVE KEYBOARD LAYOUT when it
+         commits a typed character. On a machine whose layout is not en-US that throw happened
+         on every keystroke, landed in App's DispatcherUnhandledException handler (which marks
+         it handled), and the character silently vanished. Backspace, Delete, the arrow keys
+         and paste run through EditingCommands, which consult no culture, so editing kept
+         working and the Settings window looked half-alive.
+         False keeps ICU out - cultures still resolve to invariant DATA - but makes them
+         constructible instead of fatal. Everything here is parsed and formatted with
+         CultureInfo.InvariantCulture explicitly, so behaviour does not change. -->
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
 
     <!-- We set PerMonitorV2 DPI awareness in app.manifest (WPF needs process-level
          awareness for the overlay's physical-pixel placement). The WinForms analyzer

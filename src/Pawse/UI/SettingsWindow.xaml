@@ -267,16 +267,27 @@
                              the monitor list always has been. Disabled in "All displays" mode,
                              where the set is worked out fresh each time the popup is built. -->
                         <StackPanel x:Name="PnlDisplays" Margin="92,2,0,2" />
+                        <!-- Both sliders carry a live readout: a bare handle between two
+                             unlabelled ends says nothing about what the setting currently is,
+                             and neither value has a unit a user could guess. -->
                         <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
                             <TextBlock Text="Opacity" VerticalAlignment="Center" Width="70" />
                             <Slider x:Name="SldOpacity" Maximum="1.0" Width="200"
                                     TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                            <TextBlock x:Name="LblOpacity" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" MinWidth="44" />
                         </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="How solid the popup looks. Lower lets more of the desktop show through it." />
                         <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
-                            <TextBlock Text="Vertical" VerticalAlignment="Center" Width="70" />
+                            <TextBlock Text="Position" VerticalAlignment="Center" Width="70" />
                             <Slider x:Name="SldVertical" Minimum="0" Maximum="100" Width="200"
                                     TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                            <TextBlock x:Name="LblVertical" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" MinWidth="44" />
                         </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="How far down the screen the popup sits - 0% is the top edge, 100% the bottom." />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
