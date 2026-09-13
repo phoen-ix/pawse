@@ -299,6 +299,10 @@ public partial class App : Application
             try
             {
                 _tray?.SetLocked(locked);
+                // An open Settings window has to follow the lock: while locked the hook
+                // swallows every key before WPF sees it, so its text fields would otherwise
+                // sit there looking editable and doing nothing.
+                _settingsWindow?.SetLocked(locked);
                 // The Win+L registry toggle runs inline inside Apply; the Keyboard-Filter
                 // (WMI) work is dispatched off-thread inside Apply so this returns fast.
                 _systemBlock?.Apply(locked, background: true, notify: true);
@@ -430,13 +434,16 @@ public partial class App : Application
                 // Activate() alone does not surface a minimized window.
                 if (_settingsWindow.WindowState == WindowState.Minimized)
                     _settingsWindow.WindowState = WindowState.Normal;
-                _settingsWindow.Activate();
+                ForceForeground(_settingsWindow);
                 return;
             }
             _settingsWindow = new SettingsWindow(_controller!.Config, () => _controller!.IsLocked);
             _settingsWindow.Applied += ApplyConfigChange;
             _settingsWindow.CheckUpdatesRequested += () => CheckForUpdates(interactive: true);
             _settingsWindow.DownloadsPageRequested += OpenDownloadsPage;
+            // The locked banner's Unlock button. While locked the keyboard is swallowed, so
+            // the mouse is the only way out of Settings that does not mean hunting the tray.
+            _settingsWindow.UnlockRequested += () => _controller!.Disengage("settings");
             _settingsWindow.Closed += (_, _) =>
             {
                 _settingsWindow = null;
@@ -453,7 +460,7 @@ public partial class App : Application
             // means pressing the current one) can't lock the machine mid-capture.
             _controller!.SuppressLockHotkey = true;
             _settingsWindow.Show();
-            _settingsWindow.Activate();
+            ForceForeground(_settingsWindow);
         }
         catch (Exception ex)
         {
@@ -462,6 +469,57 @@ public partial class App : Application
             _settingsWindow = null;
             if (_controller != null) _controller.SuppressLockHotkey = false;
         }
+    }
+
+    /// <summary>Bring a window to the front and make sure keyboard focus lands inside it.
+    /// <para><see cref="Window.Activate"/> is <c>SetForegroundWindow</c> underneath, which
+    /// Windows grants only to the process that owns the foreground - and after a click on the
+    /// tray paw that is Explorer, not Pawse. A refused call fails silently: the window appears
+    /// and takes mouse input (mouse messages go to the window under the cursor either way)
+    /// while every keystroke goes to whatever is still active. That is what made Settings look
+    /// half-broken - the passphrase box, both duration boxes and both shortcut boxes dead,
+    /// while the checkboxes, sliders and Clear buttons worked.</para>
+    /// <para>So check whether activation actually took, and if it did not, ask again while
+    /// attached to the foreground thread's input queue - which is what makes the grant
+    /// legitimate. Detached again in the finally, always.</para></summary>
+    private static void ForceForeground(Window window)
+    {
+        window.Activate();
+        if (!window.IsActive)
+        {
+            uint self = NativeMethods.GetCurrentThreadId();
+            uint other = 0;
+            try
+            {
+                var foreground = NativeMethods.GetForegroundWindow();
+                if (foreground != IntPtr.Zero)
+                    other = NativeMethods.GetWindowThreadProcessId(foreground, IntPtr.Zero);
+                if (other != 0 && other != self) NativeMethods.AttachThreadInput(self, other, true);
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero) NativeMethods.SetForegroundWindow(hwnd);
+                window.Activate();
+            }
+            catch (Exception ex) { Log.Error("settings window activate", ex); }
+            finally
+            {
+                if (other != 0 && other != self) NativeMethods.AttachThreadInput(self, other, false);
+            }
+        }
+
+        // Foreground is only half of it: a window with nothing focused inside has nowhere to
+        // put a keystroke. Set it once, on a window that has none - re-opening Settings from
+        // the tray must not yank focus back from wherever the user left it. The first tab stop
+        // is the TabControl's first header, which is why this cannot land on a ChordBox and
+        // start a capture nobody asked for (ChordBox begins one on ANY keyboard-focus gain).
+        if (System.Windows.Input.FocusManager.GetFocusedElement(window) is null)
+        {
+            window.Focus();
+            window.MoveFocus(new System.Windows.Input.TraversalRequest(
+                System.Windows.Input.FocusNavigationDirection.First));
+        }
+
+        // One line, so a repeat of "I can't type in Settings" is answerable from pawse.log.
+        Log.Info($"settings window foreground: active={window.IsActive}");
     }
 
     private void ApplyConfigChange()

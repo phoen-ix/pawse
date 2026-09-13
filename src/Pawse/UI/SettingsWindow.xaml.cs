@@ -44,6 +44,10 @@ public partial class SettingsWindow : Window
     /// owns opening it, the same as it owns the check itself.</summary>
     public event Action? DownloadsPageRequested;
 
+    /// <summary>Raised by the locked banner's Unlock button. App owns the lock state; this
+    /// window only asks. See <see cref="SetLocked"/> for how the answer comes back.</summary>
+    public event Action? UnlockRequested;
+
     public SettingsWindow(Config cfg, Func<bool> isLocked)
     {
         InitializeComponent();
@@ -77,6 +81,7 @@ public partial class SettingsWindow : Window
         ChkPassphrase.Checked += (_, _) => UpdateWarnings();
         ChkPassphrase.Unchecked += (_, _) => UpdateWarnings();
         UpdateWarnings();
+        SetLocked(isLocked());
     }
 
     /// <summary>One checkbox per display attached right now, plus the two-entry mode list.
@@ -379,6 +384,25 @@ public partial class SettingsWindow : Window
             label.Visibility = Visibility.Collapsed;
         }
     }
+
+    /// <summary>Follow the lock. Called at construction and again from App on every
+    /// <c>LockedChanged</c>, so a window left open across a lock or unlock stays honest.
+    /// <para>While locked the global hook swallows every key before WPF sees it, so the three
+    /// plain text fields are disabled rather than left looking editable and doing nothing -
+    /// the two <see cref="ChordBox"/>es already refuse capture on their own
+    /// (<see cref="ChordBox.IsRecordingBlocked"/>) and keep saying why.</para></summary>
+    public void SetLocked(bool locked)
+    {
+        PnlLockedBanner.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
+        TxtPassphrase.IsEnabled = !locked;
+        TxtHoldMs.IsEnabled = !locked;
+        TxtTimerSeconds.IsEnabled = !locked;
+        // An unlock clears a stale "Unlock Pawse first to record a shortcut." that a click on
+        // a chord box left behind; UpdateWarnings re-derives both labels from the real values.
+        if (!locked) UpdateWarnings();
+    }
+
+    private void OnBannerUnlock(object sender, RoutedEventArgs e) => UnlockRequested?.Invoke();
 
     private static void ShowBlocked(System.Windows.Controls.TextBlock label)
     {

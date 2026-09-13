@@ -38,10 +38,10 @@ public sealed class TrayIcon : IDisposable
 
     public TrayIcon()
     {
-        _toggle = new ToolStripMenuItem("Lock now", null, (_, _) => ToggleRequested?.Invoke());
-        var settings = new ToolStripMenuItem("Settings…", null, (_, _) => SettingsRequested?.Invoke());
-        var openCfg = new ToolStripMenuItem("Open config file", null, (_, _) => OpenConfigRequested?.Invoke());
-        var quit = new ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke());
+        _toggle = new ToolStripMenuItem("Lock now", null, (_, _) => Post(() => ToggleRequested?.Invoke()));
+        var settings = new ToolStripMenuItem("Settings…", null, (_, _) => Post(() => SettingsRequested?.Invoke()));
+        var openCfg = new ToolStripMenuItem("Open config file", null, (_, _) => Post(() => OpenConfigRequested?.Invoke()));
+        var quit = new ToolStripMenuItem("Quit", null, (_, _) => Post(() => QuitRequested?.Invoke()));
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_toggle);
@@ -52,7 +52,7 @@ public sealed class TrayIcon : IDisposable
         // on managed PCs and for the browser/calculator/media-key block (Keyboard Filter).
         if (!Core.Elevation.IsElevated())
             menu.Items.Add(new ToolStripMenuItem("Restart as administrator", null,
-                (_, _) => RestartAsAdminRequested?.Invoke()));
+                (_, _) => Post(() => RestartAsAdminRequested?.Invoke())));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(quit);
 
@@ -98,6 +98,23 @@ public sealed class TrayIcon : IDisposable
 
         Core.Log.Info("tray icon created");
     }
+
+    /// <summary>Raise a menu item's event after the click handler has returned, rather than
+    /// inside it.
+    /// <para>A <see cref="ContextMenuStrip"/> shown by <see cref="NotifyIcon"/> puts WinForms
+    /// into ToolStrip "menu mode", which normally unwinds through an
+    /// <c>Application.AddMessageFilter</c> filter - and Pawse pumps messages with WPF's
+    /// dispatcher, which never runs those. Opening a window from inside that handler is the
+    /// worst moment for it: the window shows but does not become foreground, so it takes
+    /// mouse input while every keystroke lands elsewhere. One turn of the dispatcher lets the
+    /// menu finish closing first.</para>
+    /// <para>Background, not ApplicationIdle: it still runs after the input and render work
+    /// queued by the menu closing, but it sits ABOVE the idle priorities, so a DispatcherTimer
+    /// (auto-unlock, the daily update check) cannot starve a menu click indefinitely.</para>
+    /// <para>The tray CLICK handlers below stay synchronous - no menu is involved there and
+    /// the double-click guard's timing depends on them firing at once.</para></summary>
+    private void Post(Action raise) =>
+        _dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, raise);
 
     public void SetLocked(bool locked)
     {

@@ -107,21 +107,27 @@ jobs:
         shell: pwsh
         run: choco install nsis --no-progress -y
 
-      - name: Build the standard installer
+      - name: Build the standard and minimal installers
         shell: pwsh
         run: |
           Copy-Item publish-full/Pawse.exe packaging/Pawse.exe     -Force
           Copy-Item publish-min/Pawse.exe  packaging/Pawse-min.exe -Force
-          # A silent run deploys the FULL build ($BuildChoice defaults to "full" in .onInit), so
-          # the minimal exe rides along for the File directive but is never unpacked here - it
-          # would have winget pull the ~57 MB .NET runtime onto the runner.
+          # A silent run of the STANDARD installer deploys the FULL build ($BuildChoice defaults
+          # to "full" in .onInit), so the minimal exe only rides along for the File directive
+          # there. The MINIMAL_ONLY build below is what actually unpacks and boots it - see the
+          # per-machine minimal smoke step, which passes /NORUNTIME rather than have winget pull
+          # the ~57 MB runtime onto the runner.
           # From inside packaging/, so OutFile lands next to the script.
           Push-Location packaging
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /WX /V2 /DVERSION=0.0.0 pawse.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis failed with $LASTEXITCODE" }
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /WX /V2 /DVERSION=0.0.0 /DMINIMAL_ONLY pawse.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis /DMINIMAL_ONLY failed with $LASTEXITCODE" }
           Pop-Location
           if (-not (Test-Path packaging/Pawse-Setup-0.0.0.exe)) { throw "makensis wrote no installer" }
+          if (-not (Test-Path packaging/Pawse-Setup-0.0.0-min.exe)) { throw "makensis wrote no minimal installer" }
           Add-Content -Path $env:GITHUB_ENV -Value "SETUP=$((Resolve-Path packaging/Pawse-Setup-0.0.0.exe).Path)"
+          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_MIN=$((Resolve-Path packaging/Pawse-Setup-0.0.0-min.exe).Path)"
 
       - name: Per-user - install silently and start the app
         shell: pwsh
@@ -229,4 +235,44 @@ jobs:
           Wait-PawseGone 8
           Wait-Removed $env:UNINST_KEY_MACHINE $env:MACHINE_DIR
           if (Test-Path $env:MACHINE_SHORTCUT) { throw "the uninstall left the common Start Menu shortcut $env:MACHINE_SHORTCUT behind" }
+          if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }
+
+      - name: Per-machine MINIMAL - install silently and start the app
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          # Minimal + /AllUsers had no coverage at all: every step above deploys the full,
+          # self-contained build, so the framework-dependent apphost was never once unpacked and
+          # booted by CI - and that is exactly the shape a bug report arrived on. The one thing
+          # this proves that nothing else does is that hostfxr finds a runtime it did not bring
+          # with it and the CLR comes up.
+          #
+          # /NORUNTIME so no winget download lands on the runner: setup-dotnet installed the SDK
+          # global.json pins, which carries Microsoft.WindowsDesktop.App with it. That makes the
+          # step assert the other half of the MINIMAL_ONLY .onInit guard too - it must refuse a
+          # silent /NORUNTIME install only when the runtime is MISSING, and this one is present.
+          $installDir = Join-Path $env:ProgramFiles 'Pawse'
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+          '{"General":{"Logging":true}}' | Set-Content (Join-Path $installDir 'pawse.json') -Encoding utf8
+          $proc = Start-Process -FilePath $env:SETUP_MIN -ArgumentList '/S','/AllUsers','/RESTART','/NORUNTIME' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "the minimal installer exited with $($proc.ExitCode) (3 = it did not find the .NET runtime)" }
+          if (-not (Test-Path $env:UNINST_KEY_MACHINE)) { throw "nothing registered at $env:UNINST_KEY_MACHINE" }
+          $entry = Get-ItemProperty $env:UNINST_KEY_MACHINE
+          if ($entry.BuildVariant -ne 'min') { throw "BuildVariant is '$($entry.BuildVariant)', expected min" }
+          if (-not (Test-Path (Join-Path $installDir 'Pawse.exe'))) { throw "Pawse.exe missing from $installDir" }
+          Add-Content -Path $env:GITHUB_ENV -Value "MIN_DIR=$installDir"
+          $log = Join-Path $installDir 'pawse.log'
+          $fallback = Join-Path $env:APPDATA 'Pawse\pawse.log'
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path $log) -and -not (Test-Path $fallback)) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $log) { Wait-PawseStarted $log 1 } else { Wait-PawseStarted $fallback 1 }
+
+      - name: Per-machine MINIMAL - uninstall silently and leave nothing behind
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          $uninstaller = (Get-ItemProperty $env:UNINST_KEY_MACHINE).UninstallString.Trim('"')
+          Start-Process -FilePath $uninstaller -ArgumentList '/S'
+          Wait-PawseGone 8
+          Wait-Removed $env:UNINST_KEY_MACHINE $env:MIN_DIR
           if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }

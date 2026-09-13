@@ -167,6 +167,29 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    // ---- Foreground activation (the Settings window) -------------------------
+    // Window.Activate() is SetForegroundWindow underneath, and Windows grants that only to
+    // the process that owns the foreground. After a click on the tray paw that is Explorer,
+    // not Pawse - so the call is refused, the window appears without keyboard focus, and it
+    // takes mouse input while every keystroke goes somewhere else. Briefly attaching to the
+    // foreground thread's input queue is the long-standing way to be granted it anyway.
+    // See App.ForceForeground, which is the only caller.
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>Pass IntPtr.Zero for lpdwProcessId when only the thread id is wanted.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr lpdwProcessId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo,
+        [MarshalAs(UnmanagedType.Bool)] bool fAttach);
+
     // ---- Overlay placement (physical pixels, DPI-correct) --------------------
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public const uint SWP_NOACTIVATE = 0x0010;

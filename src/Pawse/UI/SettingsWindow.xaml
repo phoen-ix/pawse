@@ -118,13 +118,32 @@
 
     <Grid Margin="18">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Shown only while Pawse has the keyboard locked. The global hook swallows every
+             key before WPF sees it, so the passphrase, the two durations and both shortcut
+             boxes are dead - say so once, here, instead of letting the user find out one
+             field at a time. The way out sits in the same bar: a button, because the mouse
+             is exactly what still works in this state. -->
+        <Border x:Name="PnlLockedBanner" Grid.Row="0" Visibility="Collapsed"
+                Background="#FFFFF4CE" BorderBrush="#FFE8C55A" BorderThickness="1"
+                CornerRadius="6" Padding="10,8" Margin="0,0,0,12">
+            <DockPanel>
+                <Button x:Name="BtnBannerUnlock" DockPanel.Dock="Right" Content="Unlock"
+                        Width="92" Height="28" Margin="12,0,0,0"
+                        VerticalAlignment="Center" Click="OnBannerUnlock" />
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap"
+                           FontSize="12" Foreground="#FF5C4600"
+                           Text="Pawse has the keyboard locked, so you can't type in here. Unlock to edit the passphrase, the durations and the shortcuts." />
+            </DockPanel>
+        </Border>
+
         <!-- Each page is sized to fit; the ScrollViewers are a safety net for a revealed
              warning, a high DPI setting or a short display. -->
-        <TabControl Grid.Row="0" AutomationProperties.Name="Settings sections">
+        <TabControl Grid.Row="1" AutomationProperties.Name="Settings sections">
             <TabItem Header="General">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
                     <StackPanel>
@@ -300,7 +319,7 @@
             </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Cancel" Width="92" Height="30" Margin="0,0,8,0" Click="OnCancel" />
             <Button Content="Save" Width="92" Height="30" Click="OnSave" IsDefault="True" />
         </StackPanel>
