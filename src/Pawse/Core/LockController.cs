@@ -59,6 +59,7 @@ public sealed class LockController
 
     private volatile bool _isLocked;
     private volatile bool _suppressLockHotkey;
+    private volatile Action<int, bool>? _captureSink;
 
     public Config Config { get; }
     public bool IsLocked => _isLocked;
@@ -69,6 +70,21 @@ public sealed class LockController
     {
         get => _suppressLockHotkey;
         set => _suppressLockHotkey = value;
+    }
+
+    /// <summary>Set while the shortcut recorder is open: every key event is handed to it and
+    /// swallowed, so a chord being recorded cannot leak into the window behind, fire the lock
+    /// hotkey, or feed an unlock matcher.
+    /// <para>This is the whole point of recording through the hook rather than through WPF:
+    /// the hook sees every key system-wide no matter which window has focus, so recording
+    /// cannot be defeated by an activation, focus or text-input problem in the UI.</para>
+    /// <para>Raised on the HOOK thread. The recorder marshals to its own dispatcher, and must
+    /// clear this in a finally - a sink left set would swallow the keyboard for good.</para>
+    /// </summary>
+    public Action<int, bool>? CaptureSink
+    {
+        get => _captureSink;
+        set => _captureSink = value;
     }
 
     /// <summary>Raised with the new locked state. Handlers should be quick or defer.</summary>
@@ -133,6 +149,18 @@ public sealed class LockController
         // exactly what Pawse injects (modifier key-UPs) and nothing else; tagged
         // key-downs or non-modifier keys are treated like any other input.
         if (ours && !isDown && Input.IsClearedModifier(vk)) return false;
+
+        // A recorder is open: the key belongs to it and to nothing else. Deliberately ahead of
+        // the _gate bookkeeping - these keys are swallowed, so no window ever sees them and
+        // _pressed must not start tracking them (PruneReleased reconciles it on the next
+        // ordinary key anyway). An exception here must not escape into the hook callback,
+        // which would cost us the hook itself.
+        if (_captureSink is { } sink)
+        {
+            try { sink(vk, isDown); }
+            catch (Exception ex) { Log.Error("shortcut recorder sink", ex); }
+            return true;
+        }
 
         lock (_gate)
         {

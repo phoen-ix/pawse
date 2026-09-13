@@ -437,7 +437,10 @@ public partial class App : Application
                 ForceForeground(_settingsWindow);
                 return;
             }
-            _settingsWindow = new SettingsWindow(_controller!.Config, () => _controller!.IsLocked);
+            _settingsWindow = new SettingsWindow(
+                _controller!.Config,
+                () => _controller!.IsLocked,
+                RecordChord);
             _settingsWindow.Applied += ApplyConfigChange;
             _settingsWindow.CheckUpdatesRequested += () => CheckForUpdates(interactive: true);
             _settingsWindow.DownloadsPageRequested += OpenDownloadsPage;
@@ -471,6 +474,15 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Show the shortcut recorder over <paramref name="owner"/> and return what it
+    /// captured, or null when cancelled. App owns this because the recorder needs the
+    /// LockController - it records off the global hook rather than off WPF key events.</summary>
+    private List<string>? RecordChord(Window owner)
+    {
+        var recorder = new ShortcutRecorderWindow(_controller!) { Owner = owner };
+        return recorder.ShowDialog() == true ? recorder.Chord : null;
+    }
+
     /// <summary>Bring a window to the front and make sure keyboard focus lands inside it.
     /// <para><see cref="Window.Activate"/> is <c>SetForegroundWindow</c> underneath, which
     /// Windows grants only to the process that owns the foreground - and after a click on the
@@ -479,38 +491,39 @@ public partial class App : Application
     /// while every keystroke goes to whatever is still active. That is what made Settings look
     /// half-broken - the passphrase box, both duration boxes and both shortcut boxes dead,
     /// while the checkboxes, sliders and Clear buttons worked.</para>
-    /// <para>So check whether activation actually took, and if it did not, ask again while
-    /// attached to the foreground thread's input queue - which is what makes the grant
-    /// legitimate. Detached again in the finally, always.</para></summary>
+    /// <para>So check whether activation actually took, and if it did not, ask once more
+    /// directly.</para>
+    /// <para>This deliberately does NOT use the AttachThreadInput trick. Attaching merges the
+    /// two threads' input queues - including the key-state table that TranslateMessage reads
+    /// to decide whether a key-down produces a character - and detaching does not put it back.
+    /// A foreground thread that believed Ctrl was held would hand that belief to Pawse's UI
+    /// thread, where it would persist until Ctrl was pressed and released over the window:
+    /// letters and digits would stop producing characters while Ctrl+Backspace still deleted.
+    /// That is indistinguishable from the bug this function exists to fix, and it would only
+    /// ever fire on the elevated/tray-click path that already reproduces it. Worse, attaching
+    /// to a hung foreground thread blocks ours. A refused activation is a visible annoyance;
+    /// this would be a silent, self-inflicted repeat.</para></summary>
     private static void ForceForeground(Window window)
     {
         window.Activate();
         if (!window.IsActive)
         {
-            uint self = NativeMethods.GetCurrentThreadId();
-            uint other = 0;
             try
             {
-                var foreground = NativeMethods.GetForegroundWindow();
-                if (foreground != IntPtr.Zero)
-                    other = NativeMethods.GetWindowThreadProcessId(foreground, IntPtr.Zero);
-                if (other != 0 && other != self) NativeMethods.AttachThreadInput(self, other, true);
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                if (hwnd != IntPtr.Zero) NativeMethods.SetForegroundWindow(hwnd);
+                if (hwnd != IntPtr.Zero && !NativeMethods.SetForegroundWindow(hwnd))
+                    Log.Warn("settings window: SetForegroundWindow was refused");
                 window.Activate();
             }
             catch (Exception ex) { Log.Error("settings window activate", ex); }
-            finally
-            {
-                if (other != 0 && other != self) NativeMethods.AttachThreadInput(self, other, false);
-            }
         }
 
         // Foreground is only half of it: a window with nothing focused inside has nowhere to
         // put a keystroke. Set it once, on a window that has none - re-opening Settings from
         // the tray must not yank focus back from wherever the user left it. The first tab stop
-        // is the TabControl's first header, which is why this cannot land on a ChordBox and
-        // start a capture nobody asked for (ChordBox begins one on ANY keyboard-focus gain).
+        // is the locked banner's Unlock button when that banner is up, otherwise the
+        // TabControl's first header - never a ChordBox, which would start a capture nobody
+        // asked for (ChordBox begins one on ANY keyboard-focus gain).
         if (System.Windows.Input.FocusManager.GetFocusedElement(window) is null)
         {
             window.Focus();

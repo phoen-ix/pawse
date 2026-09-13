@@ -250,4 +250,63 @@ public class LockControllerTests
         h.Tap(S);
         Assert.False(h.Controller.IsLocked);
     }
+
+    [Fact]
+    public void A_capture_sink_takes_every_key_and_swallows_it()
+    {
+        var h = new Harness();
+        var seen = new List<(int Vk, bool Down)>();
+        h.Controller.CaptureSink = (vk, isDown) => seen.Add((vk, isDown));
+
+        Assert.True(h.Send(Keys.VK_LCONTROL, true));
+        Assert.True(h.Send(L, true));
+        Assert.True(h.Send(L, false));
+        Assert.True(h.Send(Keys.VK_LCONTROL, false));
+
+        // Ctrl+L is the DEFAULT lock hotkey: recording it must not lock the machine, and no
+        // key may reach the window behind the recorder.
+        Assert.False(h.Controller.IsLocked);
+        Assert.Equal(
+            new[]
+            {
+                (Keys.VK_LCONTROL, true), (L, true), (L, false), (Keys.VK_LCONTROL, false),
+            },
+            seen);
+    }
+
+    [Fact]
+    public void Clearing_the_capture_sink_restores_the_lock_hotkey()
+    {
+        var h = new Harness();
+        h.Controller.CaptureSink = (_, _) => { };
+        h.Send(Keys.VK_LCONTROL, true);
+        h.Send(L, true);
+        Assert.False(h.Controller.IsLocked);
+
+        h.Controller.CaptureSink = null;
+        h.Send(L, false);
+        h.Send(Keys.VK_LCONTROL, false);
+
+        // A fresh Ctrl+L now behaves exactly as it would have without the recorder.
+        h.Send(Keys.VK_LCONTROL, true);
+        Assert.True(h.Send(L, true));
+        Assert.True(h.Controller.IsLocked);
+    }
+
+    [Fact]
+    public void A_capture_sink_does_not_feed_the_unlock_matchers()
+    {
+        var config = new Config();
+        config.Unlock.Passphrase.Enabled = true;
+        config.Unlock.Passphrase.Text = "as";
+
+        var h = new Harness(config);
+        h.Controller.Engage("test");
+        h.Controller.CaptureSink = (_, _) => { };
+
+        // Typing the passphrase into a recorder must not unlock; the keys belong to it alone.
+        h.Tap(A);
+        h.Tap(S);
+        Assert.True(h.Controller.IsLocked);
+    }
 }

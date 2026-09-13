@@ -41,6 +41,13 @@
             <Setter Property="Padding" Value="4,2" />
             <Setter Property="Width" Value="260" />
             <Setter Property="HorizontalAlignment" Value="Left" />
+            <!-- Off the Text Services Framework, onto the plain WM_CHAR path. TSF is serviced
+                 by ctfmon.exe at medium integrity; a Pawse restarted as administrator runs at
+                 high integrity and UIPI blocks the two from talking, which silently kills
+                 character input while Backspace and Delete - plain key commands - keep
+                 working. Nothing here ever wants composition anyway: a passphrase limited to
+                 a-z/0-9/space (Keys.IsTypeablePassphrase), two integers, and key chords. -->
+            <Setter Property="InputMethod.IsInputMethodEnabled" Value="False" />
         </Style>
         <!-- A TextBox subclass does NOT inherit the implicit TextBox style above, so
              base it explicitly to keep the same indent/width/padding. -->
@@ -169,11 +176,14 @@
                         <CheckBox x:Name="ChkLockHotkey" Content="Lock with a keyboard shortcut" />
                         <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
                             <ui:ChordBox x:Name="TxtLockHotkey" Width="180" Margin="0" />
+                            <Button x:Name="BtnSetLockHotkey" Content="Set…" Width="60" Height="24"
+                                    Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Click="OnSetLockHotkey" />
                             <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
                                     VerticalAlignment="Center" Click="OnClearLockHotkey" />
                         </StackPanel>
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="Click the box and press your shortcut (e.g. Ctrl+Alt+L). The Windows key may open Start, but the shortcut is still captured." />
+                                   Text="Press Set… and hold your shortcut (e.g. Ctrl+Alt+L), then let go. The Windows key may open Start, but the shortcut is still captured." />
                         <TextBlock x:Name="LblLockHotkeyWarn" Style="{StaticResource Warn}" />
 
                         <TextBlock Text="While locked" Style="{StaticResource SubHeader}" />
@@ -204,11 +214,14 @@
                         <CheckBox x:Name="ChkChord" Content="Unlock with a key combination" />
                         <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
                             <ui:ChordBox x:Name="TxtChord" Width="180" Margin="0" />
+                            <Button x:Name="BtnSetChord" Content="Set…" Width="60" Height="24"
+                                    Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Click="OnSetChord" />
                             <Button Content="Clear" Width="60" Height="24" Margin="8,0,0,0"
                                     VerticalAlignment="Center" Click="OnClearChord" />
                         </StackPanel>
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="Click the box and press your shortcut (e.g. Ctrl+Shift+U)." />
+                                   Text="Press Set… and hold your shortcut (e.g. Ctrl+Shift+U), then let go." />
                         <TextBlock x:Name="LblChordWarn" Style="{StaticResource Warn}" />
 
                         <TextBlock Text="Passphrase" Style="{StaticResource SubHeader}" />
@@ -221,17 +234,21 @@
                         <CheckBox x:Name="ChkMouseHold" Content="Unlock by holding the popup button" />
                         <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
                             <TextBlock Text="Hold for" VerticalAlignment="Center" />
-                            <TextBox x:Name="TxtHoldMs" Width="70" Margin="8,0" />
+                            <TextBox x:Name="TxtHoldMs" Width="70" Margin="8,0"
+                                     MaxLength="5" />
                             <TextBlock Text="milliseconds" VerticalAlignment="Center" />
                         </StackPanel>
+                        <TextBlock x:Name="LblHoldWarn" Style="{StaticResource Warn}" />
 
                         <TextBlock Text="Auto timer" Style="{StaticResource SubHeader}" />
                         <CheckBox x:Name="ChkTimer" Content="Automatically unlock after a delay" />
                         <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
                             <TextBlock Text="Unlock after" VerticalAlignment="Center" />
-                            <TextBox x:Name="TxtTimerSeconds" Width="70" Margin="8,0" />
+                            <TextBox x:Name="TxtTimerSeconds" Width="70" Margin="8,0"
+                                     MaxLength="5" />
                             <TextBlock Text="seconds" VerticalAlignment="Center" />
                         </StackPanel>
+                        <TextBlock x:Name="LblTimerWarn" Style="{StaticResource Warn}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

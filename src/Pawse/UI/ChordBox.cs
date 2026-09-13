@@ -107,7 +107,16 @@ public sealed class ChordBox : TextBox
         e.Handled = true;                   // capturing: swallow so keys don't navigate/Save/open Alt-menu
         if (e.IsRepeat) return;
 
-        var key = e.Key == Key.System ? e.SystemKey : e.Key; // Alt/F10 arrive as Key.System
+        // Alt/F10 arrive as Key.System. When the Text Services Framework is in the way -
+        // notably in an elevated process, where UIPI keeps it from reaching ctfmon - keys
+        // arrive as Key.ImeProcessed instead, and VirtualKeyFromKey would hand back 0 for
+        // that, so the vk == 0 guard below silently dropped every one of them.
+        var key = e.Key switch
+        {
+            Key.System => e.SystemKey,
+            Key.ImeProcessed => e.ImeProcessedKey,
+            _ => e.Key,
+        };
 
         if (key == Key.Escape)
         {

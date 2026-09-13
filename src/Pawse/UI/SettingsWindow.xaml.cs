@@ -48,10 +48,20 @@ public partial class SettingsWindow : Window
     /// window only asks. See <see cref="SetLocked"/> for how the answer comes back.</summary>
     public event Action? UnlockRequested;
 
-    public SettingsWindow(Config cfg, Func<bool> isLocked)
+    /// <summary>Live lock state; also drives <see cref="ChordBox.IsRecordingBlocked"/>.</summary>
+    private readonly Func<bool> _isLocked;
+
+    /// <summary>Opens the shortcut recorder over this window and returns what it captured, or
+    /// null when cancelled. App owns it because the recorder needs the LockController (it
+    /// reads the global hook), and this window is deliberately kept to Config + callbacks.</summary>
+    private readonly Func<Window, List<string>?> _recordChord;
+
+    public SettingsWindow(Config cfg, Func<bool> isLocked, Func<Window, List<string>?> recordChord)
     {
         InitializeComponent();
         _cfg = cfg;
+        _isLocked = isLocked;
+        _recordChord = recordChord;
         // The version reads from the title bar now, and again on the About page - the
         // footer is just Cancel/Save.
         Title = "Pawse settings - v" + App.Version;
@@ -81,6 +91,17 @@ public partial class SettingsWindow : Window
         ChkPassphrase.Checked += (_, _) => UpdateWarnings();
         ChkPassphrase.Unchecked += (_, _) => UpdateWarnings();
         UpdateWarnings();
+
+        // Digits only, typed or pasted, so the field cannot hold something ParseInt will
+        // silently throw away on save.
+        foreach (var box in new[] { TxtHoldMs, TxtTimerSeconds })
+        {
+            box.PreviewTextInput += OnDigitsOnly;
+            System.Windows.DataObject.AddPastingHandler(box, OnPasteDigitsOnly);
+            box.TextChanged += (_, _) => UpdateNumberWarnings();
+        }
+        UpdateNumberWarnings();
+
         SetLocked(isLocked());
     }
 
@@ -343,6 +364,65 @@ public partial class SettingsWindow : Window
     {
         TxtLockHotkey.Chord = new List<string>();
         UpdateWarnings();
+    }
+
+    private void OnSetLockHotkey(object sender, RoutedEventArgs e)
+        => RecordInto(TxtLockHotkey, LblLockHotkeyWarn);
+
+    private void OnSetChord(object sender, RoutedEventArgs e)
+        => RecordInto(TxtChord, LblChordWarn);
+
+    /// <summary>Run the recorder and take what it captured. The recorder reads Pawse's global
+    /// hook rather than WPF key events, so it works regardless of what this window's keyboard
+    /// focus or text-input path is doing - which is the whole reason it exists.</summary>
+    private void RecordInto(ChordBox box, System.Windows.Controls.TextBlock warn)
+    {
+        // Same refusal as clicking the box: while locked the hook swallows everything for the
+        // lock, and stray keys would feed the live unlock matchers.
+        if (_isLocked())
+        {
+            ShowBlocked(warn);
+            return;
+        }
+        var chord = _recordChord(this);
+        if (chord is null || chord.Count == 0) return;   // cancelled, or a rejected key
+        box.Chord = chord;
+        UpdateWarnings();
+    }
+
+    private static void OnDigitsOnly(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        => e.Handled = !e.Text.All(char.IsAsciiDigit);
+
+    private static void OnPasteDigitsOnly(object sender, DataObjectPastingEventArgs e)
+    {
+        var text = e.DataObject.GetData(System.Windows.DataFormats.UnicodeText) as string;
+        if (string.IsNullOrEmpty(text) || !text.All(char.IsAsciiDigit)) e.CancelCommand();
+    }
+
+    /// <summary>Say the range while the user is typing. ParseInt still clamps on save - this
+    /// only stops a silently corrected value being the first the user hears of it.</summary>
+    private void UpdateNumberWarnings()
+    {
+        SetRangeWarn(LblHoldWarn, TxtHoldMs.Text,
+                     Config.MouseHoldCfg.MinHoldMs, Config.MouseHoldCfg.MaxHoldMs, "milliseconds");
+        // The floor of 1 matches OnSave's ParseInt call, which hard-codes it rather than
+        // taking a Config constant the way the ceiling does.
+        SetRangeWarn(LblTimerWarn, TxtTimerSeconds.Text, 1, Config.TimerCfg.MaxSeconds, "seconds");
+    }
+
+    private static void SetRangeWarn(System.Windows.Controls.TextBlock label, string? text,
+                                     int min, int max, string unit)
+    {
+        bool ok = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)
+                  && v >= min && v <= max;
+        if (ok)
+        {
+            label.Visibility = Visibility.Collapsed;
+            return;
+        }
+        label.Text = $"Enter a whole number from {min} to {max} {unit} - "
+                   + "anything else is corrected when you save.";
+        label.Visibility = Visibility.Visible;
     }
 
     private void UpdateWarnings()
