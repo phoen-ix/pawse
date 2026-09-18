@@ -4,21 +4,57 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pawse - a cat-proof keyboard lock for Windows</title>
-<meta name="description" content="Pawse freezes your keyboard with one click so a cat walking across it can't wreck your work. Unlock deliberately - a chord, a passphrase, a hold, or a timer. Free, open source, and local unless you ask it to check for updates.">
+<meta name="description" content="Pawse freezes your keyboard with one click so a cat can't wreck your work. Unlock with a chord, passphrase, hold or timer. Open source, for Windows 10 and 11.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#17131f">
+<!-- www.pawse.at serves this same page; the canonical tells search engines which one counts. -->
+<link rel="canonical" href="https://pawse.at/">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://pawse.at">
+<meta property="og:site_name" content="Pawse">
+<meta property="og:url" content="https://pawse.at/">
 <meta property="og:title" content="Pawse - a cat-proof keyboard lock for Windows">
-<meta property="og:description" content="One click freezes the keyboard so a cat can't wreck your work. Unlock your way. Free, open source, and local by default.">
-<meta property="og:image" content="https://pawse.at/og.png">
+<meta property="og:description" content="One click freezes the keyboard so a cat can't wreck your work. Unlock your way. Open source, and local by default.">
+<!-- ?v= busts link-preview caches; bump it whenever og.png.py regenerates the card. -->
+<meta property="og:image" content="https://pawse.at/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="pawse. - A cat-proof keyboard lock for Windows. Open source, MIT.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
+<!-- Structured data for search engines. A JSON-LD block is data, never executed, so the
+     CSP's no-script rule doesn't touch it. No softwareVersion: nothing updates this page
+     on release day, so it would go stale. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Pawse",
+      "url": "https://pawse.at/"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Pawse",
+      "url": "https://pawse.at/",
+      "description": "A cat-proof keyboard lock for Windows. One click or a hotkey freezes the keyboard; unlock deliberately with a chord, a passphrase, a hold-to-unlock button or an auto-timer.",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Windows 10, Windows 11",
+      "image": "https://pawse.at/og.png",
+      "downloadUrl": "https://github.com/phoen-ix/pawse/releases/latest",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "sameAs": "https://github.com/phoen-ix/pawse"
+    }
+  ]
+}
+</script>
 <style>
   :root{
     --bg:#17131f; --panel:rgba(255,247,237,.035);
     --ink:#F7EFE4; --soft:rgba(247,239,228,.66); --faint:rgba(247,239,228,.52); /* ≥4.5:1 on bg for the 10.5-12px text (WCAG AA) */
     --violet:#8B6CF0; --cream:#FFF7ED; --amber:#F5C97B;
+    --lilac:#B4A2F7; /* violet lifted for small text: 6.8:1 on the violet-tinted pick row, where --violet is 3.9:1 */
     --line:rgba(247,239,228,.12);
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code","Segoe UI Mono",Menlo,Consolas,monospace;
@@ -87,13 +123,14 @@
 
   /* sections */
   .feat,.sec{position:relative; z-index:2; padding:26px 0 20px}
-  .rule{display:flex; align-items:center; gap:16px; color:var(--faint); font-family:var(--mono); font-size:11.5px; letter-spacing:.24em; text-transform:uppercase; margin:0 0 26px}
+  /* .rule / .sub are the section headings (h2 / h3), styled as small labels */
+  .rule{display:flex; align-items:center; gap:16px; color:var(--faint); font-family:var(--mono); font-size:11.5px; font-weight:400; letter-spacing:.24em; text-transform:uppercase; margin:0 0 26px}
   .rule::before,.rule::after{content:""; height:1px; background:var(--line); flex:1}
   .intro{color:var(--soft); font-size:15.5px; max-width:62ch; margin:-6px 0 22px}
   .intro b{color:var(--ink); font-weight:600}
-  .sub{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:28px 0 12px}
+  .sub{font-family:var(--mono); font-size:11.5px; font-weight:400; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:28px 0 12px}
   .note{color:var(--faint); font-size:12.5px; line-height:1.65; margin:18px 0 0; max-width:74ch}
-  .note code,.intro code{font-family:var(--mono); font-size:.92em; color:var(--soft)}
+  .note code,.intro code,.card code{font-family:var(--mono); font-size:.92em; color:var(--soft)}
 
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
   .grid.two{grid-template-columns:repeat(2,1fr)}
@@ -125,7 +162,7 @@
   .chip{justify-self:start; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap;
     border:1px solid var(--line); border-radius:100px; padding:4px 10px; color:var(--faint)}
   .chip.on{color:var(--amber); border-color:rgba(245,201,123,.35); background:rgba(245,201,123,.06)}
-  .chip.rec{color:var(--violet); border-color:rgba(139,108,240,.5); background:rgba(139,108,240,.1)}
+  .chip.rec{color:var(--lilac); border-color:rgba(139,108,240,.5); background:rgba(139,108,240,.1)}
 
   footer{position:relative; z-index:2; margin-top:34px; padding:30px 0 46px; border-top:1px solid var(--line);
     display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:space-between; color:var(--faint); font-family:var(--mono); font-size:12px; letter-spacing:.06em}
@@ -205,7 +242,7 @@
   </section>
 
   <section class="feat">
-    <p class="rule">What Pawse does</p>
+    <h2 class="rule">What Pawse does</h2>
     <div class="grid">
       <div class="card"><span class="kbd">Ctrl+L</span>
         <span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
@@ -234,7 +271,7 @@
   </section>
 
   <section class="sec">
-    <p class="rule">Unlocking</p>
+    <h2 class="rule">Unlocking</h2>
     <p class="intro">Four ways in, each switched on or off in Settings. Whatever you turn off, Pawse keeps at least one <b>working</b> method enabled - a lock you couldn't undo would be worse than no lock.</p>
     <div class="rows">
       <div class="row">
@@ -258,7 +295,7 @@
   </section>
 
   <section class="sec">
-    <p class="rule">Download</p>
+    <h2 class="rule">Download</h2>
     <p class="intro">Windows 10 or 11, 64-bit. <b>Not sure which? Take the all-in-one installer</b> - it carries everything and asks you nothing. Nothing here needs administrator rights unless you choose to install for every account on the PC.</p>
     <!-- Every row links to releases/latest rather than a versioned asset: GitHub resolves
          that to the newest release, so nothing here needs touching on release day. The
@@ -278,7 +315,7 @@
         <span class="what">Carries both builds and asks which one to install.</span>
       </a>
     </div>
-    <p class="sub">Or stay portable</p>
+    <h3 class="sub">Or stay portable</h3>
     <div class="rows">
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-x.y.z.zip</span><span class="chip">~61 MB</span>
@@ -293,7 +330,7 @@
   </section>
 
   <section class="sec">
-    <p class="rule">What it can't block</p>
+    <h2 class="rule">What it can't block</h2>
     <p class="intro">A keyboard hook is not a kernel driver, and pretending otherwise would be the wrong kind of confidence. Four things stay out of reach:</p>
     <div class="grid two">
       <div class="card plain">
@@ -306,6 +343,24 @@
         <h3>Simulated keystrokes</h3><p>Windows says a keystroke was simulated, never which program did it - so while on-screen keyboards are allowed, macro tools can type too. One setting shuts both out.</p></div>
     </div>
     <p class="note">And if Pawse itself dies, the lock dies with it: Windows drops the hook and the keyboard is yours again. Anything it switched on at the OS level is reverted on unlock, on quit, and swept on the next start if it was killed outright.</p>
+  </section>
+
+  <section class="sec">
+    <h2 class="rule">Questions</h2>
+    <div class="grid two">
+      <div class="card plain">
+        <h3>How do I stop my cat typing on my keyboard?</h3><p>Lock the keyboard before you step away - click the tray paw or press Ctrl+L. Every key the cat steps on is swallowed, and the unlock chord only counts when its keys are the only ones held, so paws can't set it off.</p></div>
+      <div class="card plain">
+        <h3>Can I lock just the keyboard in Windows 10 or 11?</h3><p>Win+L locks the whole session and hides the screen. Pawse freezes only the keyboard, so a video, a download or a presentation keeps running where you can see it.</p></div>
+      <div class="card plain">
+        <h3>Can I clean my keyboard without shutting down?</h3><p>Lock it, wipe the keys, then hold the unlock button on the floating popup - no keyboard needed. Or let the auto timer unlock it for you.</p></div>
+      <div class="card plain">
+        <h3>Does it keep toddlers off the keyboard too?</h3><p>Any small visitor, cat or not. For hands that go for the mouse as well, one setting blocks the mouse while locked.</p></div>
+      <div class="card plain">
+        <h3>Is it safe to run?</h3><p>The source is on GitHub under the MIT license. No telemetry, and no connection until you check for updates. Every release is built by CI and published with a <code>SHA256SUMS.txt</code>.</p></div>
+      <div class="card plain">
+        <h3>Will it run on my PC?</h3><p>Windows 10 or 11, 64-bit. No administrator rights needed unless you install for every account on the PC. What it can't block is listed above.</p></div>
+    </div>
   </section>
 
   <footer>
