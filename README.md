@@ -10,7 +10,7 @@ This is a native Windows app (C# / .NET 10, WPF + a WinForms tray).
 ## Install
 
 Two ways to install, both from the [latest release](https://github.com/phoen-ix/pawse/releases)
-(or via [pawse.at](https://pawse.at)):
+(or via [pawse.at](https://www.pawse.at)):
 
 - **Installer** - run a `Pawse-Setup-<version>*.exe`. Installs per-user by default (no
   admin), offers Start Menu/Desktop shortcuts, and uninstalls cleanly from Windows'

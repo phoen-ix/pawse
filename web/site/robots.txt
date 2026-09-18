@@ -2,4 +2,4 @@ User-agent: *
 # The app's update feed, not a page - keep it out of search results.
 Disallow: /latest.json
 
-Sitemap: https://pawse.at/sitemap.xml
+Sitemap: https://www.pawse.at/sitemap.xml
