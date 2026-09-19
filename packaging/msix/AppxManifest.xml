@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Package manifest for the Microsoft Store build. A template: build-msix.ps1 fills in the four
+  $TOKENS$ and writes the result into the package. The identity has to match what Partner
+  Center reserved for the app (repo variables STORE_*; see README.md) - anything else is fine
+  for a local test install and is refused by the Store.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 desktop desktop6 virtualization rescap">
+
+  <!-- Four-part version: the Store reserves the last part and requires it to be 0. -->
+  <Identity Name="$IDENTITY_NAME$" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Pawse</DisplayName>
+    <PublisherDisplayName>$PUBLISHER_DISPLAY_NAME$</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+
+    <!-- Block Win+L works by writing the DisableLockWorkstation policy value in HKCU
+         (Core/WorkstationLock.cs). A packaged app's HKCU writes normally land in a private
+         per-app hive that Windows itself never reads, so the block would silently do nothing.
+         On Windows 11 only the two keys Pawse writes are exempt: the policy key, and
+         Software\Pawse, which holds the markers that let ANY later Pawse - Store, installer or
+         portable - revert a value a crash or uninstall left behind. Windows 10 predates the
+         per-key form and takes the older switch, which exempts all of HKCU; this build writes
+         nothing else there (start-at-sign-in is the StartupTask below, not the Run key).
+         Both need the unvirtualizedResources capability at the bottom. -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <virtualization:RegistryWriteVirtualization>
+      <virtualization:ExcludedKeys>
+        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\System</virtualization:ExcludedKey>
+        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Pawse</virtualization:ExcludedKey>
+      </virtualization:ExcludedKeys>
+    </virtualization:RegistryWriteVirtualization>
+  </Properties>
+
+  <!-- 19041 (Windows 10 2004) is also the TFM the Store build compiles against (Pawse.csproj). -->
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Pawse" Executable="Pawse.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Pawse"
+        Description="A cat-proof keyboard lock for Windows."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Start at sign-in (Core/Autostart.Store.cs). Off until the user ticks it in
+             Settings, as with the other builds. TaskId is a constant there too. -->
+        <desktop:Extension Category="windows.startupTask" Executable="Pawse.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="PawseStartup" Enabled="false" DisplayName="Pawse" />
+        </desktop:Extension>
+
+        <!-- %LOCALAPPDATA%\Microsoft\WindowsApps\pawse.exe. Restart as administrator goes
+             through it (Core/Elevation.cs): started that way the elevated copy is still the
+             package, with its data folder and startup task. Also makes `pawse` work in Win+R. -->
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="Pawse.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="pawse.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <!-- Restricted capabilities: each needs a justification in the Partner Center submission
+       (drafts in README.md).
+       runFullTrust - a desktop app; the low-level keyboard and mouse hooks need it.
+       allowElevation - Restart as administrator, which Block Win+L needs on managed PCs and
+                        the Keyboard Filter (browser/media keys) needs everywhere.
+       unvirtualizedResources - the two HKCU keys above. -->
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="allowElevation" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>

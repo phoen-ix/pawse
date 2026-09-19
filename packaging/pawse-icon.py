@@ -40,3 +40,25 @@ ico = os.path.join(here, 'pawse.ico')
 imgs[0].save(ico, format='ICO', sizes=[(s, s) for s in sizes], append_images=imgs[1:])
 render(256).save(os.path.join(here, 'pawse.png'))
 print('wrote', ico)
+
+# The Store build's MSIX logos (packaging/msix/Assets, referenced by AppxManifest.xml): the
+# same paw at the sizes Windows asks a package for. Names carry MRT qualifiers - .scale-200
+# for high-DPI, targetsize-N_altform-unplated for the taskbar and app list, which then show
+# the paw as-is instead of on a coloured plate - and build-msix.ps1 indexes them with makepri
+# so Windows picks the right file. Tiles get the paw with room around it, as tiles expect.
+def framed(w, h, icon):
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    paw = render(icon)
+    img.paste(paw, ((w - icon) // 2, (h - icon) // 2), paw)
+    return img
+
+assets = os.path.join(here, 'msix', 'Assets')
+os.makedirs(assets, exist_ok=True)
+for k, suffix in ((1, ''), (2, '.scale-200')):
+    framed(150 * k, 150 * k, 100 * k).save(os.path.join(assets, f'Square150x150Logo{suffix}.png'))
+    framed(310 * k, 150 * k, 100 * k).save(os.path.join(assets, f'Wide310x150Logo{suffix}.png'))
+    render(44 * k).save(os.path.join(assets, f'Square44x44Logo{suffix}.png'))
+    render(50 * k).save(os.path.join(assets, f'StoreLogo{suffix}.png'))
+for t in (16, 24, 32, 48, 256):
+    render(t).save(os.path.join(assets, f'Square44x44Logo.targetsize-{t}_altform-unplated.png'))
+print('wrote', assets)

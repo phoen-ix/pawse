@@ -276,3 +276,82 @@ jobs:
           Wait-PawseGone 8
           Wait-Removed $env:UNINST_KEY_MACHINE $env:MIN_DIR
           if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }
+
+  # The Microsoft Store build (packaging/msix), built the way release.yml builds it - which
+  # compiles the Store flavor with warnings as errors (the updater's files are not compiled
+  # there at all, so anything still calling into them fails here) and has makeappx validate
+  # the manifest. Then the parts only a packaged run can show, on a throwaway machine:
+  #   - it really runs as its package, with its config in the package's LocalState;
+  #   - Block Win+L's policy value is visible OUTSIDE the package, i.e. the registry
+  #     virtualization exemption in AppxManifest.xml works - without it the write lands in a
+  #     private hive and Win+L is never blocked;
+  #   - a copy killed while locked leaves the value behind, and the next start sweeps it
+  #     from the marker in Software\Pawse (the same exemption), which is all an MSIX has in
+  #     place of an uninstaller's sweep.
+  store:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # The SDK is chosen by global.json, not here: setup-dotnet installs ALONGSIDE
+          # what the runner image ships and `dotnet` then picks the newest one, so a bare
+          # dotnet-version pins nothing and a new image could swap the SDK under the build.
+          global-json-file: global.json
+
+      - name: Build the MSIX
+        shell: pwsh
+        run: ./packaging/msix/build-msix.ps1
+
+      # An unsigned layout registers only with Developer Mode on - which is exactly how the
+      # build script's -Register installs it on a dev box.
+      - name: Install the package layout
+        shell: pwsh
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /v AllowDevelopmentWithoutDevLicense /t REG_DWORD /d 1 /f
+          if ($LASTEXITCODE -ne 0) { throw "could not enable Developer Mode" }
+          Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
+          Add-AppxPackage -Register packaging/msix/out/stage/AppxManifest.xml
+          $pkg = Get-AppxPackage -Name Pawse.Dev
+          if (-not $pkg) { throw "Pawse.Dev did not register" }
+          "registered $($pkg.PackageFullName)"
+          "PKG_FULL=$($pkg.PackageFullName)" >> $env:GITHUB_ENV
+          "LOCAL_STATE=$env:LOCALAPPDATA\Packages\$($pkg.PackageFamilyName)\LocalState" >> $env:GITHUB_ENV
+          "PAWSE_ALIAS=$env:LOCALAPPDATA\Microsoft\WindowsApps\pawse.exe" >> $env:GITHUB_ENV
+
+      - name: Packaged start - identity, data folder, Win+L outside the package
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          New-Item -ItemType Directory $env:LOCAL_STATE -Force | Out-Null
+          # Lock at start with Block Win+L on, so the policy value gets written.
+          '{"General":{"Logging":true,"StartLocked":true},"SystemBlock":{"WinLock":true}}' |
+            Set-Content (Join-Path $env:LOCAL_STATE 'pawse.json')
+          # Through the app execution alias, the way Restart as administrator relaunches it.
+          Start-Process $env:PAWSE_ALIAS
+          $log = Join-Path $env:LOCAL_STATE 'pawse.log'
+          Wait-PawseStarted $log 1
+          $line = "$(Select-String -Path $log -Pattern 'store build: package' | Select-Object -Last 1)"
+          $line
+          $has = { param($text) $line.IndexOf($text, [StringComparison]::OrdinalIgnoreCase) -ge 0 }
+          if (-not (& $has $env:PKG_FULL)) { throw "Pawse did not run as its package" }
+          if (-not (& $has $env:LOCAL_STATE)) { throw "Pawse's data folder is not the package's LocalState" }
+          Wait-WinLockPolicy 1 20
+
+      - name: Killed while locked - the next start sweeps the value
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          # A hard kill skips OnExit, like a crash or an uninstall that just ends the process.
+          Stop-Process -Name Pawse -Force
+          Wait-PawseGone 10
+          if ((Get-WinLockPolicy) -ne 1) { throw "the value should outlive a hard kill - is the test still testing anything?" }
+          '{"General":{"Logging":true},"SystemBlock":{"WinLock":true}}' |
+            Set-Content (Join-Path $env:LOCAL_STATE 'pawse.json')
+          Start-Process $env:PAWSE_ALIAS
+          Wait-PawseStarted (Join-Path $env:LOCAL_STATE 'pawse.log') 2
+          Wait-WinLockPolicy $null 20
+          Stop-Process -Name Pawse -Force
+          Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
+          Remove-AppxPackage -Package $env:PKG_FULL

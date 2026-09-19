@@ -46,3 +46,21 @@ function Wait-Removed([string]$key, [string]$dir) {
     if (Test-Path $key) { throw "the uninstall left $key in the registry" }
     if (Test-Path $dir) { throw "the uninstall left $dir behind: $((Get-ChildItem $dir -Force).Name -join ', ')" }
 }
+
+# Used by the store job: Block Win+L's policy value as seen from OUTSIDE the package - this
+# shell is not the package, so it reads the real HKCU. Null when the value is absent.
+function Get-WinLockPolicy {
+    (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+        -Name DisableLockWorkstation -ErrorAction SilentlyContinue).DisableLockWorkstation
+}
+
+function Wait-WinLockPolicy($expected, [int]$seconds) {
+    # The lock engages (and the value is written) on a dispatcher turn after "startup
+    # complete" is logged, and the next start's sweep likewise - so poll rather than read once.
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        if ((Get-WinLockPolicy) -eq $expected) { "DisableLockWorkstation is $(if ($null -eq $expected) { 'absent' } else { $expected })"; return }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "DisableLockWorkstation is '$(Get-WinLockPolicy)', expected '$expected' after $seconds s"
+}

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Security.Principal;
 
 namespace Pawse.Core;
@@ -56,6 +57,15 @@ public static class Elevation
     {
         var exe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exe)) { Log.Error("relaunch: no ProcessPath"); return false; }
+#if STORE
+        // A packaged app elevates itself through its app execution alias (AppxManifest.xml,
+        // with the allowElevation capability): the copy that starts keeps package identity,
+        // and with it the StartupTask and the data folder. Started by its path inside
+        // WindowsApps it would not be the package at all.
+        var alias = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                 "Microsoft", "WindowsApps", "pawse.exe");
+        if (File.Exists(alias)) exe = alias;
+#endif
         try
         {
             Process.Start(new ProcessStartInfo

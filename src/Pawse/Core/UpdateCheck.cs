@@ -129,9 +129,10 @@ public static class UpdateCheck
     /// wall, a rename to somewhere else) is not an answer about a release.</summary>
     private const string GitHubHost = "github.com";
 
-    /// <summary>The version a local build reports (Pawse.csproj ships 0.0.0-dev; CI injects
-    /// the real one). Checking it against a release would always claim an update.</summary>
-    public const string DevVersion = "0.0.0";
+    /// <summary>The version a local build reports - see <see cref="App.DevVersion"/>, which
+    /// the Store build (no UpdateCheck) needs too. Checking it against a release would always
+    /// claim an update.</summary>
+    public const string DevVersion = App.DevVersion;
 
     /// <summary>Also hard-coded in packaging/pawse.nsi as UNINST_KEY - change both or
     /// neither, or an installed Pawse starts reading as portable.</summary>

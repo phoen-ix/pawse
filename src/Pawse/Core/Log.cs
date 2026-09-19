@@ -105,6 +105,17 @@ public static class Log
 
     private static string ResolveBaseDir()
     {
+#if STORE
+        // The Store build keeps everything in its package's own data folder (LocalState). The
+        // install folder is read-only, and the %APPDATA% fallback below is redirected for a
+        // packaged app into a private location nothing outside the package can see - so
+        // "Open config file" would hand Notepad a path with no file behind it. LocalState is
+        // a real path, the same for an elevated relaunch (it keeps package identity), and
+        // Windows removes it on uninstall. No identity - the exe started outside its package -
+        // throws, and the classic rules below take over.
+        try { return global::Windows.Storage.ApplicationData.Current.LocalFolder.Path; }
+        catch { /* not running as a package */ }
+#endif
         // An existing pawse.json decides first: the writability probe depends on the
         // process token, so an elevated relaunch from e.g. Program Files would
         // otherwise resolve a DIFFERENT directory than the run that launched it -

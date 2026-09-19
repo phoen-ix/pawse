@@ -329,40 +329,49 @@
                                        RequestNavigate="OnOpenLink">github.com/phoen-ix/pawse</Hyperlink>
                         </TextBlock>
 
-                        <TextBlock Text="Updates" Style="{StaticResource SubHeader}" />
-                        <RadioButton x:Name="RbUpdManual" GroupName="UpdateMode"
-                                     Content="Only when I ask" Margin="0,4,0,2" />
-                        <RadioButton x:Name="RbUpdNotify" GroupName="UpdateMode"
-                                     Content="Tell me when an update is ready" Margin="0,4,0,2" />
-                        <RadioButton x:Name="RbUpdAuto" GroupName="UpdateMode"
-                                     Content="Download and install updates automatically" Margin="0,4,0,2" />
-                        <TextBlock Style="{StaticResource Hint}"
-                                   Text="Only when I ask is the default: nothing leaves this machine until you press Check now. The other two look once a day while Pawse is running. A check asks github.com; installing also asks pawse.at, to cross-check the download against a second host." />
-                        <!-- Filled in code when this copy cannot install updates on its own, so
-                             "automatically" never silently means "notify". -->
-                        <TextBlock x:Name="LblUpdateCaveat" Style="{StaticResource Warn}" />
-                        <!-- A Grid, not a horizontal StackPanel: that measures its children with
-                             infinite width, so the status text would never wrap however long the
-                             message gets. -->
-                        <Grid Margin="22,4,0,2">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Top">
-                                <Button x:Name="BtnCheckUpdates" Content="Check now"
-                                        Width="100" Height="26" Click="OnCheckUpdates" />
-                                <!-- Only after a check found nobody home. A failure that a retry
-                                     would fix shouldn't cost a modal, but the downloads page
-                                     should still be one click away. -->
-                                <Button x:Name="BtnDownloadsPage" Content="Downloads page"
-                                        Width="120" Height="26" Margin="8,0,0,0"
-                                        Visibility="Collapsed" Click="OnOpenDownloadsPage" />
-                            </StackPanel>
-                            <TextBlock x:Name="LblUpdateStatus" Grid.Column="1" VerticalAlignment="Center"
-                                       Margin="10,0,0,0" FontSize="11" Foreground="#FF7A808A"
-                                       TextWrapping="Wrap" />
-                        </Grid>
+                        <!-- The Store build updates through the Store and has no updater: this
+                             panel stays collapsed there, and the hint below shows instead.
+                             SettingsWindow.Updates.cs makes it visible and wires its buttons in
+                             code rather than with Click= here, because the handlers live in a
+                             file the Store build does not compile. -->
+                        <TextBlock x:Name="LblStoreUpdates" Text="Updates come from the Microsoft Store."
+                                   Style="{StaticResource Hint}" Margin="0,14,0,0" Visibility="Collapsed" />
+                        <StackPanel x:Name="UpdatesPanel" Visibility="Collapsed">
+                            <TextBlock Text="Updates" Style="{StaticResource SubHeader}" />
+                            <RadioButton x:Name="RbUpdManual" GroupName="UpdateMode"
+                                         Content="Only when I ask" Margin="0,4,0,2" />
+                            <RadioButton x:Name="RbUpdNotify" GroupName="UpdateMode"
+                                         Content="Tell me when an update is ready" Margin="0,4,0,2" />
+                            <RadioButton x:Name="RbUpdAuto" GroupName="UpdateMode"
+                                         Content="Download and install updates automatically" Margin="0,4,0,2" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Only when I ask is the default: nothing leaves this machine until you press Check now. The other two look once a day while Pawse is running. A check asks github.com; installing also asks pawse.at, to cross-check the download against a second host." />
+                            <!-- Filled in code when this copy cannot install updates on its own, so
+                                 "automatically" never silently means "notify". -->
+                            <TextBlock x:Name="LblUpdateCaveat" Style="{StaticResource Warn}" />
+                            <!-- A Grid, not a horizontal StackPanel: that measures its children with
+                                 infinite width, so the status text would never wrap however long the
+                                 message gets. -->
+                            <Grid Margin="22,4,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button x:Name="BtnCheckUpdates" Content="Check now"
+                                            Width="100" Height="26" />
+                                    <!-- Only after a check found nobody home. A failure that a retry
+                                         would fix shouldn't cost a modal, but the downloads page
+                                         should still be one click away. -->
+                                    <Button x:Name="BtnDownloadsPage" Content="Downloads page"
+                                            Width="120" Height="26" Margin="8,0,0,0"
+                                            Visibility="Collapsed" />
+                                </StackPanel>
+                                <TextBlock x:Name="LblUpdateStatus" Grid.Column="1" VerticalAlignment="Center"
+                                           Margin="10,0,0,0" FontSize="11" Foreground="#FF7A808A"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

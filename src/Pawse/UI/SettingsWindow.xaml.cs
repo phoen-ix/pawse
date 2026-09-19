@@ -36,14 +36,6 @@ public partial class SettingsWindow : Window
     /// <summary>Raised after Save has written control values back into the config.</summary>
     public event Action? Applied;
 
-    /// <summary>Raised by "Check now". App owns the check itself (and the download that may
-    /// follow); this window only shows what came of it - see <see cref="ShowUpdateStatus"/>.</summary>
-    public event Action? CheckUpdatesRequested;
-
-    /// <summary>Raised by the "Downloads page" button that appears after a failed check. App
-    /// owns opening it, the same as it owns the check itself.</summary>
-    public event Action? DownloadsPageRequested;
-
     /// <summary>Raised by the locked banner's Unlock button. App owns the lock state; this
     /// window only asks. See <see cref="SetLocked"/> for how the answer comes back.</summary>
     public event Action? UnlockRequested;
@@ -56,6 +48,14 @@ public partial class SettingsWindow : Window
     /// reads the global hook), and this window is deliberately kept to Config + callbacks.</summary>
     private readonly Func<Window, List<string>?> _recordChord;
 
+    // The About page's update controls live in SettingsWindow.Updates.cs; the Store build
+    // compiles SettingsWindow.Store.cs instead (see Pawse.csproj), which has no updater and
+    // only says where updates come from. InitUpdateSection is implemented by whichever of the
+    // two is in the build; a partial method with no body compiles away with its calls.
+    partial void InitUpdateSection();
+    partial void LoadUpdates();
+    partial void SaveUpdates();
+
     public SettingsWindow(Config cfg, Func<bool> isLocked, Func<Window, List<string>?> recordChord)
     {
         InitializeComponent();
@@ -65,7 +65,7 @@ public partial class SettingsWindow : Window
         // The version reads from the title bar now, and again on the About page - the
         // footer is just Cancel/Save.
         Title = "Pawse settings - v" + App.Version;
-        LblVersion.Text = App.Version == UpdateCheck.DevVersion
+        LblVersion.Text = App.Version == App.DevVersion
             ? $"Pawse {App.Version} - development build"
             : $"Pawse {App.Version}";
         // The default size does not fit a 1366x768 laptop at 125% scaling, and
@@ -74,6 +74,7 @@ public partial class SettingsWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
         Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
         SldOpacity.Minimum = Config.OverlayCfg.MinOpacity;
+        InitUpdateSection();
         LoadMonitors();
         LoadFromConfig();
 
@@ -167,13 +168,7 @@ public partial class SettingsWindow : Window
         ChkTimer.IsChecked = _cfg.Unlock.Timer.Enabled;
         TxtTimerSeconds.Text = _cfg.Unlock.Timer.Seconds.ToString(CultureInfo.InvariantCulture);
 
-        RbUpdManual.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Manual;
-        RbUpdNotify.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Notify;
-        RbUpdAuto.IsChecked = _cfg.Update.ModeValue == Config.UpdateMode.Automatic;
-        ShowUpdateCaveat();
-        LblUpdateStatus.Text = _cfg.Update.LastCheckUtc is { } last
-            ? $"Last checked {last.ToLocalTime():yyyy-MM-dd HH:mm}"
-            : "Never checked";
+        LoadUpdates();
 
         ChkOverlay.IsChecked = _cfg.Overlay.Enabled;
         _configuredDisplays = new List<int>(_cfg.Overlay.Displays);
@@ -215,10 +210,7 @@ public partial class SettingsWindow : Window
         _cfg.Unlock.Timer.Enabled = ChkTimer.IsChecked == true;
         _cfg.Unlock.Timer.Seconds = ParseInt(TxtTimerSeconds.Text, _cfg.Unlock.Timer.Seconds, 1, Config.TimerCfg.MaxSeconds);
 
-        _cfg.Update.ModeValue =
-            RbUpdAuto.IsChecked == true ? Config.UpdateMode.Automatic :
-            RbUpdNotify.IsChecked == true ? Config.UpdateMode.Notify :
-            Config.UpdateMode.Manual;
+        SaveUpdates();
 
         _cfg.Overlay.Enabled = ChkOverlay.IsChecked == true;
         _cfg.Overlay.AllDisplays = CmbDisplayMode.SelectedIndex == 0;
@@ -250,41 +242,6 @@ public partial class SettingsWindow : Window
 
         Applied?.Invoke();
         Close();
-    }
-
-    private void OnCheckUpdates(object sender, RoutedEventArgs e)
-    {
-        BtnCheckUpdates.IsEnabled = false;
-        BtnDownloadsPage.Visibility = Visibility.Collapsed;
-        LblUpdateStatus.Text = "Checking…";
-        CheckUpdatesRequested?.Invoke();
-    }
-
-    private void OnOpenDownloadsPage(object sender, RoutedEventArgs e) => DownloadsPageRequested?.Invoke();
-
-    /// <summary>Progress while a check is still running: the text changes, the button stays
-    /// disabled. <see cref="ShowUpdateStatus"/> is the terminal one and re-enables it.</summary>
-    public void ShowUpdateProgress(string text) => LblUpdateStatus.Text = text;
-
-    /// <summary>A check that reached nobody. The button becomes the retry - a first attempt
-    /// fails far more often than a second - and the downloads page moves in beside it rather
-    /// than interrupting with a dialog.</summary>
-    public void ShowUpdateFailure(string text)
-    {
-        LblUpdateStatus.Text = text;
-        BtnCheckUpdates.Content = "Try again";
-        BtnCheckUpdates.IsEnabled = true;
-        BtnDownloadsPage.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>Report a finished check. Called by App on the UI thread; safe to call after
-    /// the user has closed the window (App null-checks its reference, WPF ignores the rest).</summary>
-    public void ShowUpdateStatus(string text)
-    {
-        LblUpdateStatus.Text = text;
-        BtnCheckUpdates.Content = "Check now";
-        BtnCheckUpdates.IsEnabled = true;
-        BtnDownloadsPage.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -322,25 +279,6 @@ public partial class SettingsWindow : Window
                     + "It will follow any monitor you plug in or unplug from now on.",
                 "Pawse", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-    }
-
-    /// <summary>Say up front when this copy cannot take an update on its own, so choosing
-    /// "automatically" never quietly means "notify". Both reasons are properties of where
-    /// Pawse is installed, so neither can change while the window is open.</summary>
-    private void ShowUpdateCaveat()
-    {
-        // The same test App.AutoInstallRefusal applies, so the two cannot drift apart.
-        string? reason = UpdateCheck.LocalInstallObstacle(UpdateCheck.DetectInstall()) switch
-        {
-            LocalObstacle.PerMachine => "This copy is installed for everyone on this PC, so updates are offered "
-                                      + "rather than installed - installing needs administrator rights.",
-            LocalObstacle.FolderNotWritable => "Pawse can't write to its own folder, so it can only tell you about "
-                                             + "updates - installing one is up to you.",
-            _ => null,
-        };
-
-        LblUpdateCaveat.Text = reason ?? "";
-        LblUpdateCaveat.Visibility = reason is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>Both About-page links. A WPF Hyperlink does nothing by itself; this hands the

@@ -64,12 +64,15 @@ public static class Autostart
         return v;
     }
 
-    public static void SetEnabled(bool on)
+    /// <summary>Turn start-at-sign-in on or off. Returns null when done, otherwise what to tell
+    /// the user - the Store build's StartupTask can be refused; the Run key never says no, so
+    /// this one always returns null (a failure is only logged, as before).</summary>
+    public static string? SetEnabled(bool on)
     {
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (key == null) return;
+            if (key == null) return null;
             if (on)
             {
                 var exe = Environment.ProcessPath;
@@ -86,5 +89,6 @@ public static class Autostart
         {
             Log.Error("autostart write", ex);
         }
+        return null;
     }
 }

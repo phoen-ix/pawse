@@ -57,6 +57,28 @@
     <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
   </PropertyGroup>
 
+  <!-- The Microsoft Store build: dotnet publish -p:PawseStore=true, packed into an MSIX by
+       packaging/msix/build-msix.ps1. The Store owns updates, so the updater is not hidden but
+       left OUT - the files below are not compiled at all, and anything still calling into
+       them fails the build instead of shipping. Start-at-sign-in becomes a StartupTask, which
+       is what the Windows-versioned TFM is for: it brings the WinRT projection
+       (StartupTask, ApplicationData). Only this build pays for that projection - it is
+       several MB, and the framework-dependent build is a 0.3 MB launcher.
+       Convention: *.Store.cs files exist only in this build; the Compile Remove list is
+       what exists only outside it. obj/ and bin/ are per-TFM, so both flavors build from
+       one checkout. -->
+  <PropertyGroup Condition="'$(PawseStore)' == 'true'">
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <DefineConstants>$(DefineConstants);STORE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PawseStore)' == 'true'">
+    <Compile Remove="Core\UpdateCheck.cs;Core\SelfReplace.cs;Core\Autostart.cs;App.Updates.cs;UI\SettingsWindow.Updates.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PawseStore)' != 'true'">
+    <Compile Remove="**\*.Store.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- WMI, used only for the Keyboard Filter block (browser/calculator/media keys) in
          Core/KeyboardFilterGuard.cs. Windows-only at runtime; restores fine on Linux. -->

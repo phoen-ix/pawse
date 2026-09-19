@@ -329,3 +329,59 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "git pull --rebase failed - the feed commit was NOT pushed" }
           git push origin HEAD:main
           if ($LASTEXITCODE -ne 0) { throw "git push failed - the feed commit was NOT pushed" }
+
+  # The Microsoft Store package (packaging/msix). Its own job, beside build rather than inside
+  # it: the Store upload is a separate, manual step in Partner Center, so a Store build that
+  # breaks must not hold up the installers or leave the update feed half-published.
+  # The .msix is NOT a release asset - it is unsigned (Partner Center signs what it
+  # publishes), so nobody could install it from here. It is not in SHA256SUMS.txt or the feed
+  # either: Store copies are updated by the Store. Download it from this run's artifacts.
+  store:
+    needs: version
+    if: needs.version.outputs.new_tag != ''
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # The SDK is chosen by global.json, not here: setup-dotnet installs ALONGSIDE
+          # what the runner image ships and `dotnet` then picks the newest one, so a bare
+          # dotnet-version pins nothing and a new image could swap the SDK under the build.
+          global-json-file: global.json
+
+      # The identity Partner Center reserved for Pawse, from repository VARIABLES (not
+      # secrets - all three are printed in every Store listing anyway). Without them the
+      # package carries the development identity, which the Store refuses.
+      - name: Build the MSIX
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.new_version }}
+          STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          $identity = @{}
+          if ($env:STORE_IDENTITY_NAME -or $env:STORE_PUBLISHER -or $env:STORE_PUBLISHER_DISPLAY_NAME) {
+            if (-not ($env:STORE_IDENTITY_NAME -and $env:STORE_PUBLISHER -and $env:STORE_PUBLISHER_DISPLAY_NAME)) {
+              throw "Set all three STORE_* repository variables, or none of them"
+            }
+            $identity = @{
+              IdentityName         = $env:STORE_IDENTITY_NAME
+              Publisher            = $env:STORE_PUBLISHER
+              PublisherDisplayName = $env:STORE_PUBLISHER_DISPLAY_NAME
+            }
+          } else {
+            "::warning::No STORE_* repository variables - this MSIX has the development identity, which Partner Center will refuse."
+          }
+          ./packaging/msix/build-msix.ps1 -Version $env:VERSION @identity
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Pawse-${{ needs.version.outputs.new_version }}-msix
+          path: packaging/msix/out/Pawse-${{ needs.version.outputs.new_version }}.msix
+          if-no-files-found: error
+          # A submission is made within days of a release; the next release brings a new one.
+          retention-days: 30
