@@ -18,11 +18,16 @@ internal static class IconFactory
 
     // Paw geometry in a 256-unit design space (same as packaging/pawse.ico): four toe
     // beans + a heel pad, each an ellipse given as (dx, dy, rx, ry) offsets from centre.
-    private static readonly (float dx, float dy, float rx, float ry)[] Beans =
+    // Internal, not private: the on-screen paw (OverlayWindow) draws the same table, so
+    // the paw on the display is the paw in the tray.
+    internal static readonly (float dx, float dy, float rx, float ry)[] Beans =
     {
         (-46, -26, 13, 17), (-16, -47, 14, 19), (16, -47, 14, 19), (46, -26, 13, 17),
         (0, 34, 46, 37),
     };
+
+    /// <summary>How much the beans are scaled about the centre to fill the tile.</summary>
+    internal const float PawScale = 1.25f;
 
     private static Icon Build(bool locked)
     {
@@ -41,7 +46,7 @@ internal static class IconFactory
                 g.FillPath(bgBrush, path);
 
             // Cream paw, centred, scaled to fill the tile.
-            const float cx = 128f, cy = 128f, s = 1.25f;
+            const float cx = 128f, cy = 128f, s = PawScale;
             using var paw = new SolidBrush(Color.FromArgb(255, 248, 240));
             foreach (var (dx, dy, rx, ry) in Beans)
                 g.FillEllipse(paw,

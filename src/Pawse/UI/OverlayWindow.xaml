@@ -11,35 +11,80 @@
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
         ShowActivated="False">
-    <Border CornerRadius="18" Padding="26" BorderThickness="1" BorderBrush="#40FFFFFF">
-        <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#F21C1C28" Offset="0" />
-                <GradientStop Color="#F2101018" Offset="1" />
-            </LinearGradientBrush>
-        </Border.Background>
-        <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="🐾  Keyboard locked"
-                       Foreground="White" FontSize="24" FontWeight="SemiBold"
-                       HorizontalAlignment="Center" />
-            <TextBlock x:Name="HintText"
-                       Foreground="#B8FFFFFF" FontSize="13" TextAlignment="Center"
-                       TextWrapping="Wrap" Margin="0,10,0,0" />
+    <Window.Resources>
+        <!-- The dark card: behind the window layout, and behind the paw's hint box. -->
+        <LinearGradientBrush x:Key="CardBrush" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#F21C1C28" Offset="0" />
+            <GradientStop Color="#F2101018" Offset="1" />
+        </LinearGradientBrush>
+    </Window.Resources>
 
-            <Grid x:Name="HoldArea" Height="44" Margin="0,18,0,0">
-                <Border CornerRadius="10" Background="#2E6CF0" />
-                <Border x:Name="HoldFill" CornerRadius="10" Background="#7AA5FF"
-                        HorizontalAlignment="Left" Width="0" />
-                <Border x:Name="HoldButton" Background="Transparent" Cursor="Hand">
-                    <TextBlock Text="Hold to unlock" Foreground="White" FontSize="14"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+    <!-- Two layouts, one visible at a time - Configure picks by Overlay.Style. Both share
+         the hold logic, the positioning and the per-display lifecycle, so the paw is the
+         same window as the card, just dressed differently. -->
+    <Grid>
+        <Border x:Name="CardRoot" CornerRadius="18" Padding="26" BorderThickness="1"
+                BorderBrush="#40FFFFFF" Background="{StaticResource CardBrush}">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="🐾  Keyboard locked"
+                           Foreground="White" FontSize="24" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock x:Name="HintText"
+                           Foreground="#B8FFFFFF" FontSize="13" TextAlignment="Center"
+                           TextWrapping="Wrap" Margin="0,10,0,0" />
+
+                <Grid x:Name="HoldArea" Height="44" Margin="0,18,0,0">
+                    <Border CornerRadius="10" Background="#2E6CF0" />
+                    <Border x:Name="HoldFill" CornerRadius="10" Background="#7AA5FF"
+                            HorizontalAlignment="Left" Width="0" />
+                    <Border x:Name="HoldButton" Background="Transparent" Cursor="Hand">
+                        <TextBlock Text="Hold to unlock" Foreground="White" FontSize="14"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+
+                <!-- Static "Auto-unlocks after Ns" note (it does not tick down). -->
+                <TextBlock x:Name="AutoUnlockText"
+                           Foreground="#90FFFFFF" FontSize="12" TextAlignment="Center"
+                           Margin="0,12,0,0" />
+            </StackPanel>
+        </Border>
+
+        <StackPanel x:Name="PawRoot" Visibility="Collapsed" HorizontalAlignment="Center">
+            <!-- The tray paw, as vectors in the icon's 256-unit design space so it stays crisp
+                 at any size and DPI. The green tile lies over the red one behind a clip that
+                 HoldTick grows from the bottom: the paw fills to unlocked-green while held,
+                 the same colour flip the tray icon makes. The beans are added in code from
+                 IconFactory.Beans, so the two paws cannot drift apart. A transparent
+                 background makes the whole square, not just the ink, take the mouse. -->
+            <Grid x:Name="PawButton" Width="96" Height="96" Background="Transparent">
+                <Viewbox Stretch="Uniform">
+                    <Canvas Width="256" Height="256">
+                        <Rectangle Canvas.Left="12" Canvas.Top="12" Width="232" Height="232"
+                                   RadiusX="52" RadiusY="52" Fill="#E04848" />
+                        <Rectangle Canvas.Left="12" Canvas.Top="12" Width="232" Height="232"
+                                   RadiusX="52" RadiusY="52" Fill="#4CAF60">
+                            <Rectangle.Clip>
+                                <!-- In the tile's own coordinates (232 square); empty until held. -->
+                                <RectangleGeometry x:Name="PawFillClip" Rect="0,232,232,0" />
+                            </Rectangle.Clip>
+                        </Rectangle>
+                        <Canvas x:Name="PawBeans" />
+                    </Canvas>
+                </Viewbox>
             </Grid>
 
-            <!-- Static "Auto-unlocks after Ns" note (it does not tick down). -->
-            <TextBlock x:Name="AutoUnlockText"
-                       Foreground="#90FFFFFF" FontSize="12" TextAlignment="Center"
-                       Margin="0,12,0,0" />
+            <!-- Optional: what unlocks, in the card's voice, beneath the paw. -->
+            <Border x:Name="PawHintBox" CornerRadius="10" Padding="12,8" Margin="0,8,0,0"
+                    BorderThickness="1" BorderBrush="#40FFFFFF" Background="{StaticResource CardBrush}"
+                    MaxWidth="360" HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="PawHintText" Foreground="White" FontSize="13"
+                               TextAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PawAutoUnlockText" Foreground="#90FFFFFF" FontSize="12"
+                               TextAlignment="Center" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
         </StackPanel>
-    </Border>
+    </Grid>
 </Window>

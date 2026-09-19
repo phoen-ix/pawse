@@ -47,23 +47,23 @@ public sealed class ChordMatcher
 }
 
 /// <summary>
-/// Fires when the passphrase is typed. This is pure state - the characters come
+/// Fires when the lockphrase is typed. This is pure state - the characters come
 /// from the keyboard hook, not a text box (the hook swallows all keys while
 /// locked, so no control ever gets focus).
 ///
 /// <para>With <c>resetOnWrong</c>, a wrong key falls back to the longest prefix of
-/// the passphrase that is still a suffix of what was typed (KMP failure links) -
+/// the lockphrase that is still a suffix of what was typed (KMP failure links) -
 /// so "aaab" completes "aab", which a naive restart-from-scratch would miss.
 /// Without it, wrong keys are simply ignored and progress is kept.</para>
 /// </summary>
-public sealed class PassphraseMatcher
+public sealed class LockphraseMatcher
 {
     private readonly string _text;
     private readonly bool _resetOnWrong;
     private readonly int[] _fail;
     private int _i;
 
-    public PassphraseMatcher(string text, bool resetOnWrong)
+    public LockphraseMatcher(string text, bool resetOnWrong)
     {
         _text = (text ?? "").ToLowerInvariant();
         _resetOnWrong = resetOnWrong;

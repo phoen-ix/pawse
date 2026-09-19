@@ -10,7 +10,7 @@ public class HasUsableUnlockTests
     {
         var c = new Config();
         c.Unlock.Chord.Enabled = false;
-        c.Unlock.Passphrase.Enabled = false;
+        c.Unlock.Lockphrase.Enabled = false;
         c.Unlock.MouseHold.Enabled = false;
         c.Unlock.Timer.Enabled = false;
         return c;
@@ -35,14 +35,14 @@ public class HasUsableUnlockTests
     }
 
     [Fact]
-    public void Enabled_passphrase_needs_hook_typeable_text()
+    public void Enabled_lockphrase_needs_hook_typeable_text()
     {
         var c = AllOff();
-        c.Unlock.Passphrase.Enabled = true;
-        c.Unlock.Passphrase.Text = "p@ss!";
+        c.Unlock.Lockphrase.Enabled = true;
+        c.Unlock.Lockphrase.Text = "p@ss!";
         Assert.False(c.HasUsableUnlock());
 
-        c.Unlock.Passphrase.Text = "unlock";
+        c.Unlock.Lockphrase.Text = "unlock";
         Assert.True(c.HasUsableUnlock());
     }
 
@@ -121,8 +121,8 @@ public class ConfigJsonTests
         c.General.StartLocked = true;
         c.General.BlockMouse = true;
         c.General.BlockScreenKeyboard = true;
-        c.Unlock.Passphrase.Enabled = true;
-        c.Unlock.Passphrase.Text = "let me in";
+        c.Unlock.Lockphrase.Enabled = true;
+        c.Unlock.Lockphrase.Text = "let me in";
         c.Unlock.Timer.Seconds = 42;
         c.Overlay.Opacity = 0.5;
         c.SystemBlock.WinLock = true;
@@ -133,8 +133,8 @@ public class ConfigJsonTests
         Assert.True(back!.General.StartLocked);
         Assert.True(back.General.BlockMouse);
         Assert.True(back.General.BlockScreenKeyboard);
-        Assert.True(back.Unlock.Passphrase.Enabled);
-        Assert.Equal("let me in", back.Unlock.Passphrase.Text);
+        Assert.True(back.Unlock.Lockphrase.Enabled);
+        Assert.Equal("let me in", back.Unlock.Lockphrase.Text);
         Assert.Equal(42, back.Unlock.Timer.Seconds);
         Assert.Equal(0.5, back.Overlay.Opacity);
         Assert.True(back.SystemBlock.WinLock);
@@ -148,6 +148,7 @@ public class ConfigJsonTests
     [InlineData(/*lang=json*/ """{"Unlock": {"Chord": {"Enabled": true, "Keys": null}}}""")]
     [InlineData(/*lang=json*/ """{"Unlock": {"Chord": {"Enabled": true, "Keys": ["Ctrl", null]}}}""")]
     [InlineData(/*lang=json*/ """{"LockHotkey": {"Enabled": true, "Keys": [null, " ", "L"]}}""")]
+    [InlineData(/*lang=json*/ """{"Unlock": {"Lockphrase": {"Enabled": true, "Text": null}}}""")]
     [InlineData(/*lang=json*/ """{"Unlock": {"Passphrase": {"Enabled": true, "Text": null}}}""")]
     [InlineData(/*lang=json*/ """{"General": null, "LockHotkey": null, "Overlay": null, "SystemBlock": null}""")]
     public void Nulled_sections_are_reseeded_with_defaults(string json)
@@ -156,7 +157,7 @@ public class ConfigJsonTests
         Assert.NotNull(cfg);
         _ = cfg!.HasUsableUnlock(); // must not throw
         Assert.NotNull(cfg.Unlock.Chord.Keys);
-        Assert.NotNull(cfg.Unlock.Passphrase.Text);
+        Assert.NotNull(cfg.Unlock.Lockphrase.Text);
         Assert.NotNull(cfg.General);
         Assert.NotNull(cfg.Overlay);
         // Null/blank ELEMENTS are scrubbed too - a hand-edited ["Ctrl", null] used to
@@ -422,5 +423,137 @@ public class OverlayMigrationTests
         var cfg = new Config();
         cfg.Overlay.Displays = new List<int> { 0, 2 };
         Assert.Equal(new[] { 0, 2 }, Config.FromJson(cfg.ToJson())!.Overlay.Displays);
+    }
+}
+
+/// <summary>The one-way migration from the key the lockphrase had while it was still called
+/// the passphrase.</summary>
+public class LockphraseMigrationTests
+{
+    [Fact]
+    public void An_old_passphrase_block_becomes_the_lockphrase()
+    {
+        var cfg = Config.FromJson(
+            """{"Unlock":{"Passphrase":{"Enabled":true,"Text":"let me in","ResetOnWrongKey":false}}}""");
+        Assert.True(cfg!.Unlock.Lockphrase.Enabled);
+        Assert.Equal("let me in", cfg.Unlock.Lockphrase.Text);
+        Assert.False(cfg.Unlock.Lockphrase.ResetOnWrongKey);
+    }
+
+    [Fact]
+    public void The_old_key_is_gone_from_the_next_save()
+    {
+        string json = Config.FromJson("""{"Unlock":{"Passphrase":{"Enabled":true,"Text":"x"}}}""")!.ToJson();
+        Assert.DoesNotContain("Passphrase", json);
+        Assert.Contains("Lockphrase", json);
+    }
+
+    /// <summary>No build has ever written both keys, so a file carrying Passphrase predates
+    /// Lockphrase and Passphrase wins. Only reachable by hand-editing, and it self-corrects:
+    /// the next save drops Passphrase for good.</summary>
+    [Fact]
+    public void The_old_block_wins_when_a_hand_edited_file_has_both()
+    {
+        var cfg = Config.FromJson("""{"Unlock":{"Passphrase":{"Text":"old"},"Lockphrase":{"Text":"new"}}}""");
+        Assert.Equal("old", cfg!.Unlock.Lockphrase.Text);
+    }
+
+    [Fact]
+    public void A_nulled_old_key_is_ignored()
+    {
+        var cfg = Config.FromJson("""{"Unlock":{"Passphrase":null,"Lockphrase":{"Text":"kept"}}}""");
+        Assert.Equal("kept", cfg!.Unlock.Lockphrase.Text);
+    }
+
+    [Fact]
+    public void A_fresh_config_is_unaffected()
+    {
+        var cfg = new Config();
+        Assert.False(cfg.Unlock.Lockphrase.Enabled);
+        Assert.Equal("unlock", cfg.Unlock.Lockphrase.Text);
+        Assert.DoesNotContain("Passphrase", cfg.ToJson());
+    }
+}
+
+/// <summary>The popup's style and the settings the paw added, as far as they are pure.</summary>
+public class OverlayStyleTests
+{
+    [Theory]
+    [InlineData("Paw", Config.OverlayStyle.Paw)]
+    [InlineData("paw", Config.OverlayStyle.Paw)]
+    [InlineData(" PAW ", Config.OverlayStyle.Paw)]
+    [InlineData("Window", Config.OverlayStyle.Window)]
+    [InlineData("bogus", Config.OverlayStyle.Window)]
+    [InlineData("7", Config.OverlayStyle.Window)]
+    [InlineData("", Config.OverlayStyle.Window)]
+    [InlineData(null, Config.OverlayStyle.Window)]
+    public void Style_parses_leniently(string? text, Config.OverlayStyle expected)
+        => Assert.Equal(expected, Config.OverlayCfg.ParseStyle(text));
+
+    [Fact]
+    public void Defaults_are_the_centred_window_and_a_medium_paw_with_its_hint()
+    {
+        var cfg = new Config();
+        Assert.Equal(Config.OverlayStyle.Window, cfg.Overlay.StyleValue);
+        Assert.Equal(50, cfg.Overlay.HorizontalPercent);
+        Assert.Equal(50, cfg.Overlay.VerticalPercent);
+        Assert.Equal(96, cfg.Overlay.Paw.Size);
+        Assert.True(cfg.Overlay.Paw.ShowHint);
+        Assert.True(cfg.Overlay.ShowLockphrase);
+    }
+
+    [Fact]
+    public void Style_round_trips_as_text()
+    {
+        var cfg = new Config();
+        cfg.Overlay.StyleValue = Config.OverlayStyle.Paw;
+        Assert.Contains("\"Style\": \"Paw\"", cfg.ToJson());
+        Assert.Equal(Config.OverlayStyle.Paw, Config.FromJson(cfg.ToJson())!.Overlay.StyleValue);
+    }
+
+    /// <summary>A typo in the one field people hand-edit must not cost the rest of the file
+    /// (a throwing enum converter would have sent it to .bad).</summary>
+    [Fact]
+    public void A_bad_style_costs_only_the_style()
+    {
+        var cfg = Config.FromJson("""{"Overlay":{"Style":"pwa","Opacity":0.5}}""");
+        Assert.Equal(Config.OverlayStyle.Window, cfg!.Overlay.StyleValue);
+        Assert.Equal(0.5, cfg.Overlay.Opacity);
+    }
+
+    [Fact]
+    public void Hand_edited_size_and_positions_are_clamped_to_what_settings_allows()
+    {
+        var cfg = Config.FromJson(
+            """{"Overlay":{"HorizontalPercent":140,"VerticalPercent":-5,"Paw":{"Size":9999}}}""");
+        Assert.Equal(100, cfg!.Overlay.HorizontalPercent);
+        Assert.Equal(0, cfg.Overlay.VerticalPercent);
+        Assert.Equal(Config.OverlayCfg.PawCfg.MaxSize, cfg.Overlay.Paw.Size);
+        Assert.Equal(Config.OverlayCfg.PawCfg.MinSize,
+            Config.FromJson("""{"Overlay":{"Paw":{"Size":1}}}""")!.Overlay.Paw.Size);
+    }
+
+    [Fact]
+    public void Nulled_paw_and_style_are_reseeded()
+    {
+        var cfg = Config.FromJson("""{"Overlay":{"Paw":null,"Style":null}}""");
+        Assert.NotNull(cfg!.Overlay.Paw);
+        Assert.Equal(Config.OverlayStyle.Window, cfg.Overlay.StyleValue);
+        Assert.Contains("\"Style\": \"Window\"", cfg.ToJson());
+    }
+
+    [Fact]
+    public void The_paw_settings_round_trip()
+    {
+        var cfg = new Config();
+        cfg.Overlay.HorizontalPercent = 100;
+        cfg.Overlay.Paw.Size = 200;
+        cfg.Overlay.Paw.ShowHint = false;
+        cfg.Overlay.ShowLockphrase = false;
+        var back = Config.FromJson(cfg.ToJson())!;
+        Assert.Equal(100, back.Overlay.HorizontalPercent);
+        Assert.Equal(200, back.Overlay.Paw.Size);
+        Assert.False(back.Overlay.Paw.ShowHint);
+        Assert.False(back.Overlay.ShowLockphrase);
     }
 }

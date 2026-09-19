@@ -2,7 +2,7 @@
 
 A cat-proof keyboard lock for Windows. One click (or a hotkey) freezes the
 keyboard so a cat walking across it can't wreak havoc, close your work, or leave
-a modifier "stuck". Unlock it deliberately - a chord, a passphrase, a
+a modifier "stuck". Unlock it deliberately - a chord, a lockphrase, a
 hold-to-unlock button, or an auto-timer.
 
 This is a native Windows app (C# / .NET 10, WPF + a WinForms tray).
@@ -91,20 +91,24 @@ installers are built from [`packaging/`](packaging/).
 
 While locked, a small floating popup shows on the displays you choose - one, several, or
 **All displays**, which picks up a monitor you plug in later without you touching anything.
-You can also turn it off, move it up or down, and set its opacity. The desktop stays visible
-around it.
+It comes in two styles: a **window** with the hold-to-unlock button, or a **paw icon** of
+whatever size you like, with an optional text box beneath naming what unlocks it - hold the
+paw to unlock, exactly like the button. Either one can be placed anywhere on the display,
+dimmed, or switched off; the desktop stays visible around it. The unlock hint prints the
+lockphrase itself by default - switch that off in **Settings → Lock popup** if someone else
+can see your screen.
 
 ### Unlock methods (each independently toggleable in Settings)
 
 | Method | Default | Notes |
 | --- | --- | --- |
 | Keyboard chord | on (`Ctrl+L`) | Any combination you like. |
-| Passphrase | off | Type a word; a wrong key restarts it. |
-| Mouse hold | on | Hold the popup button (~1.2 s). |
+| Lockphrase | off | Type a word; a wrong key restarts it. |
+| Mouse hold | on | Hold the popup button or the paw icon (~1.2 s). |
 | Auto timer | off | Unlock automatically after N seconds. |
 
 Mouse blocking is **off by default**; enable it in Settings if the cat uses the
-mouse too. (With it on, unlock with the keyboard - the hold button needs the mouse.)
+mouse too. (With it on, unlock with the keyboard - the hold button and the paw need the mouse.)
 Blocking **on-screen keyboards** is off by default as well - see
 [What it can and can't block](#what-it-can-and-cant-block).
 
@@ -202,7 +206,7 @@ settings and keystrokes stay on the machine either way.
 Nothing is written about what you type. The optional log (off by default, see
 [Configuration & logs](#configuration--logs)) records what Pawse did, not what you pressed -
 the one exception being which keys were still held when a lock engaged, which exists to
-diagnose an unlock chord that won't complete. Your passphrase is never written to it.
+diagnose an unlock chord that won't complete. Your lockphrase is never written to it.
 
 ## Build from source
 

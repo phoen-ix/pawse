@@ -74,6 +74,8 @@ public partial class SettingsWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
         Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
         SldOpacity.Minimum = Config.OverlayCfg.MinOpacity;
+        SldPawSize.Minimum = Config.OverlayCfg.PawCfg.MinSize;
+        SldPawSize.Maximum = Config.OverlayCfg.PawCfg.MaxSize;
         ApplyDeploymentMode();
         InitUpdateSection();
         LoadMonitors();
@@ -89,9 +91,9 @@ public partial class SettingsWindow : Window
         TxtLockHotkey.RecordBlocked += (_, _) => ShowBlocked(LblLockHotkeyWarn);
         TxtChord.KeyRejected += (_, key) => ShowRejected(LblChordWarn, key);
         TxtLockHotkey.KeyRejected += (_, key) => ShowRejected(LblLockHotkeyWarn, key);
-        TxtPassphrase.TextChanged += (_, _) => UpdateWarnings();
-        ChkPassphrase.Checked += (_, _) => UpdateWarnings();
-        ChkPassphrase.Unchecked += (_, _) => UpdateWarnings();
+        TxtLockphrase.TextChanged += (_, _) => UpdateWarnings();
+        ChkLockphrase.Checked += (_, _) => UpdateWarnings();
+        ChkLockphrase.Unchecked += (_, _) => UpdateWarnings();
         UpdateWarnings();
 
         // Digits only, typed or pasted, so the field cannot hold something ParseInt will
@@ -152,6 +154,13 @@ public partial class SettingsWindow : Window
     private void OnDisplayModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         => PnlDisplays.IsEnabled = CmbDisplayMode.SelectedIndex == 1;
 
+    private void OnStyleChanged(object sender, RoutedEventArgs e) => SyncStylePanels();
+
+    /// <summary>The paw's own options mean nothing while the window is picked, so they are
+    /// hidden rather than greyed - a greyed slider invites the question of how to enable it.</summary>
+    private void SyncStylePanels()
+        => PnlPawOptions.Visibility = RbStylePaw.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
     /// <summary>The displays ticked right now.</summary>
     private List<int> TickedDisplays() =>
         _displayBoxes.Where(b => b.IsChecked == true).Select(b => (int)b.Tag!).ToList();
@@ -174,9 +183,9 @@ public partial class SettingsWindow : Window
         ChkChord.IsChecked = _cfg.Unlock.Chord.Enabled;
         TxtChord.Chord = _cfg.Unlock.Chord.Keys;
 
-        ChkPassphrase.IsChecked = _cfg.Unlock.Passphrase.Enabled;
-        TxtPassphrase.Text = _cfg.Unlock.Passphrase.Text;
-        ChkResetWrong.IsChecked = _cfg.Unlock.Passphrase.ResetOnWrongKey;
+        ChkLockphrase.IsChecked = _cfg.Unlock.Lockphrase.Enabled;
+        TxtLockphrase.Text = _cfg.Unlock.Lockphrase.Text;
+        ChkResetWrong.IsChecked = _cfg.Unlock.Lockphrase.ResetOnWrongKey;
 
         ChkMouseHold.IsChecked = _cfg.Unlock.MouseHold.Enabled;
         TxtHoldMs.Text = _cfg.Unlock.MouseHold.HoldMs.ToString(CultureInfo.InvariantCulture);
@@ -194,6 +203,15 @@ public partial class SettingsWindow : Window
             box.IsChecked = _configuredDisplays.Contains((int)box.Tag!);
         SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         SldVertical.Value = Math.Clamp(_cfg.Overlay.VerticalPercent, 0, 100);
+        SldHorizontal.Value = Math.Clamp(_cfg.Overlay.HorizontalPercent, 0, 100);
+        bool paw = _cfg.Overlay.StyleValue == Config.OverlayStyle.Paw;
+        RbStylePaw.IsChecked = paw;
+        RbStyleWindow.IsChecked = !paw;
+        SldPawSize.Value = Math.Clamp(_cfg.Overlay.Paw.Size,
+            Config.OverlayCfg.PawCfg.MinSize, Config.OverlayCfg.PawCfg.MaxSize);
+        ChkPawHint.IsChecked = _cfg.Overlay.Paw.ShowHint;
+        ChkShowLockphrase.IsChecked = _cfg.Overlay.ShowLockphrase;
+        SyncStylePanels();
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
@@ -215,9 +233,9 @@ public partial class SettingsWindow : Window
         _cfg.Unlock.Chord.Enabled = ChkChord.IsChecked == true;
         _cfg.Unlock.Chord.Keys = new List<string>(TxtChord.Chord);
 
-        _cfg.Unlock.Passphrase.Enabled = ChkPassphrase.IsChecked == true;
-        _cfg.Unlock.Passphrase.Text = (TxtPassphrase.Text ?? "").Trim();
-        _cfg.Unlock.Passphrase.ResetOnWrongKey = ChkResetWrong.IsChecked == true;
+        _cfg.Unlock.Lockphrase.Enabled = ChkLockphrase.IsChecked == true;
+        _cfg.Unlock.Lockphrase.Text = (TxtLockphrase.Text ?? "").Trim();
+        _cfg.Unlock.Lockphrase.ResetOnWrongKey = ChkResetWrong.IsChecked == true;
 
         _cfg.Unlock.MouseHold.Enabled = ChkMouseHold.IsChecked == true;
         _cfg.Unlock.MouseHold.HoldMs = ParseInt(TxtHoldMs.Text, _cfg.Unlock.MouseHold.HoldMs,
@@ -239,9 +257,16 @@ public partial class SettingsWindow : Window
             .Distinct().OrderBy(i => i).ToList();
         _cfg.Overlay.Opacity = SldOpacity.Value;
         _cfg.Overlay.VerticalPercent = (int)Math.Round(SldVertical.Value);
+        _cfg.Overlay.HorizontalPercent = (int)Math.Round(SldHorizontal.Value);
+        _cfg.Overlay.StyleValue = RbStylePaw.IsChecked == true
+            ? Config.OverlayStyle.Paw
+            : Config.OverlayStyle.Window;
+        _cfg.Overlay.Paw.Size = (int)Math.Round(SldPawSize.Value);
+        _cfg.Overlay.Paw.ShowHint = ChkPawHint.IsChecked == true;
+        _cfg.Overlay.ShowLockphrase = ChkShowLockphrase.IsChecked == true;
 
         // Guard against locking yourself out: require at least one *genuinely usable* unlock
-        // method for the whole config - a parseable chord, a fully-typeable passphrase,
+        // method for the whole config - a parseable chord, a fully-typeable lockphrase,
         // mouse-hold only when the overlay is shown AND the mouse isn't blocked, or a timer
         // with a positive delay (see Config.HasUsableUnlock).
         // The popup's own two guard rails, before the unlock check below - turning the popup
@@ -385,24 +410,24 @@ public partial class SettingsWindow : Window
         SetWarn(LblLockHotkeyWarn, TxtLockHotkey.IsModifiersOnly);
 
         // Only a-z, 0-9 and space can register through the hook while locked, so any
-        // other character makes the passphrase impossible to type. Warn while editing -
-        // silently saving a passphrase that can never fire teaches the user it works.
-        string phrase = (TxtPassphrase.Text ?? "").Trim();
-        bool on = ChkPassphrase.IsChecked == true;
+        // other character makes the lockphrase impossible to type. Warn while editing -
+        // silently saving a lockphrase that can never fire teaches the user it works.
+        string phrase = (TxtLockphrase.Text ?? "").Trim();
+        bool on = ChkLockphrase.IsChecked == true;
         if (on && phrase.Length == 0)
         {
-            LblPassphraseWarn.Text = "The passphrase is empty - this unlock method won't do anything.";
-            LblPassphraseWarn.Visibility = Visibility.Visible;
+            LblLockphraseWarn.Text = "The lockphrase is empty - this unlock method won't do anything.";
+            LblLockphraseWarn.Visibility = Visibility.Visible;
         }
-        else if (on && !Keys.IsTypeablePassphrase(phrase))
+        else if (on && !Keys.IsTypeableLockphrase(phrase))
         {
-            LblPassphraseWarn.Text = "Only letters, digits and spaces can be typed while locked - " +
-                                     "this passphrase could never unlock. Remove the other characters.";
-            LblPassphraseWarn.Visibility = Visibility.Visible;
+            LblLockphraseWarn.Text = "Only letters, digits and spaces can be typed while locked - " +
+                                     "this lockphrase could never unlock. Remove the other characters.";
+            LblLockphraseWarn.Visibility = Visibility.Visible;
         }
         else
         {
-            LblPassphraseWarn.Visibility = Visibility.Collapsed;
+            LblLockphraseWarn.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -428,7 +453,7 @@ public partial class SettingsWindow : Window
     public void SetLocked(bool locked)
     {
         PnlLockedBanner.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
-        TxtPassphrase.IsEnabled = !locked;
+        TxtLockphrase.IsEnabled = !locked;
         TxtHoldMs.IsEnabled = !locked;
         TxtTimerSeconds.IsEnabled = !locked;
         // An unlock clears a stale "Unlock Pawse first to record a shortcut." that a click on

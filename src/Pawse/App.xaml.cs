@@ -496,7 +496,7 @@ public partial class App : Application
     /// tray paw that is Explorer, not Pawse. A refused call fails silently: the window appears
     /// and takes mouse input (mouse messages go to the window under the cursor either way)
     /// while every keystroke goes to whatever is still active. That is what made Settings look
-    /// half-broken - the passphrase box, both duration boxes and both shortcut boxes dead,
+    /// half-broken - the lockphrase box, both duration boxes and both shortcut boxes dead,
     /// while the checkboxes, sliders and Clear buttons worked.</para>
     /// <para>So check whether activation actually took, and if it did not, ask once more
     /// directly.</para>

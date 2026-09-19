@@ -2,7 +2,7 @@ namespace Pawse.Core;
 
 /// <summary>
 /// Virtual-key constants, modifier normalization, VK↔name mapping (for the
-/// config's chord strings) and a small VK→char map used by the passphrase
+/// config's chord strings) and a small VK→char map used by the lockphrase
 /// matcher. Kept deliberately simple - no layout awareness.
 /// </summary>
 public static class Keys
@@ -101,7 +101,7 @@ public static class Keys
 
     public static string ChordToText(IEnumerable<string> names) => string.Join("+", names);
 
-    /// <summary>Best-effort VK→character for passphrase matching: letters, digits on either the
+    /// <summary>Best-effort VK→character for lockphrase matching: letters, digits on either the
     /// top row or the keypad (with NumLock on they arrive as VK_NUMPAD0-9, not as '0'-'9'), and
     /// space.</summary>
     public static char? TryVkToChar(int vk)
@@ -113,11 +113,11 @@ public static class Keys
         return null;
     }
 
-    /// <summary>True if every character of the passphrase can actually be typed while
+    /// <summary>True if every character of the lockphrase can actually be typed while
     /// locked - only a-z, 0-9 (top row or keypad) and space register through the hook (see
-    /// <see cref="TryVkToChar"/>), so a passphrase with any other character could never
+    /// <see cref="TryVkToChar"/>), so a lockphrase with any other character could never
     /// complete. Empty text is not usable.</summary>
-    public static bool IsTypeablePassphrase(string? text)
+    public static bool IsTypeableLockphrase(string? text)
     {
         if (string.IsNullOrEmpty(text)) return false;
         foreach (char ch in text)

@@ -107,6 +107,6 @@ public class KeysTests
     [InlineData("Unlock 42", true)] // upper case folds to typeable lower case
     [InlineData("pass!", false)]    // '!' can never register through the hook
     [InlineData("päw", false)]
-    public void IsTypeablePassphrase_accepts_only_hook_typeable_text(string? text, bool expected)
-        => Assert.Equal(expected, Keys.IsTypeablePassphrase(text));
+    public void IsTypeableLockphrase_accepts_only_hook_typeable_text(string? text, bool expected)
+        => Assert.Equal(expected, Keys.IsTypeableLockphrase(text));
 }

@@ -109,9 +109,9 @@ public class ChordMatcherExactTests
     }
 }
 
-public class PassphraseMatcherTests
+public class LockphraseMatcherTests
 {
-    private static bool Type(PassphraseMatcher m, string input)
+    private static bool Type(LockphraseMatcher m, string input)
     {
         bool fired = false;
         foreach (char c in input) fired |= m.Feed(c);
@@ -121,19 +121,19 @@ public class PassphraseMatcherTests
     [Fact]
     public void Completes_on_the_final_character_of_an_exact_match()
     {
-        var m = new PassphraseMatcher("unlock", resetOnWrong: true);
+        var m = new LockphraseMatcher("unlock", resetOnWrong: true);
         Assert.False(Type(m, "unloc"));
         Assert.True(m.Feed('k'));
     }
 
     [Fact]
     public void Matching_is_case_insensitive()
-        => Assert.True(Type(new PassphraseMatcher("unlock", resetOnWrong: true), "UNLOCK"));
+        => Assert.True(Type(new LockphraseMatcher("unlock", resetOnWrong: true), "UNLOCK"));
 
     [Fact]
     public void Wrong_key_restarts_progress_when_reset_is_on()
     {
-        var m = new PassphraseMatcher("unlock", resetOnWrong: true);
+        var m = new LockphraseMatcher("unlock", resetOnWrong: true);
         Assert.False(Type(m, "unx"));      // wrong key wipes progress...
         Assert.True(Type(m, "unlock"));    // ...so the full phrase works from scratch
     }
@@ -141,7 +141,7 @@ public class PassphraseMatcherTests
     [Fact]
     public void Wrong_key_that_is_the_first_letter_counts_as_a_fresh_start()
     {
-        var m = new PassphraseMatcher("ab", resetOnWrong: true);
+        var m = new LockphraseMatcher("ab", resetOnWrong: true);
         Assert.False(m.Feed('a'));
         Assert.False(m.Feed('a')); // wrong for position 2, but restarts as position 1
         Assert.True(m.Feed('b'));
@@ -153,7 +153,7 @@ public class PassphraseMatcherTests
         // Consciously flipped when the matcher gained KMP failure links: "aaab"
         // contains "aab", and the mismatching third 'a' falls back to the "aa"
         // prefix instead of restarting from scratch.
-        var m = new PassphraseMatcher("aab", resetOnWrong: true);
+        var m = new LockphraseMatcher("aab", resetOnWrong: true);
         Assert.True(Type(m, "aaab"));
     }
 
@@ -162,21 +162,21 @@ public class PassphraseMatcherTests
     {
         // "ababc": typing "abababc" mismatches at the second 'a' (expected 'c'),
         // falls back to the "abab" prefix ending there, and still completes.
-        var m = new PassphraseMatcher("ababc", resetOnWrong: true);
+        var m = new LockphraseMatcher("ababc", resetOnWrong: true);
         Assert.True(Type(m, "abababc"));
     }
 
     [Fact]
     public void Wrong_keys_are_ignored_when_reset_is_off()
     {
-        var m = new PassphraseMatcher("unlock", resetOnWrong: false);
+        var m = new LockphraseMatcher("unlock", resetOnWrong: false);
         Assert.True(Type(m, "uxnxlxoxcxk"));
     }
 
     [Fact]
     public void Reset_discards_progress()
     {
-        var m = new PassphraseMatcher("unlock", resetOnWrong: false);
+        var m = new LockphraseMatcher("unlock", resetOnWrong: false);
         Type(m, "unloc");
         m.Reset();
         Assert.False(m.Feed('k'));
@@ -185,5 +185,5 @@ public class PassphraseMatcherTests
 
     [Fact]
     public void Empty_text_never_fires()
-        => Assert.False(Type(new PassphraseMatcher("", resetOnWrong: true), "anything"));
+        => Assert.False(Type(new LockphraseMatcher("", resetOnWrong: true), "anything"));
 }

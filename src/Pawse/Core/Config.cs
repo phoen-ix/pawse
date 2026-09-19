@@ -118,10 +118,28 @@ public sealed class Config
                 : UpdateMode.Manual;
     }
 
+    /// <summary>What the lock popup looks like while locked.</summary>
+    public enum OverlayStyle
+    {
+        /// <summary>The floating card: title, unlock hint, hold-to-unlock button.</summary>
+        Window = 0,
+
+        /// <summary>A paw icon of a chosen size, optionally with the unlock hint beneath it.
+        /// Holding the paw unlocks.</summary>
+        Paw = 1,
+    }
+
     public sealed class UnlockCfg
     {
         public ChordCfg Chord { get; set; } = Config.DefaultChord();
-        public PassphraseCfg Passphrase { get; set; } = new();
+        public LockphraseCfg Lockphrase { get; set; } = new();
+
+        /// <summary>Read only to migrate configs written while the lockphrase was still called
+        /// the passphrase. Never written back - the JsonIgnore overrides the file-wide
+        /// <c>DefaultIgnoreCondition.Never</c> - so the key drops out of pawse.json the first
+        /// time this build saves. See <see cref="NormalizeAfterLoad"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public LockphraseCfg? Passphrase { get; set; }
         public MouseHoldCfg MouseHold { get; set; } = new();
         public TimerCfg Timer { get; set; } = new();
     }
@@ -132,7 +150,7 @@ public sealed class Config
         public List<string> Keys { get; set; } = new();
     }
 
-    public sealed class PassphraseCfg
+    public sealed class LockphraseCfg
     {
         public bool Enabled { get; set; }
         public string Text { get; set; } = "unlock";
@@ -185,7 +203,56 @@ public sealed class Config
         /// undocked laptop must not permanently forget the monitors it was set up for.</summary>
         public List<int> Displays { get; set; } = new() { 0 };
 
+        /// <summary>"Window" | "Paw" - see <see cref="OverlayStyle"/>. Stored as text for the
+        /// same reason as <see cref="UpdateCfg.Mode"/>: a hand-edited typo must cost the user
+        /// the style, not the whole file. <see cref="ParseStyle"/> is lenient.</summary>
+        public string Style { get; set; } = nameof(OverlayStyle.Window);
+
+        /// <summary><see cref="Style"/> parsed. Not serialized - the string is the stored form.</summary>
+        [JsonIgnore]
+        public OverlayStyle StyleValue
+        {
+            get => ParseStyle(Style);
+            set => Style = value.ToString();
+        }
+
+        /// <summary>Anything unrecognised reads as the window - the style every config had
+        /// before the paw existed. Enum.TryParse also accepts numbers, including ones no member
+        /// sits at, so IsDefined has the last word.</summary>
+        internal static OverlayStyle ParseStyle(string? text) =>
+            Enum.TryParse<OverlayStyle>((text ?? "").Trim(), ignoreCase: true, out var style)
+            && Enum.IsDefined(style)
+                ? style
+                : OverlayStyle.Window;
+
+        /// <summary>Where the popup sits on its display, as a fraction of the room left over:
+        /// 0 hugs the left / top edge, 100 the right / bottom, 50 centres it. Shared by both
+        /// styles, so switching between them keeps the spot.</summary>
+        public int HorizontalPercent { get; set; } = 50;
         public int VerticalPercent { get; set; } = 50;
+
+        /// <summary>Print the lockphrase itself in the popup's unlock hint ("type “unlock”")
+        /// rather than only saying to type it. On by default: Pawse is a cat lock, not a
+        /// security lock - any human can already unlock it from the tray - and a phrase you
+        /// cannot remember is a lockout. Off for anyone who shares their screen.</summary>
+        public bool ShowLockphrase { get; set; } = true;
+
+        public PawCfg Paw { get; set; } = new();
+
+        /// <summary>The paw-icon style: the tray paw, drawn large on the display, held to
+        /// unlock like the window's button.</summary>
+        public sealed class PawCfg
+        {
+            /// <summary>Device-independent pixels. One range for the settings slider and the
+            /// load clamp, so a hand-edited value cannot disagree with what the UI allows.</summary>
+            public const int MinSize = 32, MaxSize = 512;
+
+            public int Size { get; set; } = 96;
+
+            /// <summary>A small text box beneath the paw naming what unlocks (the chord and,
+            /// when <see cref="ShowLockphrase"/> allows, the lockphrase).</summary>
+            public bool ShowHint { get; set; } = true;
+        }
 
         /// <summary>
         /// Which displays the popup actually goes on, given how many are attached. Pure so the
@@ -344,8 +411,14 @@ public sealed class Config
         Unlock.Chord ??= DefaultChord();
         Unlock.Chord.Keys ??= new();
         Unlock.Chord.Keys.RemoveAll(string.IsNullOrWhiteSpace);
-        Unlock.Passphrase ??= new();
-        Unlock.Passphrase.Text ??= "";
+        // Configs written before the rename carry "Passphrase" and no "Lockphrase". Its mere
+        // presence dates the file: no build has ever written both, and this clears it, so the
+        // key cannot outlive one save. A nulled legacy section is treated like an absent one.
+        if (Unlock.Passphrase is { } legacy)
+            Unlock.Lockphrase = legacy;
+        Unlock.Passphrase = null;
+        Unlock.Lockphrase ??= new();
+        Unlock.Lockphrase.Text ??= "";
         Unlock.MouseHold ??= new();
         Unlock.Timer ??= new();
         // The same limits Settings enforces on save, so a hand-edited file cannot slip a value
@@ -353,6 +426,13 @@ public sealed class Config
         Unlock.MouseHold.HoldMs = Math.Clamp(Unlock.MouseHold.HoldMs, MouseHoldCfg.MinHoldMs, MouseHoldCfg.MaxHoldMs);
         Unlock.Timer.Seconds = Math.Min(Unlock.Timer.Seconds, TimerCfg.MaxSeconds);
         Overlay ??= new();
+        Overlay.Style ??= nameof(OverlayStyle.Window);
+        Overlay.Paw ??= new();
+        // The same limits Settings enforces, so a hand-edited file cannot put the popup off
+        // screen or make the paw a dot or a wall.
+        Overlay.HorizontalPercent = Math.Clamp(Overlay.HorizontalPercent, 0, 100);
+        Overlay.VerticalPercent = Math.Clamp(Overlay.VerticalPercent, 0, 100);
+        Overlay.Paw.Size = Math.Clamp(Overlay.Paw.Size, OverlayCfg.PawCfg.MinSize, OverlayCfg.PawCfg.MaxSize);
         Overlay.Displays ??= new();
         // Configs written before multi-display carry "Monitor": N and no "Displays". Its mere
         // presence dates the file: no build has ever written both, and this clears it, so the
@@ -381,14 +461,14 @@ public sealed class Config
     /// <summary>
     /// True if at least one unlock method is genuinely usable given the whole config, so
     /// locking can't strand the user. Mirrors what actually works while locked: a chord must
-    /// parse to >=1 key; a passphrase must be fully typeable (only a-z/0-9/space register
+    /// parse to >=1 key; a lockphrase must be fully typeable (only a-z/0-9/space register
     /// through the hook); mouse-hold needs the overlay shown AND the mouse not blocked (else
     /// the hold button can't be clicked); the timer needs a positive delay.
     /// </summary>
     public bool HasUsableUnlock()
     {
         if (Unlock.Chord.Enabled && Keys.ParseChord(Unlock.Chord.Keys).Count > 0) return true;
-        if (Unlock.Passphrase.Enabled && Keys.IsTypeablePassphrase(Unlock.Passphrase.Text)) return true;
+        if (Unlock.Lockphrase.Enabled && Keys.IsTypeableLockphrase(Unlock.Lockphrase.Text)) return true;
         if (Unlock.MouseHold.Enabled && Overlay.Enabled && !General.BlockMouse) return true;
         if (Unlock.Timer.Enabled && Unlock.Timer.Seconds > 0) return true;
         return false;
@@ -416,10 +496,10 @@ public sealed class Config
     public string Summary() =>
         $"logging={General.Logging} lock_on_start={General.StartLocked} block_mouse={General.BlockMouse} " +
         $"block_screen_keyboard={General.BlockScreenKeyboard} " +
-        $"overlay.enabled={Overlay.Enabled} " +
+        $"overlay.enabled={Overlay.Enabled} overlay.style={Overlay.StyleValue.ToString().ToLowerInvariant()} " +
         $"overlay.displays={(Overlay.AllDisplays ? "all" : string.Join("+", Overlay.Displays))} " +
         $"unlock=[chord={Unlock.Chord.Enabled} " +
-        $"passphrase={Unlock.Passphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
+        $"lockphrase={Unlock.Lockphrase.Enabled} mouse_hold={Unlock.MouseHold.Enabled} " +
         $"timer={Unlock.Timer.Enabled}] lock_hotkey={LockHotkey.Enabled} " +
         $"update_mode={Update.ModeValue} " +
         $"sysblock=[win_l={SystemBlock.WinLock} launch_media={SystemBlock.LaunchMediaKeys}]";

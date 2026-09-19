@@ -236,12 +236,12 @@ public class LockControllerTests
     }
 
     [Fact]
-    public void Passphrase_still_unlocks_while_the_chord_is_disabled()
+    public void Lockphrase_still_unlocks_while_the_chord_is_disabled()
     {
         var config = new Config();
         config.Unlock.Chord.Enabled = false;
-        config.Unlock.Passphrase.Enabled = true;
-        config.Unlock.Passphrase.Text = "as";
+        config.Unlock.Lockphrase.Enabled = true;
+        config.Unlock.Lockphrase.Text = "as";
 
         var h = new Harness(config);
         h.Controller.Engage("test");
@@ -297,14 +297,14 @@ public class LockControllerTests
     public void A_capture_sink_does_not_feed_the_unlock_matchers()
     {
         var config = new Config();
-        config.Unlock.Passphrase.Enabled = true;
-        config.Unlock.Passphrase.Text = "as";
+        config.Unlock.Lockphrase.Enabled = true;
+        config.Unlock.Lockphrase.Text = "as";
 
         var h = new Harness(config);
         h.Controller.Engage("test");
         h.Controller.CaptureSink = (_, _) => { };
 
-        // Typing the passphrase into a recorder must not unlock; the keys belong to it alone.
+        // Typing the lockphrase into a recorder must not unlock; the keys belong to it alone.
         h.Tap(A);
         h.Tap(S);
         Assert.True(h.Controller.IsLocked);

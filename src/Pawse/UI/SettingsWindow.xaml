@@ -34,7 +34,7 @@
         <Style TargetType="CheckBox">
             <Setter Property="Margin" Value="0,4,0,2" />
         </Style>
-        <!-- Only TxtPassphrase takes this width; the numeric boxes and both chord
+        <!-- Only TxtLockphrase takes this width; the numeric boxes and both chord
              boxes set their own. Widened with the content pane. -->
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="22,2,0,2" />
@@ -45,8 +45,8 @@
                  by ctfmon.exe at medium integrity; a Pawse restarted as administrator runs at
                  high integrity and UIPI blocks the two from talking, which silently kills
                  character input while Backspace and Delete - plain key commands - keep
-                 working. Nothing here ever wants composition anyway: a passphrase limited to
-                 a-z/0-9/space (Keys.IsTypeablePassphrase), two integers, and key chords. -->
+                 working. Nothing here ever wants composition anyway: a lockphrase limited to
+                 a-z/0-9/space (Keys.IsTypeableLockphrase), two integers, and key chords. -->
             <Setter Property="InputMethod.IsInputMethodEnabled" Value="False" />
         </Style>
         <!-- A TextBox subclass does NOT inherit the implicit TextBox style above, so
@@ -131,7 +131,7 @@
         </Grid.RowDefinitions>
 
         <!-- Shown only while Pawse has the keyboard locked. The global hook swallows every
-             key before WPF sees it, so the passphrase, the two durations and both shortcut
+             key before WPF sees it, so the lockphrase, the two durations and both shortcut
              boxes are dead - say so once, here, instead of letting the user find out one
              field at a time. The way out sits in the same bar: a button, because the mouse
              is exactly what still works in this state. -->
@@ -144,7 +144,7 @@
                         VerticalAlignment="Center" Click="OnBannerUnlock" />
                 <TextBlock VerticalAlignment="Center" TextWrapping="Wrap"
                            FontSize="12" Foreground="#FF5C4600"
-                           Text="Pawse has the keyboard locked, so you can't type in here. Unlock to edit the passphrase, the durations and the shortcuts." />
+                           Text="Pawse has the keyboard locked, so you can't type in here. Unlock to edit the lockphrase, the durations and the shortcuts." />
             </DockPanel>
         </Border>
 
@@ -194,7 +194,7 @@
                         <TextBlock Text="While locked" Style="{StaticResource SubHeader}" />
                         <CheckBox x:Name="ChkBlockMouse" Content="Also block the mouse while locked" />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="With mouse blocking on, use a keyboard method to unlock (the hold button needs the mouse)." />
+                                   Text="With mouse blocking on, use a keyboard method to unlock (the hold button and the paw need the mouse)." />
                         <CheckBox x:Name="ChkBlockScreenKeyboard" Content="Also block on-screen keyboards while locked" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse stops a mouse-driven on-screen keyboard, but not taps on a touchscreen.)" />
@@ -232,14 +232,14 @@
                                    Text="Press Set… and hold your shortcut (e.g. Ctrl+Shift+U), then let go." />
                         <TextBlock x:Name="LblChordWarn" Style="{StaticResource Warn}" />
 
-                        <TextBlock Text="Passphrase" Style="{StaticResource SubHeader}" />
-                        <CheckBox x:Name="ChkPassphrase" Content="Unlock by typing a passphrase" />
-                        <TextBox x:Name="TxtPassphrase" />
-                        <TextBlock x:Name="LblPassphraseWarn" Style="{StaticResource Warn}" />
-                        <CheckBox x:Name="ChkResetWrong" Content="A wrong key restarts the passphrase" Margin="22,2,0,2" />
+                        <TextBlock Text="Lockphrase" Style="{StaticResource SubHeader}" />
+                        <CheckBox x:Name="ChkLockphrase" Content="Unlock by typing a lockphrase" />
+                        <TextBox x:Name="TxtLockphrase" />
+                        <TextBlock x:Name="LblLockphraseWarn" Style="{StaticResource Warn}" />
+                        <CheckBox x:Name="ChkResetWrong" Content="A wrong key restarts the lockphrase" Margin="22,2,0,2" />
 
                         <TextBlock Text="Mouse hold" Style="{StaticResource SubHeader}" />
-                        <CheckBox x:Name="ChkMouseHold" Content="Unlock by holding the popup button" />
+                        <CheckBox x:Name="ChkMouseHold" Content="Unlock by holding the popup button or the paw icon" />
                         <StackPanel Orientation="Horizontal" Margin="22,2,0,2">
                             <TextBlock Text="Hold for" VerticalAlignment="Center" />
                             <TextBox x:Name="TxtHoldMs" Width="70" Margin="8,0"
@@ -275,6 +275,18 @@
                              the monitor list always has been. Disabled in "All displays" mode,
                              where the set is worked out fresh each time the popup is built. -->
                         <StackPanel x:Name="PnlDisplays" Margin="92,2,0,2" />
+                        <!-- Two looks, one setting: the card with its hold button, or the tray paw
+                             drawn large. The paw's own options further down appear only while it
+                             is picked (OnStyleChanged). -->
+                        <StackPanel Orientation="Horizontal" Margin="22,6,0,2">
+                            <TextBlock Text="Style" VerticalAlignment="Center" Width="70" />
+                            <RadioButton x:Name="RbStyleWindow" GroupName="OverlayStyle" Content="Window"
+                                         VerticalAlignment="Center" Checked="OnStyleChanged" />
+                            <RadioButton x:Name="RbStylePaw" GroupName="OverlayStyle" Content="Paw icon"
+                                         Margin="16,0,0,0" VerticalAlignment="Center" Checked="OnStyleChanged" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="The window shows the hold-to-unlock button; the paw is a small icon you hold instead." />
                         <!-- Both sliders carry a live readout: a bare handle between two
                              unlabelled ends says nothing about what the setting currently is,
                              and neither value has a unit a user could guess. -->
@@ -301,13 +313,31 @@
                         </Grid>
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="How solid the popup looks. Lower lets more of the desktop show through it." />
+                        <!-- Both axes, so the popup - or the paw - can sit in a corner, not only on
+                             the centre line. Shared by both styles; switching keeps the spot. -->
                         <Grid Margin="22,6,18,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="70" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Position" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="0" Text="Horizontal" VerticalAlignment="Center" />
+                            <Slider x:Name="SldHorizontal" Grid.Column="1" Minimum="0" Maximum="100"
+                                    MaxWidth="260" HorizontalAlignment="Left" MinWidth="140"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" MinWidth="44"
+                                       Text="{Binding ElementName=SldHorizontal, Path=Value, StringFormat={}{0:0}%}" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="How far across the screen the popup sits - 0% is the left edge, 100% the right." />
+                        <Grid Margin="22,6,18,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Vertical" VerticalAlignment="Center" />
                             <Slider x:Name="SldVertical" Grid.Column="1" Minimum="0" Maximum="100"
                                     MaxWidth="260" HorizontalAlignment="Left" MinWidth="140"
                                     TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
@@ -317,6 +347,34 @@
                         </Grid>
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="How far down the screen the popup sits - 0% is the top edge, 100% the bottom." />
+                        <!-- Hidden, not greyed, while the window style is picked: a greyed slider
+                             invites the question of how to enable it. -->
+                        <StackPanel x:Name="PnlPawOptions">
+                            <Grid Margin="22,6,18,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Paw size" VerticalAlignment="Center" />
+                                <!-- Minimum and Maximum come from Config.OverlayCfg.PawCfg in code, like
+                                     SldOpacity's floor, so the slider and the load clamp cannot disagree. -->
+                                <Slider x:Name="SldPawSize" Grid.Column="1" MaxWidth="260"
+                                        HorizontalAlignment="Left" MinWidth="140"
+                                        TickFrequency="8" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                           Margin="10,0,0,0" MinWidth="44"
+                                           Text="{Binding ElementName=SldPawSize, Path=Value, StringFormat='{}{0:0} px'}" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="How big the paw is, in pixels before display scaling." />
+                            <CheckBox x:Name="ChkPawHint" Content="Show how to unlock beneath the paw" Margin="22,4,0,2" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="A small text box under the paw naming the key combination and the lockphrase." />
+                        </StackPanel>
+                        <CheckBox x:Name="ChkShowLockphrase" Content="Show the lockphrase in the popup" Margin="22,4,0,2" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="On: the unlock hint prints the lockphrase itself. Off: it only says to type it - for when someone else can see your screen." />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

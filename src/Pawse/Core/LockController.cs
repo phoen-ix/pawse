@@ -35,7 +35,7 @@ public sealed class LockController
     /// <summary>Normalized VKs that were physically held when the lock engaged (e.g. the lock
     /// hotkey's own keys). The OS autorepeats a held key, and to the hook those repeats are
     /// ordinary key-downs: feeding them to the matchers would let a key the user never pressed
-    /// again type the passphrase or complete the unlock chord by itself. Repeats of these keys
+    /// again type the lockphrase or complete the unlock chord by itself. Repeats of these keys
     /// are therefore ignored until the key's real key-UP (or <see cref="ForgetHeldKeys"/>)
     /// drops it from the set. It stays in <see cref="_pressed"/> throughout - it really is
     /// held, and the unlock chord is entitled to count it once the chord is re-formed.</summary>
@@ -55,7 +55,7 @@ public sealed class LockController
 
     private ChordMatcher? _unlockChord;
     private ChordMatcher? _lockHotkey;
-    private PassphraseMatcher? _passphrase;
+    private LockphraseMatcher? _lockphrase;
 
     private volatile bool _isLocked;
     private volatile bool _suppressLockHotkey;
@@ -124,8 +124,8 @@ public sealed class LockController
             _lockHotkey = Config.LockHotkey.Enabled
                 ? new ChordMatcher(Keys.ParseChord(Config.LockHotkey.Keys))
                 : null;
-            _passphrase = Config.Unlock.Passphrase.Enabled
-                ? new PassphraseMatcher(Config.Unlock.Passphrase.Text, Config.Unlock.Passphrase.ResetOnWrongKey)
+            _lockphrase = Config.Unlock.Lockphrase.Enabled
+                ? new LockphraseMatcher(Config.Unlock.Lockphrase.Text, Config.Unlock.Lockphrase.ResetOnWrongKey)
                 : null;
             // Re-bound mid-lock (Settings → Apply): a brand-new matcher is armed, so if the
             // new chord happens to be held right now, the next autorepeat would unlock.
@@ -206,12 +206,12 @@ public sealed class LockController
                         Disengage("chord");
                         return true;
                     }
-                    if (isDown && _passphrase != null)
+                    if (isDown && _lockphrase != null)
                     {
                         char? c = Keys.TryVkToChar(vk);
-                        if (c.HasValue && _passphrase.Feed(c.Value))
+                        if (c.HasValue && _lockphrase.Feed(c.Value))
                         {
-                            Disengage("passphrase");
+                            Disengage("lockphrase");
                             return true;
                         }
                     }
@@ -298,7 +298,7 @@ public sealed class LockController
         // the chord instead of resetting it is what keeps a held Ctrl+L from unlocking
         // the moment it autorepeats - an already-satisfied chord must be broken first.
         _unlockChord?.Prime(_pressed);
-        _passphrase?.Reset();
+        _lockphrase?.Reset();
         // Inside the lock on purpose: raised after release, a hook-thread transition
         // squeezing into that gap could get its notification out first and the UI
         // would end up showing the stale state (see the class doc).
