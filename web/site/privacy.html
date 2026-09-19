@@ -60,12 +60,17 @@
   b{color:var(--ink); font-weight:600}
   a{color:var(--lilac); text-underline-offset:3px}
   a:hover{color:var(--cream)}
+  /* Same explicit keyboard-focus ring as index.html. */
+  a:focus-visible{outline:2px solid var(--lilac); outline-offset:3px}
   code{font-family:var(--mono); font-size:.9em; color:var(--ink)}
 
-  footer{margin-top:48px; padding:30px 0 46px; border-top:1px solid var(--line);
+  /* Outside <main> on purpose, like index.html: nested in main it would not be the
+     contentinfo landmark. It carries .wrap itself, so the rule still aligns with the column. */
+  .foot{margin-top:48px; padding:30px 0 46px; border-top:1px solid var(--line);
     display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:space-between;
     color:var(--faint); font-family:var(--mono); font-size:12px; letter-spacing:.06em}
-  footer a{color:var(--soft); text-decoration:none} footer a:hover{color:var(--ink)}
+  footer a{color:var(--soft); text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px}
+  footer a:hover{color:var(--ink); text-decoration-color:currentColor}
   footer .paw{width:16px; height:16px; fill:var(--faint); vertical-align:-3px; margin-right:7px}
 </style>
 </head>
@@ -97,12 +102,12 @@
   <h2>The app</h2>
 
   <h3>What it sees</h3>
-  <p>Pawse uses a Windows keyboard hook, plus a mouse hook if you turn on mouse blocking. That lets it swallow input while the keyboard is locked and notice your unlock chord or passphrase. It handles keys in memory as they're pressed, doesn't keep them and doesn't send them anywhere.</p>
+  <p>Pawse uses a Windows keyboard hook, plus a mouse hook if you turn on mouse blocking. That lets it swallow input while the keyboard is locked and notice your unlock chord or lockphrase. It handles keys in memory as they're pressed, doesn't keep them and doesn't send them anywhere.</p>
 
   <h3>What it stores on your PC</h3>
   <ul>
-    <li><b>Your settings</b>, in a file called <code>pawse.json</code>. This includes your unlock passphrase, in plain text, so anyone who can read your files can read it.</li>
-    <li><b>A log</b>, only if you switch it on (it's off by default). It records what Pawse did. To help diagnose an unlock chord that won't complete, it also notes which keys were still held when a lock engaged. It never records your passphrase.</li>
+    <li><b>Your settings</b>, in a file called <code>pawse.json</code>. This includes your unlock lockphrase, in plain text, so anyone who can read your files can read it. The lock popup also shows it on screen while locked, unless you switch that off in Settings.</li>
+    <li><b>A log</b>, only if you switch it on (it's off by default). It records what Pawse did. To help diagnose an unlock chord that won't complete, it also notes which keys were still held when a lock engaged. It never records your lockphrase.</li>
   </ul>
   <p>A portable copy keeps both files next to <code>Pawse.exe</code> and writes nothing to the registry. An installed copy keeps them there too, or in <code>%APPDATA%\Pawse</code> when it can't write to its folder (a machine-wide install), and uninstalling it removes everything it created. The Microsoft Store build keeps them in its own app data folder, which Windows deletes when you uninstall it. None of it leaves your PC.</p>
 
@@ -127,11 +132,14 @@
   <h2>Questions and changes</h2>
   <p>Ask on <a href="https://github.com/phoen-ix/pawse/issues">GitHub</a>. If what Pawse or this website does with your data changes, this page is updated with it. The date at the top says when that last happened.</p>
 
-  <footer>
+</main>
+
+<footer class="wrap">
+  <div class="foot">
     <span><svg class="paw" viewBox="0 0 256 256" aria-hidden="true"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 10. MIT-licensed.</span>
     <span>© 2026 · <a href="/">pawse.at</a></span>
-  </footer>
-</main>
+  </div>
+</footer>
 
 </body>
 </html>

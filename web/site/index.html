@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pawse - a cat-proof keyboard lock for Windows</title>
-<meta name="description" content="Pawse freezes your keyboard with one click so a cat can't wreck your work. Unlock with a chord, passphrase, hold or timer. Open source, for Windows 10 and 11.">
+<meta name="description" content="Pawse freezes your keyboard with one click so a cat can't wreck your work. Unlock with a chord, lockphrase, hold or timer. Open source, for Windows 10 and 11.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#17131f">
 <!-- www.pawse.at is the canonical host: Traefik 301s the apex here, except /latest.json,
@@ -38,7 +38,7 @@
       "@type": "SoftwareApplication",
       "name": "Pawse",
       "url": "https://www.pawse.at/",
-      "description": "A cat-proof keyboard lock for Windows. One click or a hotkey freezes the keyboard; unlock deliberately with a chord, a passphrase, a hold-to-unlock button or an auto-timer.",
+      "description": "A cat-proof keyboard lock for Windows. One click or a hotkey freezes the keyboard; unlock deliberately with a chord, a lockphrase, a hold-to-unlock button or an auto-timer.",
       "applicationCategory": "UtilitiesApplication",
       "operatingSystem": "Windows 10, Windows 11",
       "image": "https://www.pawse.at/og.png",
@@ -83,6 +83,9 @@
   }
 
   .wrap{max-width:1080px; margin:0 auto; padding:0 24px}
+  /* Keyboard focus: one explicit ring, so it is the same in every browser and visible on
+     the dark panels. Pointer clicks do not trigger :focus-visible, so nothing changes for them. */
+  a:focus-visible{outline:2px solid var(--lilac); outline-offset:3px}
 
   /* top bar */
   header{position:relative; z-index:2}
@@ -160,14 +163,27 @@
   a.row{text-decoration:none; transition:border-color .2s ease, background .2s ease}
   a.row:hover{border-color:rgba(139,108,240,.5); background:rgba(139,108,240,.09)}
   a.row:hover .name{color:#fff}
+  /* Link rows must read as links at rest, not only on hover: the unlock-method rows right
+     above them are the same shape and are not links. A trailing arrow and a quiet underline
+     on the file name do that. */
+  a.row{grid-template-columns:minmax(180px,1fr) auto minmax(0,1.9fr) auto}
+  a.row .name{text-decoration:underline; text-decoration-color:rgba(180,162,247,.45); text-underline-offset:3px}
+  a.row:hover .name{text-decoration-color:currentColor}
+  .go{width:16px; height:16px; color:var(--faint); justify-self:end; transition:color .2s ease}
+  .go svg{width:100%; height:100%; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+  a.row:hover .go{color:var(--ink)}
   .chip{justify-self:start; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap;
     border:1px solid var(--line); border-radius:100px; padding:4px 10px; color:var(--faint)}
   .chip.on{color:var(--amber); border-color:rgba(245,201,123,.35); background:rgba(245,201,123,.06)}
   .chip.rec{color:var(--lilac); border-color:rgba(139,108,240,.5); background:rgba(139,108,240,.1)}
 
-  footer{position:relative; z-index:2; margin-top:34px; padding:30px 0 46px; border-top:1px solid var(--line);
+  /* The footer sits outside <main> on purpose: nested in main it would not be the page's
+     contentinfo landmark. It carries .wrap itself, so the rule still aligns with the column. */
+  footer{position:relative; z-index:2}
+  .foot{margin-top:34px; padding:30px 0 46px; border-top:1px solid var(--line);
     display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:space-between; color:var(--faint); font-family:var(--mono); font-size:12px; letter-spacing:.06em}
-  footer a{color:var(--soft); text-decoration:none} footer a:hover{color:var(--ink)}
+  footer a{color:var(--soft); text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px}
+  footer a:hover{color:var(--ink); text-decoration-color:currentColor}
   footer .paw{width:16px; height:16px; fill:var(--faint); vertical-align:-3px; margin-right:7px}
 
   @media (max-width:760px){
@@ -177,6 +193,7 @@
   }
   @media (max-width:640px){
     .row{grid-template-columns:1fr auto}
+    a.row{grid-template-columns:1fr auto auto}
     .row .what{grid-column:1/-1}
   }
   @media (max-width:480px){
@@ -227,7 +244,7 @@
 
     <h1 class="reveal" style="animation-delay:.12s">pawse<span class="dotcat">.</span></h1>
     <p class="tag reveal" style="animation-delay:.2s">A cat-proof keyboard lock for Windows.</p>
-    <p class="lede reveal" style="animation-delay:.28s">One click - or a hotkey - freezes the keyboard so a cat walking across it can't close your work, fire off shortcuts, or leave a modifier <b>stuck</b>. The days of your cat <b>force-pushing to main</b> are over. Unlock it deliberately: a chord, a passphrase, a hold-to-unlock button, or an auto-timer.</p>
+    <p class="lede reveal" style="animation-delay:.28s">One click - or a hotkey - freezes the keyboard so a cat walking across it can't close your work, fire off shortcuts, or leave a modifier <b>stuck</b>. The days of your cat <b>force-pushing to main</b> are over. Unlock it deliberately: a chord, a lockphrase, a hold-to-unlock button, or an auto-timer.</p>
     <div class="cta reveal" style="animation-delay:.36s">
       <!-- Both point at the repo rather than a versioned file: GitHub's releases/latest
            always resolves to the newest one, so nothing here goes stale on release day. -->
@@ -242,37 +259,39 @@
     </div>
   </section>
 
-  <section class="feat">
-    <h2 class="rule">What Pawse does</h2>
+  <section class="feat" aria-labelledby="what">
+    <h2 class="rule" id="what">What Pawse does</h2>
     <div class="grid">
-      <div class="card"><span class="kbd">Ctrl+L</span>
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
-        <h3>One-click lock</h3><p>Click the tray paw or hit your hotkey. A global hook swallows every physical key while locked - typing, shortcuts, F-keys - and clears any modifier the cat left stuck.</p></div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+        <!-- After the heading in the DOM (it floats top-right visually), so a screen
+             reader hears the card's name before its shortcut. -->
+        <h3>One-click lock</h3><span class="kbd">Ctrl+L</span><p>Click the tray paw or hit your hotkey. A global hook swallows every physical key while locked - typing, shortcuts, F-keys - and clears any modifier the cat left stuck.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
         <h3>Cat-proof by design</h3><p>The unlock chord has to be the <b>only</b> keys held, so a cat sprawled across half the keyboard can't stumble into it. While locked, the tray paw needs a deliberate double-click.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 5l-4 14"/></svg></span>
-        <h3>Unlock your way</h3><p>A keyboard chord, a typed passphrase, a hold-to-unlock button, or an automatic timer - each one toggleable, and at least one always kept working.</p></div>
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 5l-4 14"/></svg></span>
+        <h3>Unlock your way</h3><p>A keyboard chord, a typed lockphrase, a hold-to-unlock button, or an automatic timer - each one toggleable, and at least one always kept working.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h.01M11 9h.01M15 9h.01M8 13h8"/></svg></span>
-        <h3>Lives in the tray</h3><p>No window in your way - a paw in the system tray (green unlocked, red locked) and a small floating popup while locked, on one display, several, or all of them. Move it, dim it, or switch it off.</p></div>
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h.01M11 9h.01M15 9h.01M8 13h8"/></svg></span>
+        <h3>Lives in the tray</h3><p>No window in your way - a paw in the system tray (green unlocked, red locked) and a small floating popup while locked - a window with the unlock button, or just a paw icon at the size you like - on one display, several, or all of them. Place it anywhere, dim it, or switch it off.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
         <h3>Your keyboard, not the screen one</h3><p>On-screen and touch keyboards keep typing while the hardware keyboard is frozen - handy for wiping the keys down. One setting blocks those too.</p></div>
 
       <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="M21 3l-6 6"/></svg></span>
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="M21 3l-6 6"/></svg></span>
         <h3>Local unless you ask</h3><p>No telemetry, no phone-home, and no connection at all until you press Check now in Settings. Updates have three levels - ask only, tell me, or install for me - and the first is the default. Settings, log and keystrokes stay on the machine.</p></div>
     </div>
   </section>
 
-  <section class="sec">
-    <h2 class="rule">Unlocking</h2>
+  <section class="sec" aria-labelledby="unlocking">
+    <h2 class="rule" id="unlocking">Unlocking</h2>
     <p class="intro">Four ways in, each switched on or off in Settings. Whatever you turn off, Pawse keeps at least one <b>working</b> method enabled - a lock you couldn't undo would be worse than no lock.</p>
     <div class="rows">
       <div class="row">
@@ -280,12 +299,12 @@
         <span class="what">Any combination you like. The same chord locks and unlocks.</span>
       </div>
       <div class="row">
-        <span class="name">Passphrase</span><span class="chip">off</span>
+        <span class="name">Lockphrase</span><span class="chip">off</span>
         <span class="what">Type a word while locked. Letters, digits and spaces - the keys that register through the hook.</span>
       </div>
       <div class="row">
         <span class="name">Hold to unlock</span><span class="chip on">on · ~1.2 s</span>
-        <span class="what">Press and hold the button on the floating popup. No keyboard needed.</span>
+        <span class="what">Press and hold the button on the floating popup - or the paw icon, if that is the style you picked. No keyboard needed.</span>
       </div>
       <div class="row">
         <span class="name">Auto timer</span><span class="chip">off</span>
@@ -295,8 +314,8 @@
     <p class="note">Also in Settings: block the mouse too, block <code>Win+L</code> and the browser / calculator / media keys while locked, start Pawse at sign-in, and lock the moment it starts.</p>
   </section>
 
-  <section class="sec">
-    <h2 class="rule">Download</h2>
+  <section class="sec" aria-labelledby="download">
+    <h2 class="rule" id="download">Download</h2>
     <p class="intro">Windows 10 or 11, 64-bit. <b>Not sure which? Take the all-in-one installer</b> - it carries everything and asks you nothing. Nothing here needs administrator rights unless you choose to install for every account on the PC.</p>
     <!-- Every row links to releases/latest rather than a versioned asset: GitHub resolves
          that to the newest release, so nothing here needs touching on release day. The
@@ -306,14 +325,17 @@
       <a class="row pick" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-Setup-x.y.z-full.exe</span><span class="chip rec">Recommended · ~61 MB</span>
         <span class="what">All-in-one installer. The .NET runtime is inside; nothing else to install.</span>
+        <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-Setup-x.y.z-min.exe</span><span class="chip">~0.5 MB</span>
         <span class="what">Tiny installer. Needs the .NET 10 Desktop Runtime, which it fetches for you if it's missing.</span>
+        <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-Setup-x.y.z.exe</span><span class="chip">~61 MB</span>
         <span class="what">Carries both builds and asks which one to install.</span>
+        <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
       </a>
     </div>
     <h3 class="sub">Or stay portable</h3>
@@ -321,17 +343,19 @@
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-x.y.z.zip</span><span class="chip">~61 MB</span>
         <span class="what">Unzip, run <code>Pawse.exe</code>. Self-contained; settings (and the optional log) live in the same folder.</span>
+        <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
       </a>
       <a class="row" href="https://github.com/phoen-ix/pawse/releases/latest">
         <span class="name">Pawse-x.y.z-min.zip</span><span class="chip">~0.3 MB</span>
         <span class="what">The small launcher. Needs the .NET 10 Desktop Runtime installed once.</span>
+        <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span>
       </a>
     </div>
     <p class="note">Already have Pawse? <b>Settings → About → Check now</b> offers the new version and installs it for you - that's the only time Pawse goes online, unless you move the update setting up a level. It checks GitHub for the newest release and cross-checks the download's checksum against pawse.at. Every release is built and published by CI, with a <code>SHA256SUMS.txt</code> covering all five downloads. Windows may mark a downloaded file as blocked - if an exe won't start, right-click it (or the zip) → <b>Properties → Unblock</b> first. Installing or uninstalling asks a running Pawse to quit properly, so anything it blocked is always put back.</p>
   </section>
 
-  <section class="sec">
-    <h2 class="rule">What it can't block</h2>
+  <section class="sec" aria-labelledby="limits">
+    <h2 class="rule" id="limits">What it can't block</h2>
     <p class="intro">A keyboard hook is not a kernel driver, and pretending otherwise would be the wrong kind of confidence. Four things stay out of reach:</p>
     <div class="grid two">
       <div class="card plain">
@@ -346,15 +370,15 @@
     <p class="note">And if Pawse itself dies, the lock dies with it: Windows drops the hook and the keyboard is yours again. Anything it switched on at the OS level is reverted on unlock, on quit, and swept on the next start if it was killed outright.</p>
   </section>
 
-  <section class="sec">
-    <h2 class="rule">Questions</h2>
+  <section class="sec" aria-labelledby="questions">
+    <h2 class="rule" id="questions">Questions</h2>
     <div class="grid two">
       <div class="card plain">
         <h3>How do I stop my cat typing on my keyboard?</h3><p>Lock the keyboard before you step away - click the tray paw or press Ctrl+L. Every key the cat steps on is swallowed, and the unlock chord only counts when its keys are the only ones held, so paws can't set it off.</p></div>
       <div class="card plain">
         <h3>Can I lock just the keyboard in Windows 10 or 11?</h3><p>Win+L locks the whole session and hides the screen. Pawse freezes only the keyboard, so a video, a download or a presentation keeps running where you can see it.</p></div>
       <div class="card plain">
-        <h3>Can I clean my keyboard without shutting down?</h3><p>Lock it, wipe the keys, then hold the unlock button on the floating popup - no keyboard needed. Or let the auto timer unlock it for you.</p></div>
+        <h3>Can I clean my keyboard without shutting down?</h3><p>Lock it, wipe the keys, then hold the unlock button (or the paw) on the floating popup - no keyboard needed. Or let the auto timer unlock it for you.</p></div>
       <div class="card plain">
         <h3>Does it keep toddlers off the keyboard too?</h3><p>Any small visitor, cat or not. For hands that go for the mouse as well, one setting blocks the mouse while locked.</p></div>
       <div class="card plain">
@@ -364,11 +388,14 @@
     </div>
   </section>
 
-  <footer>
-    <span><svg class="paw" viewBox="0 0 256 256"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 10. MIT-licensed.</span>
-    <span>© 2026 · <a href="/privacy.html">Privacy</a> · <a href="https://www.pawse.at/">pawse.at</a></span>
-  </footer>
 </main>
+
+<footer class="wrap">
+  <div class="foot">
+    <span><svg class="paw" viewBox="0 0 256 256" aria-hidden="true"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 10. MIT-licensed.</span>
+    <span>© 2026 · <a href="/privacy.html">Privacy</a> · <a href="https://www.pawse.at/">pawse.at</a></span>
+  </div>
+</footer>
 
 </body>
 </html>
