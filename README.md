@@ -165,7 +165,9 @@ machine until you press **Check now** or move it up a level. Whatever Pawse send
 
 A check asks `https://github.com/phoen-ix/pawse/releases/latest` which release is newest -
 just the redirect, no API - and reads `https://pawse.at/latest.json` for the checksum. That
-request to pawse.at isn't logged on the server; GitHub, being GitHub, logs what it likes.
+request to pawse.at is logged like any other visit to the site (IP address, time, the
+`Pawse/<version>` user agent) and kept for two weeks; GitHub, being GitHub, logs what it
+likes. The full picture is on the [privacy page](https://www.pawse.at/privacy.html).
 
 If there's something newer and you agree, Pawse downloads it from GitHub Releases, checks it
 against the SHA-256 pawse.at published, and only then runs it. Two hosts is the point: a

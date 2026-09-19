@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy - Pawse</title>
+<meta name="description" content="What Pawse and pawse.at do with information about you: keystrokes never leave your PC, there is no telemetry, and the website keeps ordinary server logs.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#17131f">
+<link rel="canonical" href="https://www.pawse.at/privacy.html">
+<link rel="icon" href="/favicon.svg">
+<!-- Same rules as index.html (nginx.conf's CSP): no scripts, no external requests - inline
+     CSS and SVG only. The tokens are index.html's, so the two pages read as one site. -->
+<style>
+  :root{
+    --bg:#17131f;
+    --ink:#F7EFE4; --soft:rgba(247,239,228,.72); --faint:rgba(247,239,228,.52); /* >=4.5:1 on bg (WCAG AA) */
+    --cream:#FFF7ED; --lilac:#B4A2F7;
+    --line:rgba(247,239,228,.12);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Segoe UI Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    line-height:1.65; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(139,108,240,.22), transparent 60%),
+      linear-gradient(180deg,#191426 0%, var(--bg) 40%, #140f1c 100%);
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:0 24px}
+
+  .bar{display:flex; align-items:center; justify-content:space-between; padding:26px 0 8px; gap:16px}
+  .brand{display:flex; align-items:center; gap:11px; font-family:var(--mono); font-size:13px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--soft); text-decoration:none}
+  .brand:hover{color:var(--ink)}
+  .brand svg{width:26px; height:26px; display:block}
+  .top{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);
+    text-decoration:none; border:1px solid var(--line); border-radius:100px; padding:7px 14px; transition:color .2s ease, border-color .2s ease}
+  .top:hover{color:var(--ink); border-color:rgba(139,108,240,.5)}
+
+  main{padding:48px 0 12px}
+  h1{font-family:var(--serif); font-weight:600; color:var(--cream); font-size:clamp(44px,9vw,72px);
+    line-height:1; letter-spacing:-.02em; margin:0 0 .35em}
+  .lede{font-size:clamp(16px,2vw,18px); color:var(--soft); margin:0 0 10px}
+  .date{font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--faint); margin:0}
+  h2{font-family:var(--serif); font-weight:600; color:var(--cream); font-size:26px; letter-spacing:-.01em;
+    margin:44px 0 8px; padding-top:22px; border-top:1px solid var(--line)}
+  h3{font-size:15.5px; font-weight:600; color:var(--ink); margin:24px 0 4px}
+  p, li{color:var(--soft); font-size:15.5px}
+  p{margin:8px 0}
+  ul{margin:8px 0; padding-left:20px}
+  li{margin:7px 0}
+  li::marker{color:var(--faint)}
+  b{color:var(--ink); font-weight:600}
+  a{color:var(--lilac); text-underline-offset:3px}
+  a:hover{color:var(--cream)}
+  code{font-family:var(--mono); font-size:.9em; color:var(--ink)}
+
+  footer{margin-top:48px; padding:30px 0 46px; border-top:1px solid var(--line);
+    display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:space-between;
+    color:var(--faint); font-family:var(--mono); font-size:12px; letter-spacing:.06em}
+  footer a{color:var(--soft); text-decoration:none} footer a:hover{color:var(--ink)}
+  footer .paw{width:16px; height:16px; fill:var(--faint); vertical-align:-3px; margin-right:7px}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="paw">
+    <ellipse cx="71" cy="96" rx="16" ry="21"/><ellipse cx="108" cy="69" rx="18" ry="24"/>
+    <ellipse cx="148" cy="69" rx="18" ry="24"/><ellipse cx="185" cy="96" rx="16" ry="21"/>
+    <ellipse cx="128" cy="170" rx="58" ry="46"/>
+  </g>
+</defs></svg>
+
+<header class="wrap">
+  <div class="bar">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 256 256" aria-hidden="true"><rect width="256" height="256" rx="56" fill="#6D5AE6"/><use href="#paw" fill="#FFF7ED"/></svg>
+      pawse.at
+    </a>
+    <a class="top" href="https://github.com/phoen-ix/pawse">Source on GitHub</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Privacy</h1>
+  <p class="lede">Pawse is a keyboard lock for Windows. It has no accounts, no ads, no analytics and no telemetry. This page covers exactly what the app and this website do with information about you.</p>
+  <p class="date">Last updated 19 September 2026</p>
+
+  <h2>The app</h2>
+
+  <h3>What it sees</h3>
+  <p>Pawse uses a Windows keyboard hook, plus a mouse hook if you turn on mouse blocking. That lets it swallow input while the keyboard is locked and notice your unlock chord or passphrase. It handles keys in memory as they're pressed, doesn't keep them and doesn't send them anywhere.</p>
+
+  <h3>What it stores on your PC</h3>
+  <ul>
+    <li><b>Your settings</b>, in a file called <code>pawse.json</code>. This includes your unlock passphrase, in plain text, so anyone who can read your files can read it.</li>
+    <li><b>A log</b>, only if you switch it on (it's off by default). It records what Pawse did. To help diagnose an unlock chord that won't complete, it also notes which keys were still held when a lock engaged. It never records your passphrase.</li>
+  </ul>
+  <p>The installer and portable builds keep both files next to <code>Pawse.exe</code>, or in <code>%APPDATA%\Pawse</code> if that folder is read-only. The Microsoft Store build keeps them in its own app data folder, which Windows deletes when you uninstall it. None of it leaves your PC.</p>
+
+  <h3>When it goes online</h3>
+  <ul>
+    <li><b>Microsoft Store build: never.</b> The Store installs and updates it.</li>
+    <li><b>Installer and portable builds: only to check for updates.</b> Out of the box that happens only when you press <b>Check now</b> in Settings → About, and you can choose a daily check instead. A check asks github.com which release is newest and fetches a small checksum file from pawse.at. If you then install the update, Pawse downloads it from GitHub. Like every web request, these carry your IP address. They also identify themselves as Pawse and its version, for example <code>Pawse/0.13.0</code>. Nothing else is sent: no ID, no settings, no usage data.</li>
+    <li>If the .NET Desktop Runtime is missing, the <b>minimal installer</b> can install it through winget once you agree. That download comes from Microsoft.</li>
+  </ul>
+
+  <h2>This website</h2>
+  <ul>
+    <li>No cookies, no JavaScript, no analytics, and nothing is loaded from other sites.</li>
+    <li>Like most web servers, the servers behind pawse.at log every request: IP address, time, the page or file requested, browser user agent and referring page. Pawse's update checks are logged too.</li>
+    <li>How long entries are kept depends on the server. The front server deletes its logs after two weeks. The web server behind it caps its log by size, not age, so at this site's traffic an entry can stay there for several months. Update checks are only in the front server's log.</li>
+    <li>The logs are used to keep the site running and to block attacks. They aren't shared, and aren't used to track anyone.</li>
+  </ul>
+
+  <h2>Downloads</h2>
+  <p>The installers and zips are hosted on GitHub Releases, and the Store build on the Microsoft Store. Their own privacy statements apply there: <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub</a> and <a href="https://privacy.microsoft.com/privacystatement">Microsoft</a>.</p>
+
+  <h2>Questions and changes</h2>
+  <p>Ask on <a href="https://github.com/phoen-ix/pawse/issues">GitHub</a>. If what Pawse or this website does with your data changes, this page is updated with it. The date at the top says when that last happened.</p>
+
+  <footer>
+    <span><svg class="paw" viewBox="0 0 256 256" aria-hidden="true"><use href="#paw"/></svg>Pawse - native Windows app, C# / .NET 10. MIT-licensed.</span>
+    <span>© 2026 · <a href="/">pawse.at</a></span>
+  </footer>
+</main>
+
+</body>
+</html>
