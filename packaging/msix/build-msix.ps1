@@ -116,9 +116,23 @@ New-Item -ItemType Directory $priRoot | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'Assets') (Join-Path $priRoot 'Assets') -Recurse
 $priConfig = Join-Path $out 'priconfig.xml'
 Invoke-Native 'makepri createconfig' { & $makepri createconfig /cf $priConfig /dq en-US /pv 10.0.0 /o }
+# By default createconfig moves each language and scale into a .pri of its own
+# (<packaging><autoResourcePackage/>), which only the resource packs of an .msixbundle load.
+# This is a single .msix, where a resources.scale-200.pri is dead weight and the 200% logos
+# are never found - so keep one index.
+$config = [xml](Get-Content $priConfig -Raw)
+$packaging = $config.resources.SelectSingleNode('packaging')
+if ($packaging) { [void]$config.resources.RemoveChild($packaging) }
+$config.Save($priConfig)
+$pri = Join-Path $stage 'resources.pri'
 Invoke-Native 'makepri new' {
-    & $makepri new /pr $priRoot /cf $priConfig /mn (Join-Path $stage 'AppxManifest.xml') /of (Join-Path $stage 'resources.pri') /o
+    & $makepri new /pr $priRoot /cf $priConfig /mn (Join-Path $stage 'AppxManifest.xml') /of $pri /o
 }
+$split = Get-ChildItem $stage -Filter '*.pri' | Where-Object Name -ne 'resources.pri'
+if ($split) { throw "makepri split the resource index ($($split.Name -join ', ')) - a single .msix loads only resources.pri" }
+$dump = Join-Path $out 'resources.pri.xml'
+Invoke-Native 'makepri dump' { & $makepri dump /if $pri /of $dump /dt Detailed /o }
+if (-not (Select-String -Path $dump -Pattern 'scale-200' -Quiet)) { throw "resources.pri does not list the 200% logos" }
 
 # makeappx validates the manifest against the schema as it packs.
 Invoke-Native 'makeappx pack' { & $makeappx pack /d $stage /p $msix /o }
