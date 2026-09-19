@@ -11,9 +11,8 @@
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
-  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 desktop desktop6 virtualization rescap">
+  IgnorableNamespaces="uap uap3 desktop desktop6 rescap">
 
   <!-- Four-part version: the Store reserves the last part and requires it to be 0. -->
   <Identity Name="$IDENTITY_NAME$" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="x64" />
@@ -26,19 +25,16 @@
     <!-- Block Win+L works by writing the DisableLockWorkstation policy value in HKCU
          (Core/WorkstationLock.cs). A packaged app's HKCU writes normally land in a private
          per-app hive that Windows itself never reads, so the block would silently do nothing.
-         On Windows 11 only the two keys Pawse writes are exempt: the policy key, and
-         Software\Pawse, which holds the markers that let ANY later Pawse - Store, installer or
-         portable - revert a value a crash or uninstall left behind. Windows 10 predates the
-         per-key form and takes the older switch, which exempts all of HKCU; this build writes
-         nothing else there (start-at-sign-in is the StartupTask below, not the Run key).
-         Both need the unvirtualizedResources capability at the bottom. -->
+         So HKCU is not virtualized for this package. That is broader than it sounds: this build
+         writes nothing else there - start-at-sign-in is the StartupTask below, not the Run key -
+         only the policy value (plus the keys it needs, removed again) and Software\Pawse, whose
+         markers let ANY later Pawse - Store, installer or portable - revert a value a crash or
+         uninstall left behind, and which is deleted once empty.
+         Not the Windows 11 per-key form (virtualization:ExcludedKeys) on purpose: with the policy
+         key listed there, an empty Policies\System was left in HKCU after every run - the key
+         appeared although Pawse had not created it, so Pawse never removed it (CI store job).
+         Needs the unvirtualizedResources capability at the bottom. -->
     <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
-    <virtualization:RegistryWriteVirtualization>
-      <virtualization:ExcludedKeys>
-        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\System</virtualization:ExcludedKey>
-        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Pawse</virtualization:ExcludedKey>
-      </virtualization:ExcludedKeys>
-    </virtualization:RegistryWriteVirtualization>
   </Properties>
 
   <!-- 19041 (Windows 10 2004) is also the TFM the Store build compiles against (Pawse.csproj). -->
@@ -85,7 +81,7 @@
        runFullTrust - a desktop app; the low-level keyboard and mouse hooks need it.
        allowElevation - Restart as administrator, which Block Win+L needs on managed PCs and
                         the Keyboard Filter (browser/media keys) needs everywhere.
-       unvirtualizedResources - the two HKCU keys above. -->
+       unvirtualizedResources - HKCU write virtualization off (Properties above). -->
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <rescap:Capability Name="allowElevation" />

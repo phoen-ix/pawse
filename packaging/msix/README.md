@@ -9,7 +9,7 @@ differs from the other two builds where the Store or packaging requires it:
 | Updates | Pawse's own updater (Settings -> About) | The Store. The updater is **not compiled in** - `UpdateCheck.cs`, `SelfReplace.cs`, `App.Updates.cs` and `SettingsWindow.Updates.cs` are left out of the build (`Pawse.csproj`), and About says "Updates come from the Microsoft Store". |
 | Start at sign-in | `HKCU\...\Run` value | The package's StartupTask (`Core/Autostart.Store.cs`). If the user turns it off in Windows (Settings -> Apps -> Startup, or Task Manager), only they can turn it back on there; Pawse says so. |
 | Settings and log | Next to the exe, or `%APPDATA%\Pawse` | The package's own data folder, `%LOCALAPPDATA%\Packages\<package family>\LocalState`. It is a real path, so "Open config file" works, and Windows removes it on uninstall. |
-| Block Win+L | Writes the HKCU policy value | Same, because `AppxManifest.xml` exempts that key (and `Software\Pawse`) from registry virtualization. |
+| Block Win+L | Writes the HKCU policy value | Same, because `AppxManifest.xml` turns off registry virtualization for HKCU. This build writes nothing else there. |
 | Restart as administrator | `runas` on the exe | `runas` on the app execution alias `pawse.exe`, so the elevated copy still runs as the package. |
 | Uninstall | The uninstaller reverts Win+L | MSIX runs no uninstall code. The Win+L value is only set while locked. A value left behind by a crash or an uninstall mid-lock is swept by the next start of **any** Pawse, because the marker lives in the exempt `Software\Pawse` key. |
 
@@ -72,9 +72,10 @@ The logos in `Assets\` come from `packaging/pawse-icon.py`, so the icon has one 
    - **unvirtualizedResources** - Block Win+L (opt-in) sets the documented per-user policy value
      `HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System\DisableLockWorkstation`
      while the keyboard is locked, and removes it on unlock. Windows only honours it in the
-     real HKCU, not in the app's virtualized hive. On Windows 11 the manifest exempts exactly
-     that key and `HKCU\Software\Pawse`, which holds the marker used to undo the value after a
-     crash. Nothing else is unvirtualized.
+     real HKCU, not in the app's virtualized hive, so HKCU write virtualization is off. Pawse
+     writes nothing else there: only that value (and the keys it needs, removed again), plus
+     `HKCU\Software\Pawse`, which holds the marker used to undo the value after a crash and is
+     deleted once empty.
 
    The schema docs say `unvirtualizedResources` is "intended to be used only by certain types
    of desktop PC games", so this is the capability most likely to be questioned. If it's
