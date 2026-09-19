@@ -104,7 +104,7 @@
     <li><b>Your settings</b>, in a file called <code>pawse.json</code>. This includes your unlock passphrase, in plain text, so anyone who can read your files can read it.</li>
     <li><b>A log</b>, only if you switch it on (it's off by default). It records what Pawse did. To help diagnose an unlock chord that won't complete, it also notes which keys were still held when a lock engaged. It never records your passphrase.</li>
   </ul>
-  <p>The installer and portable builds keep both files next to <code>Pawse.exe</code>, or in <code>%APPDATA%\Pawse</code> if that folder is read-only. The Microsoft Store build keeps them in its own app data folder, which Windows deletes when you uninstall it. None of it leaves your PC.</p>
+  <p>A portable copy keeps both files next to <code>Pawse.exe</code> and writes nothing to the registry. An installed copy keeps them there too, or in <code>%APPDATA%\Pawse</code> when it can't write to its folder (a machine-wide install), and uninstalling it removes everything it created. The Microsoft Store build keeps them in its own app data folder, which Windows deletes when you uninstall it. None of it leaves your PC.</p>
 
   <h3>When it goes online</h3>
   <ul>
