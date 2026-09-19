@@ -73,11 +73,19 @@
                                 <Setter TargetName="Row" Property="Background" Value="#FFE4E8EF" />
                             </Trigger>
                             <!-- After IsMouseOver on purpose: hovering the selected row must
-                                 keep the accent, not fall back to the hover grey. -->
+                                 keep the accent, not fall back to the hover grey.
+                                 The white text and the weight are set on the ROW, not on the
+                                 TabItem: a tab's page is the TabItem's logical child and inherits
+                                 its Foreground and FontWeight, so set on the TabItem they made
+                                 every unstyled TextBlock on the selected page white-on-white -
+                                 the "Show on", "Opacity" and "Position" labels and the slider
+                                 readouts were invisible - and every checkbox label semibold.
+                                 Controls never showed it: their default styles set their own
+                                 Foreground. -->
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Row" Property="Background" Value="#FF2E6CF0" />
-                                <Setter Property="Foreground" Value="White" />
-                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter TargetName="Row" Property="TextElement.Foreground" Value="White" />
+                                <Setter TargetName="Row" Property="TextElement.FontWeight" Value="SemiBold" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -362,9 +370,14 @@
                                 <Slider x:Name="SldPawSize" Grid.Column="1" MaxWidth="260"
                                         HorizontalAlignment="Left" MinWidth="140"
                                         TickFrequency="8" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
-                                           Margin="10,0,0,0" MinWidth="44"
-                                           Text="{Binding ElementName=SldPawSize, Path=Value, StringFormat='{}{0:0} px'}" />
+                                <!-- The unit is a second TextBlock, so the format string stays in the
+                                     same escape-free {}{0:0} form as the other readouts - no quoting
+                                     needed to fit a space in. -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="10,0,0,0" MinWidth="44">
+                                    <TextBlock Text="{Binding ElementName=SldPawSize, Path=Value, StringFormat={}{0:0}}" />
+                                    <TextBlock Text=" px" />
+                                </StackPanel>
                             </Grid>
                             <TextBlock Style="{StaticResource Hint}"
                                        Text="How big the paw is, in pixels before display scaling." />
