@@ -946,11 +946,28 @@ Section "Uninstall"
     DeleteRegKey HKCU "Software\Pawse"
   ${EndIf}
 
-  DeleteRegValue HKCU "${RUN_KEY}" "${APP}"
-  ; Remove the Add/Remove Programs entry from whichever hive it was written to - SHCTX can
-  ; be wrong if MultiUser's mode detection is off, so clear both (HKLM is a no-op un-elevated).
-  DeleteRegKey HKCU "${UNINST_KEY}"
-  DeleteRegKey HKLM "${UNINST_KEY}"
+  ; The autostart entry only if it starts THIS install's exe: another Pawse installed alongside
+  ; (a per-user copy next to a machine-wide one) keeps its own. Autostart.cs writes the path
+  ; quoted; LogicLib's == ignores case. Mirrors UninstallCleanup.PointsInto.
+  ReadRegStr $0 HKCU "${RUN_KEY}" "${APP}"
+  ${If} $0 == '"$INSTDIR\${EXE}"'
+  ${OrIf} $0 == "$INSTDIR\${EXE}"
+    DeleteRegValue HKCU "${RUN_KEY}" "${APP}"
+  ${EndIf}
+  ; Remove THIS install's Add/Remove Programs entry - and only this one. Both hives use the same
+  ; key name, so a per-user copy next to a machine-wide one used to lose its entry whenever the
+  ; other was uninstalled: its files stayed behind with no way to uninstall them, and the app
+  ; took the orphan for a portable copy. Both hives are checked (SHCTX can be wrong if
+  ; MultiUser's mode detection is off), by the folder the entry names - as un.onInit does. Every
+  ; installer has written InstallLocation, so no entry of ours goes unmatched.
+  ReadRegStr $0 HKCU "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 == "$INSTDIR"
+    DeleteRegKey HKCU "${UNINST_KEY}"
+  ${EndIf}
+  ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+  ${If} $0 == "$INSTDIR"
+    DeleteRegKey HKLM "${UNINST_KEY}"
+  ${EndIf}
 
   ; Remove the uninstaller + folder. A running uninstall.exe can't delete itself, so if it's
   ; still there hand off to a detached cmd that waits for us to exit, then cleans up.

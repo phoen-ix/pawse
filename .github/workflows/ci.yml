@@ -286,6 +286,31 @@ jobs:
           if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }
           Assert-NoPawseTraces $created
 
+      # Two installs side by side - a per-user copy next to a machine-wide one - share the
+      # Add/Remove key name in both hives. Uninstalling one used to delete the other's entry as
+      # well, leaving its files behind with no uninstaller, and the app then took it for a
+      # portable copy. The machine-wide one goes first: its elevated uninstaller is the one that
+      # cleared both hives.
+      - name: Side by side - uninstalling one install leaves the other intact
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          foreach ($mode in '/CurrentUser', '/AllUsers') {
+            $p = Start-Process -FilePath $env:SETUP -ArgumentList '/S', $mode -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "the $mode install exited with $($p.ExitCode)" }
+          }
+          $user = (Get-ItemProperty $env:UNINST_KEY_USER).InstallLocation
+          $machine = (Get-ItemProperty $env:UNINST_KEY_MACHINE).InstallLocation
+          "per-user copy in $user, machine-wide copy in $machine"
+          Start-Process -FilePath (Join-Path $machine 'uninstall.exe') -ArgumentList '/S'
+          Wait-Removed $env:UNINST_KEY_MACHINE $machine
+          if (-not (Test-Path $env:UNINST_KEY_USER)) { throw "uninstalling the machine-wide copy took the per-user copy's Add/Remove entry with it" }
+          if (-not (Test-Path (Join-Path $user 'Pawse.exe'))) { throw "uninstalling the machine-wide copy touched the per-user copy's files" }
+          Start-Process -FilePath (Join-Path $user 'uninstall.exe') -ArgumentList '/S'
+          Wait-Removed $env:UNINST_KEY_USER $user
+          Assert-NoPawseTraces
+          "both gone, each by its own uninstaller"
+
       # A portable copy writes nothing outside its folder: settings and log next to the exe, no
       # registry at all - even locked, with Block Win+L and the media-key block switched on in
       # its pawse.json, since both are installed-only. And an autostart entry an older version
