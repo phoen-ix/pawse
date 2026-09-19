@@ -76,7 +76,7 @@ function Set-PawseTraces {
     New-Item 'HKCU:\Software\Pawse' -Force | Out-Null
     if ($created) { New-ItemProperty 'HKCU:\Software\Pawse' -Name PolicyKeysCreated -Value $created -PropertyType DWord -Force | Out-Null }
     New-ItemProperty 'HKCU:\Software\Pawse' -Name PrevDisableLockWorkstation -Value 2 -PropertyType DWord -Force | Out-Null
-    New-Item $system -Force | Out-Null
+    if (-not (Test-Path $system)) { New-Item $system | Out-Null }   # -Force would wipe an existing key's values
     New-ItemProperty $system -Name DisableLockWorkstation -Value 1 -PropertyType DWord -Force | Out-Null
     New-Item -ItemType Directory "$env:APPDATA\Pawse" -Force | Out-Null
     Set-Content "$env:APPDATA\Pawse\pawse.json" '{}'

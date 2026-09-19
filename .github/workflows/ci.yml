@@ -299,6 +299,8 @@ jobs:
           Copy-Item publish-full/Pawse.exe $dir
           $exe = Join-Path $dir 'Pawse.exe'
           $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          # A fresh runner account has no Run key at all.
+          if (-not (Test-Path $run)) { New-Item $run | Out-Null }
           New-ItemProperty $run -Name Pawse -Value "`"$exe`"" -PropertyType String -Force | Out-Null
           '{"General":{"Logging":true,"StartLocked":true},"SystemBlock":{"WinLock":true,"LaunchMediaKeys":true}}' |
             Set-Content (Join-Path $dir 'pawse.json')
@@ -392,6 +394,11 @@ jobs:
           Start-Process $env:PAWSE_ALIAS
           Wait-PawseStarted (Join-Path $env:LOCAL_STATE 'pawse.log') 2
           Wait-WinLockPolicy $null 20
+          # What the app did about the policy key, and what is there now - so a failure below
+          # says why, not only that.
+          Select-String -Path (Join-Path $env:LOCAL_STATE 'pawse.log') -Pattern 'win\+l|registry cleanup|WARN|ERROR' |
+            ForEach-Object { $_.Line }
+          reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Policies' /s 2>&1 | Out-String
           # ...and nothing else of Pawse's stays in the (un-virtualized) registry either.
           if (Test-Path 'HKCU:\Software\Pawse') { throw "HKCU\Software\Pawse outlived the sweep" }
           if ($env:POLICY_KEY_BEFORE -eq 'False' -and (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System')) { throw "the Policies\System key Pawse created outlived the sweep" }
