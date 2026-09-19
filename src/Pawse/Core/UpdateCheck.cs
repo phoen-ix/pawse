@@ -31,15 +31,6 @@ public enum InstallKind
     InstalledMin,
 }
 
-/// <summary>Which hive an install's Add/Remove entry sits in. Per-machine cannot be updated
-/// without a UAC prompt, so an unattended update declines it rather than surprising anyone.</summary>
-public enum InstallScope
-{
-    None,
-    PerUser,
-    PerMachine,
-}
-
 /// <summary>Why this copy cannot take an update on its own - a property of where it is
 /// installed, not of any release. Shared by the About page's caveat and the unattended
 /// refusal, so the UI never promises an install the check would decline.</summary>
@@ -133,10 +124,6 @@ public static class UpdateCheck
     /// the Store build (no UpdateCheck) needs too. Checking it against a release would always
     /// claim an update.</summary>
     public const string DevVersion = App.DevVersion;
-
-    /// <summary>Also hard-coded in packaging/pawse.nsi as UNINST_KEY - change both or
-    /// neither, or an installed Pawse starts reading as portable.</summary>
-    private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pawse";
 
     /// <summary>The self-contained exe is ~66 MB, the launcher ~0.7 MB - anything in
     /// between is a build nobody ships, so the midpoint is a safe divider. Only a fallback
@@ -591,8 +578,8 @@ public static class UpdateCheck
             _ => null,
         };
         return DetectInstall(exeDir, ProcessSizeBytes(),
-                             () => hive is null ? null : ReadInstallLocationIn(hive),
-                             () => hive is null ? null : ReadValue(hive, "BuildVariant")?.Trim().ToLowerInvariant());
+                             () => hive is null ? null : Deployment.ReadValue(hive, "InstallLocation"),
+                             () => hive is null ? null : Deployment.ReadValue(hive, "BuildVariant")?.Trim().ToLowerInvariant());
     }
 
     /// <summary>Test seam for <see cref="DetectInstall()"/>: the registry and the exe on disk
@@ -605,7 +592,7 @@ public static class UpdateCheck
                                               Func<string?>? buildVariant = null)
     {
         var installed = installLocation();
-        bool isInstalled = !string.IsNullOrWhiteSpace(installed) && SameFolder(installed, exeDir);
+        bool isInstalled = !string.IsNullOrWhiteSpace(installed) && Deployment.SameFolder(installed, exeDir);
 
         // Prefer what the installer recorded. Guessing from the size gets it wrong whenever
         // the size cannot be read (ProcessSizeBytes answers 0, which reads as the small
@@ -643,20 +630,7 @@ public static class UpdateCheck
 
     /// <summary>Which hive this install is registered in. Per-machine needs administrator
     /// rights to update, which an unattended check must never demand on its own.</summary>
-    public static InstallScope DetectScope() =>
-        ScopeOf(Log.ExeDir(), ReadInstallLocationIn(Registry.CurrentUser),
-                ReadInstallLocationIn(Registry.LocalMachine));
-
-    /// <summary>Test seam for <see cref="DetectScope()"/>. HKCU first, the same order the
-    /// installer's own previous-install probe uses.</summary>
-    internal static InstallScope ScopeOf(string exeDir, string? hkcuLocation, string? hklmLocation)
-    {
-        if (!string.IsNullOrWhiteSpace(hkcuLocation) && SameFolder(hkcuLocation, exeDir))
-            return InstallScope.PerUser;
-        if (!string.IsNullOrWhiteSpace(hklmLocation) && SameFolder(hklmLocation, exeDir))
-            return InstallScope.PerMachine;
-        return InstallScope.None;
-    }
+    public static InstallScope DetectScope() => Deployment.Scope();
 
     /// <summary>Name prefix of the per-download %TEMP% subfolders, so the startup sweep can find
     /// what an earlier run left behind.</summary>
@@ -665,11 +639,13 @@ public static class UpdateCheck
     /// <summary>Download and verify the SHA-256 from the feed. Returns the file's path, or null
     /// when anything at all went wrong (already logged). A file that fails the checksum is
     /// deleted rather than left lying around next to a working one.
-    /// <para>The file lands in a fresh, randomly named subfolder of %TEMP% rather than at a
-    /// predictable path: the installer it holds may run elevated a moment later, and a same-user
-    /// process should not know in advance where to swap the bytes. The folder is removed by
-    /// <see cref="SweepDownloads"/> on the next start - an installer we handed over to is still
-    /// running from it when this process exits.</para>
+    /// <para>The file lands in a fresh, randomly named subfolder rather than at a predictable
+    /// path: the installer it holds may run elevated a moment later, and a same-user process
+    /// should not know in advance where to swap the bytes. For an installed copy that folder is
+    /// in %TEMP% (and the uninstaller clears what is left); a portable copy writes nothing outside
+    /// its own folder, so its zip lands next to the exe - it is unpacked by this process, never run
+    /// elevated. The folder is removed by <see cref="SweepDownloads"/> on the next start - an
+    /// installer we handed over to is still running from it when this process exits.</para>
     /// <para>Two timeouts on purpose: with ResponseHeadersRead, HttpClient.Timeout stops
     /// counting once the headers are in, so the body copy carries its own linked token - a
     /// server that stalled mid-download would otherwise hold the update busy flag until
@@ -683,8 +659,9 @@ public static class UpdateCheck
             timeout.CancelAfter(DownloadTimeout);
             var token = timeout.Token;
 
+            var root = Deployment.IsPortable ? Log.ExeDir() : Path.GetTempPath();
             dir = Directory.CreateDirectory(
-                Path.Combine(Path.GetTempPath(), DownloadDirPrefix + Path.GetRandomFileName())).FullName;
+                Path.Combine(root, DownloadDirPrefix + Path.GetRandomFileName())).FullName;
             var path = Path.Combine(dir, fileName);
 
             using var http = NewClient(DownloadTimeout);
@@ -730,18 +707,23 @@ public static class UpdateCheck
         return Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
     }
 
-    /// <summary>Remove the download folders earlier runs left in %TEMP%. Called from the startup
-    /// sweep; true when nothing is left. An installer launched from one of them may still be
-    /// exiting, so the caller retries a failure rather than treating it as an error.</summary>
+    /// <summary>Remove the download folders earlier runs left - in %TEMP%, and next to the exe
+    /// where a portable copy downloads (both, whatever this copy is: deleting is all it does, and
+    /// an older version may have used either). Called from the startup sweep; true when nothing is
+    /// left. An installer launched from one of them may still be exiting, so the caller retries a
+    /// failure rather than treating it as an error.</summary>
     public static bool SweepDownloads()
     {
         bool clean = true;
-        try
+        foreach (var root in new[] { Path.GetTempPath(), Log.ExeDir() })
         {
-            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), DownloadDirPrefix + "*"))
-                clean &= TryDeleteDir(dir);
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(root, DownloadDirPrefix + "*"))
+                    clean &= TryDeleteDir(dir);
+            }
+            catch { /* folder unreadable - nothing to sweep there */ }
         }
-        catch { /* %TEMP% unreadable - nothing to sweep */ }
         return clean;
     }
 
@@ -793,50 +775,6 @@ public static class UpdateCheck
         if (!Version.TryParse(trimmed, out var parsed)) return false;
         version = parsed;
         return true;
-    }
-
-    private static bool SameFolder(string a, string b)
-    {
-        try
-        {
-            return string.Equals(
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)),
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)),
-                StringComparison.OrdinalIgnoreCase);
-        }
-        catch { return false; }
-    }
-
-    private static string? ReadInstallLocationIn(RegistryKey root) => ReadValue(root, "InstallLocation");
-
-    /// <summary>A value under the Add/Remove entry, or null. "BuildVariant" is "full" | "min",
-    /// written by the installer since v0.8 - absent for anything older and for a portable copy.
-    /// The installer is a 32-bit NSIS exe, so a per-machine entry lands in HKLM's WOW6432Node
-    /// view, which this x64 process does not see by default - HKLM is read in both views.</summary>
-    private static string? ReadValue(RegistryKey root, string name)
-    {
-        var value = ReadValueIn(root, name);
-        if (value is null && root.Name == Registry.LocalMachine.Name)
-        {
-            try
-            {
-                using var hklm32 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
-                value = ReadValueIn(hklm32, name);
-            }
-            catch { /* no 32-bit view to read - not installed there */ }
-        }
-        return value;
-    }
-
-    private static string? ReadValueIn(RegistryKey root, string name)
-    {
-        try
-        {
-            using var key = root.OpenSubKey(UninstallKey);
-            if (key?.GetValue(name) is string value && value.Length > 0) return value;
-        }
-        catch { /* an unreadable key just means "not installed here" */ }
-        return null;
     }
 
     private static long ProcessSizeBytes()

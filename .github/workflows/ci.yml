@@ -186,12 +186,15 @@ jobs:
         shell: pwsh
         run: |
           . .github/scripts/installer-smoke-helpers.ps1
+          $created = Set-PawseTraces
           $uninstaller = (Get-ItemProperty $env:UNINST_KEY_USER).UninstallString.Trim('"')
           Start-Process -FilePath $uninstaller -ArgumentList '/S'
           # Pawse was running when the uninstall started: the uninstaller asks it to quit over
           # the named event and only force-kills as a fallback - the ceiling proves the channel.
           Wait-PawseGone 8
           Wait-Removed $env:UNINST_KEY_USER $env:INSTALL_DIR
+          # Uninstalling leaves nothing: settings, the unpack cache, downloads, registry.
+          Assert-NoPawseTraces $created
 
       - name: Per-machine - install silently and start the app
         shell: pwsh
@@ -230,12 +233,16 @@ jobs:
           # The uninstall string carries no /AllUsers: un.onInit has to work out on its own
           # that this is a machine-wide install, or the common shortcut and the HKLM entry stay
           # behind while it reports success.
+          $created = Set-PawseTraces
           $uninstaller = (Get-ItemProperty $env:UNINST_KEY_MACHINE).UninstallString.Trim('"')
           Start-Process -FilePath $uninstaller -ArgumentList '/S'
           Wait-PawseGone 8
           Wait-Removed $env:UNINST_KEY_MACHINE $env:MACHINE_DIR
           if (Test-Path $env:MACHINE_SHORTCUT) { throw "the uninstall left the common Start Menu shortcut $env:MACHINE_SHORTCUT behind" }
           if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }
+          # A machine-wide uninstall cleans every account (Pawse.exe --uninstall-cleanup
+          # --all-users); this runner has the one, so that is the one checked.
+          Assert-NoPawseTraces $created
 
       - name: Per-machine MINIMAL - install silently and start the app
         shell: pwsh
@@ -271,11 +278,43 @@ jobs:
         shell: pwsh
         run: |
           . .github/scripts/installer-smoke-helpers.ps1
+          $created = Set-PawseTraces
           $uninstaller = (Get-ItemProperty $env:UNINST_KEY_MACHINE).UninstallString.Trim('"')
           Start-Process -FilePath $uninstaller -ArgumentList '/S'
           Wait-PawseGone 8
           Wait-Removed $env:UNINST_KEY_MACHINE $env:MIN_DIR
           if (Get-Process Pawse -ErrorAction SilentlyContinue) { throw "Pawse is still running after the uninstall" }
+          Assert-NoPawseTraces $created
+
+      # A portable copy writes nothing outside its folder: settings and log next to the exe, no
+      # registry at all - even locked, with Block Win+L and the media-key block switched on in
+      # its pawse.json, since both are installed-only. And an autostart entry an older version
+      # let it create is taken back.
+      - name: Portable - nothing outside its folder, nothing in the registry
+        shell: pwsh
+        run: |
+          . .github/scripts/installer-smoke-helpers.ps1
+          $dir = Join-Path $env:RUNNER_TEMP 'pawse-portable'
+          New-Item -ItemType Directory $dir -Force | Out-Null
+          Copy-Item publish-full/Pawse.exe $dir
+          $exe = Join-Path $dir 'Pawse.exe'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          New-ItemProperty $run -Name Pawse -Value "`"$exe`"" -PropertyType String -Force | Out-Null
+          '{"General":{"Logging":true,"StartLocked":true},"SystemBlock":{"WinLock":true,"LaunchMediaKeys":true}}' |
+            Set-Content (Join-Path $dir 'pawse.json')
+          $systemBefore = Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System'
+          Start-Process $exe
+          Wait-PawseStarted (Join-Path $dir 'pawse.log') 1
+          # The lock engages a dispatcher turn after startup - give a wrong write time to land.
+          Start-Sleep -Seconds 3
+          if (Get-ItemProperty $run -Name Pawse -ErrorAction SilentlyContinue) { throw "the portable copy kept its autostart entry" }
+          if (Test-Path 'HKCU:\Software\Pawse') { throw "the portable copy wrote HKCU\Software\Pawse" }
+          if ($null -ne (Get-WinLockPolicy)) { throw "the portable copy wrote DisableLockWorkstation" }
+          if (-not $systemBefore -and (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System')) { throw "the portable copy created the Policies\System key" }
+          if (Test-Path "$env:APPDATA\Pawse") { throw "the portable copy wrote %APPDATA%\Pawse" }
+          if (-not (Select-String -Path (Join-Path $dir 'pawse.log') -Pattern 'removed the entry of this portable copy' -Quiet)) { throw "the log does not show the autostart entry being taken back" }
+          Stop-Process -Name Pawse -Force
+          "portable copy: config and log in $dir, nothing in the registry"
 
   # The Microsoft Store build (packaging/msix), built the way release.yml builds it - which
   # compiles the Store flavor with warnings as errors (the updater's files are not compiled
@@ -324,6 +363,7 @@ jobs:
         shell: pwsh
         run: |
           . .github/scripts/installer-smoke-helpers.ps1
+          "POLICY_KEY_BEFORE=$(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System')" >> $env:GITHUB_ENV
           New-Item -ItemType Directory $env:LOCAL_STATE -Force | Out-Null
           # Lock at start with Block Win+L on, so the policy value gets written.
           '{"General":{"Logging":true,"StartLocked":true},"SystemBlock":{"WinLock":true}}' |
@@ -352,6 +392,9 @@ jobs:
           Start-Process $env:PAWSE_ALIAS
           Wait-PawseStarted (Join-Path $env:LOCAL_STATE 'pawse.log') 2
           Wait-WinLockPolicy $null 20
+          # ...and nothing else of Pawse's stays in the (un-virtualized) registry either.
+          if (Test-Path 'HKCU:\Software\Pawse') { throw "HKCU\Software\Pawse outlived the sweep" }
+          if ($env:POLICY_KEY_BEFORE -eq 'False' -and (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System')) { throw "the Policies\System key Pawse created outlived the sweep" }
           Stop-Process -Name Pawse -Force
           Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
           Remove-AppxPackage -Package $env:PKG_FULL

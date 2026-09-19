@@ -257,7 +257,9 @@ jobs:
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched for you if missing. |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~61 MB | It asks you which of the two builds above to install. |
 
-            **Or stay portable** - unzip and run the exe inside, nothing is written outside its folder:
+            **Or stay portable** - unzip and run the exe inside. A portable copy writes nothing outside
+            its folder and nothing to the registry, so deleting the folder removes it; starting with
+            Windows and the Win+L / media-key blocks need the installed version:
 
             | Portable | Download size | Needs anything installed? |
             | --- | --- | --- |
@@ -269,7 +271,8 @@ jobs:
             as blocked - if an exe won't start, right-click it (or the zip) →
             **Properties → Unblock** first. The tray paw is your control; the
             config is written next to the exe (the log too, if you switch it on in
-            Settings → General). `SHA256SUMS.txt` holds checksums for every download.
+            Settings → General). Uninstalling an installed copy removes everything it
+            created, for every account. `SHA256SUMS.txt` holds checksums for every download.
 
             Already have Pawse installed? **Settings → About → Check now**
             offers this build and installs it for you.

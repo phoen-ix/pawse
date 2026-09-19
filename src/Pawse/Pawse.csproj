@@ -73,7 +73,7 @@
     <DefineConstants>$(DefineConstants);STORE</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(PawseStore)' == 'true'">
-    <Compile Remove="Core\UpdateCheck.cs;Core\SelfReplace.cs;Core\Autostart.cs;App.Updates.cs;UI\SettingsWindow.Updates.cs" />
+    <Compile Remove="Core\UpdateCheck.cs;Core\SelfReplace.cs;Core\Autostart.cs;App.Updates.cs;UI\SettingsWindow.Updates.cs;Core\UninstallCleanup.cs;App.Uninstall.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(PawseStore)' != 'true'">
     <Compile Remove="**\*.Store.cs" />

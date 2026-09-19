@@ -24,7 +24,7 @@ public static class Autostart
         State() is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy;
 
     /// <summary>Nothing to repair: the task names the package, not a path that can move.</summary>
-    public static void Repair() { }
+    public static string? Repair() => null;
 
     /// <summary>The task's state, or null when Windows would not say (no package identity -
     /// the exe started outside its package).</summary>

@@ -98,6 +98,8 @@ Var NoRuntime        ; "1" when /NORUNTIME was passed - never fetch .NET unatten
 !endif
 ; Outside the guard above: every build honours /RESTART, including FULL_ONLY.
 Var RestartApp       ; "1" when /RESTART was passed - a silent install relaunches Pawse
+Var CleanupExit      ; exit code of "Pawse.exe --uninstall-cleanup" ("" = it did not run)
+Var KeepMarkers      ; "1" = keep HKCU\Software\Pawse: it still owes a Keyboard Filter revert
 
 ; ---- UI ----
 !define MUI_ICON "pawse.ico"
@@ -221,7 +223,10 @@ FunctionEnd
 ; Sets $DotnetFound. Asks the .NET host where it lives rather than assuming: a runtime
 ; installed anywhere but the default folder used to read as "missing" and trigger a
 ; download of something already on the machine.
-Function DotnetPresent
+; A macro so the uninstaller gets its own copy (un.RunAppCleanup): NSIS keeps install and
+; uninstall functions apart, the same reason PAWSE_CLOSE_FUNCS below is one.
+!macro DOTNET_PRESENT_FUNC UN
+Function ${UN}DotnetPresent
   Push $0
   Push $1
   Push $2
@@ -250,6 +255,9 @@ Function DotnetPresent
   Pop $1
   Pop $0
 FunctionEnd
+!macroend
+!insertmacro DOTNET_PRESENT_FUNC ""
+!insertmacro DOTNET_PRESENT_FUNC "un."
 
 Function EnsureDotnet
   Call DotnetPresent
@@ -817,12 +825,64 @@ FunctionEnd
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; ---- uninstall ----
+; Uninstalling leaves nothing of Pawse behind: its files, its registry entries and its
+; settings - for every account a machine-wide install served. Windows' own records of any
+; program that ran (tray icon settings, recently-run lists) are Windows', not Pawse's.
+;
+; Most of it is Pawse.exe's own job (--uninstall-cleanup, Core/UninstallCleanup.cs): it reverts
+; the Win+L value and the Keyboard Filter rules with the same code that set them, and knows
+; how to reach other accounts' registry. The section then removes the program and repeats the
+; per-account part for this account, which also covers an exe that could not start.
+Function un.RunAppCleanup
+  StrCpy $CleanupExit ""
+  StrCpy $KeepMarkers "0"
+  IfFileExists "$INSTDIR\${EXE}" 0 cleanup_done
+!ifndef FULL_ONLY
+  ; The minimal build needs the .NET 10 Desktop Runtime to start at all - and a missing runtime
+  ; answers with a dialog, which a silent uninstall must never block on.
+  ReadRegStr $0 SHCTX "${UNINST_KEY}" "BuildVariant"
+  ${If} $0 == "min"
+    Call un.DotnetPresent
+    ${If} $DotnetFound != "1"
+      DetailPrint "Pawse's own cleanup skipped: the .NET runtime it needs is not installed."
+      Goto cleanup_done
+    ${EndIf}
+  ${EndIf}
+!endif
+  StrCpy $1 "--uninstall-cleanup"
+  ${If} $MultiUser.InstallMode == "AllUsers"
+    StrCpy $1 "$1 --all-users"   ; elevated here - so every account on the PC
+  ${EndIf}
+  DetailPrint "Removing Pawse's settings and undoing its system changes..."
+  ExecWait '"$INSTDIR\${EXE}" $1' $CleanupExit
+
+  ; 3 = an earlier run as administrator left the browser/media keys blocked, and this per-user
+  ; uninstall can't undo that without admin rights (UninstallCleanup.ExitKeyboardFilterNeedsAdmin).
+  ${If} $CleanupExit == "3"
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_TOPMOST|MB_SETFOREGROUND "An earlier Pawse run as administrator left the browser and media keys blocked.$\n$\nRestore them now? This needs administrator rights." /SD IDNO IDYES cleanup_elevate
+    StrCpy $KeepMarkers "1"
+    Goto cleanup_done
+  cleanup_elevate:
+    ExecShellWait "runas" "$INSTDIR\${EXE}" "--uninstall-cleanup"
+    ; The elevated run's exit code does not come back through the shell - its marker does.
+    ClearErrors
+    ReadRegDWORD $0 HKCU "Software\Pawse" "WekfLeftOn"
+    ${IfNot} ${Errors}
+      StrCpy $KeepMarkers "1"
+    ${EndIf}
+  ${EndIf}
+cleanup_done:
+FunctionEnd
+
 Section "Uninstall"
   ; Ask Pawse to close before deleting anything. This matters more here than on install:
   ; a forced kill leaves the Keyboard Filter rules enabled with no Pawse left to sweep
   ; them on next start (the Win+L value below is recoverable from the marker; WEKF is not).
   Call un.EnsurePawseClosed
   SetOutPath "$TEMP"   ; move CWD out of $INSTDIR so the folder can be removed
+
+  ; Before the exe goes: it is what does the undoing.
+  Call un.RunAppCleanup
 
   Delete "$INSTDIR\${EXE}"
   ; A portable copy replaces its own exe by renaming (see Core/SelfReplace.cs) and leaves
@@ -832,9 +892,7 @@ Section "Uninstall"
   Delete "$INSTDIR\${EXE}.new"
   Delete "$INSTDIR\pawse.ico"
   Delete "$INSTDIR\LICENSE.txt"
-  ; App-generated files (the app writes config + log next to the exe) - removed so
-  ; $INSTDIR can actually be deleted below. The %APPDATA%\Pawse fallback (used only
-  ; when $INSTDIR isn't writable, e.g. per-machine installs) is left in place.
+  ; App-generated files (a per-user install keeps its config + log next to the exe).
   Delete "$INSTDIR\pawse.json"
   Delete "$INSTDIR\pawse.json.bad"
   Delete "$INSTDIR\pawse.json.tmp"
@@ -842,11 +900,25 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\${APP}.lnk"
   Delete "$DESKTOP\${APP}.lnk"
 
+  ; ---- this account's own traces ----
+  ; Pawse.exe has done this already when it could start; here it is again for when it could
+  ; not, and for what it could not delete itself - the .NET unpack cache it was running from.
+  ; SetShellVarContext current: a machine-wide uninstall runs in the "all" context (the common
+  ; Start Menu above), where $APPDATA would be ProgramData instead of this account's folder.
+  SetShellVarContext current
+  RMDir /r "$APPDATA\Pawse"
+  RMDir /r "$TEMP\.net\Pawse"
+  FindFirst $0 $1 "$TEMP\Pawse-update-*"
+  ${DoWhile} $1 != ""
+    RMDir /r "$TEMP\$1"
+    FindNext $0 $1
+  ${Loop}
+  FindClose $0
+
   ; Restore Win+L if Pawse still holds it (killed or uninstalled while locked -
   ; otherwise the policy value would disable Win+L for this user forever).
-  ; Mirrors Core/WorkstationLock.cs: marker 0|1 = pre-Pawse value, 2 = was absent.
-  ; Known limitation: an elevated per-machine uninstall reads the *admin's* HKCU,
-  ; same as the RUN_KEY cleanup below; per-user installs are fully cleaned.
+  ; Mirrors Core/WorkstationLock.cs: marker 0|1 = pre-Pawse value, 2 = was absent; and
+  ; PolicyKeysCreated 1|2 = the keys Pawse created for it (only removed while empty).
   ClearErrors
   ReadRegDWORD $0 HKCU "Software\Pawse" "PrevDisableLockWorkstation"
   ${IfNot} ${Errors}
@@ -855,9 +927,24 @@ Section "Uninstall"
     ${Else}
       WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Policies\System" "DisableLockWorkstation" $0
     ${EndIf}
-    DeleteRegValue HKCU "Software\Pawse" "PrevDisableLockWorkstation"
   ${EndIf}
-  DeleteRegKey /ifempty HKCU "Software\Pawse"
+  ClearErrors
+  ReadRegDWORD $0 HKCU "Software\Pawse" "PolicyKeysCreated"
+  ${IfNot} ${Errors}
+    DeleteRegKey /ifempty HKCU "Software\Microsoft\Windows\CurrentVersion\Policies\System"
+    ${If} $0 == 2
+      DeleteRegKey /ifempty HKCU "Software\Microsoft\Windows\CurrentVersion\Policies"
+    ${EndIf}
+  ${EndIf}
+  ; All of Pawse's own key - except while it still owes a Keyboard Filter revert nobody could
+  ; perform (see un.RunAppCleanup): that marker is then the only way to finish it later.
+  ${If} $KeepMarkers == "1"
+    DeleteRegValue HKCU "Software\Pawse" "PrevDisableLockWorkstation"
+    DeleteRegValue HKCU "Software\Pawse" "PolicyKeysCreated"
+    DetailPrint "Kept HKCU\Software\Pawse: browser/media keys are still blocked by an earlier run as administrator."
+  ${Else}
+    DeleteRegKey HKCU "Software\Pawse"
+  ${EndIf}
 
   DeleteRegValue HKCU "${RUN_KEY}" "${APP}"
   ; Remove the Add/Remove Programs entry from whichever hive it was written to - SHCTX can

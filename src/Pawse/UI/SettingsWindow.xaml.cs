@@ -74,6 +74,7 @@ public partial class SettingsWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
         Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
         SldOpacity.Minimum = Config.OverlayCfg.MinOpacity;
+        ApplyDeploymentMode();
         InitUpdateSection();
         LoadMonitors();
         LoadFromConfig();
@@ -104,6 +105,21 @@ public partial class SettingsWindow : Window
         UpdateNumberWarnings();
 
         SetLocked(isLocked());
+    }
+
+    /// <summary>A portable copy writes nothing outside its folder (<see cref="DeploymentMode.Portable"/>),
+    /// so the three options that would write to the registry stay visible but greyed out, with
+    /// the reason beside them. Their saved values are kept, not cleared: the same pawse.json can
+    /// end up next to an installed copy, which honours them.</summary>
+    private void ApplyDeploymentMode()
+    {
+        if (!Deployment.IsPortable) return;
+        ChkAutostart.IsEnabled = false;
+        ChkWinLock.IsEnabled = false;
+        ChkLaunchMedia.IsEnabled = false;
+        LblAutostartPortable.Visibility = Visibility.Visible;
+        LblSystemKeysPortable.Visibility = Visibility.Visible;
+        LblPortable.Visibility = Visibility.Visible;
     }
 
     /// <summary>One checkbox per display attached right now, plus the two-entry mode list.

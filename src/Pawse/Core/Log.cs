@@ -5,7 +5,8 @@ namespace Pawse.Core;
 
 /// <summary>
 /// Opt-in, buffered file logger. Resolves <c>pawse.log</c> next to the exe so it is trivial
-/// to find, falling back to %APPDATA%\Pawse when that folder cannot be written; buffers every
+/// to find - an installed copy falls back to %APPDATA%\Pawse when that folder cannot be
+/// written, a portable copy never leaves its folder (see <see cref="ChooseBaseDir"/>); buffers every
 /// line until <see cref="Enable"/> has read Config.General.Logging, then writes on a dedicated
 /// thread - or drops the buffer when the answer is no.
 ///
@@ -95,10 +96,10 @@ public static class Log
     }
 
     /// <summary>
-    /// A path for <paramref name="filename"/> next to the exe, or under
-    /// %APPDATA%\Pawse if the exe directory can't be written to. The writability
-    /// probe runs once per process - Config calls this on every save/load, and the
-    /// answer can't meaningfully change mid-run.
+    /// A path for <paramref name="filename"/> in Pawse's data folder - next to the exe, or for
+    /// an installed copy that can't write there, %APPDATA%\Pawse (see <see cref="ChooseBaseDir"/>).
+    /// Resolved once per process - Config calls this on every save/load, and the answer can't
+    /// meaningfully change mid-run.
     /// </summary>
     public static string ResolvePath(string filename) =>
         Path.Combine(_baseDir ??= ResolveBaseDir(), filename);
@@ -116,6 +117,43 @@ public static class Log
         try { return global::Windows.Storage.ApplicationData.Current.LocalFolder.Path; }
         catch { /* not running as a package */ }
 #endif
+        var exeDir = ExeDir();
+        var appDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Pawse");
+        var dir = ChooseBaseDir(Deployment.Mode, exeDir, appDataDir, File.Exists, CanWrite, out bool adopt);
+        if (adopt)
+        {
+            try
+            {
+                Directory.CreateDirectory(appDataDir);
+                File.Copy(Path.Combine(exeDir, "pawse.json"), Path.Combine(appDataDir, "pawse.json"));
+                Warn($"pawse.json next to the exe is read-only for this account - copied it to {appDataDir}");
+            }
+            catch { /* best effort; defaults will be written there */ }
+        }
+        else if (dir == appDataDir)
+        {
+            try { Directory.CreateDirectory(appDataDir); } catch { /* ignore */ }
+        }
+        return dir;
+    }
+
+    /// <summary>
+    /// Test seam for <see cref="ResolveBaseDir"/>: where the config and log live, minus the file
+    /// system. <paramref name="adoptExeConfig"/> asks the caller to copy the pawse.json next to
+    /// the exe into <paramref name="appDataDir"/> first.
+    /// </summary>
+    internal static string ChooseBaseDir(DeploymentMode mode, string exeDir, string appDataDir,
+                                         Func<string, bool> fileExists, Func<string, bool> canWrite,
+                                         out bool adoptExeConfig)
+    {
+        adoptExeConfig = false;
+
+        // A portable copy writes nothing outside its own folder - not even when that folder
+        // turns out to be read-only. It then runs on settings it cannot save and says so
+        // (App.ApplyConfigChange), rather than leave a %APPDATA%\Pawse behind.
+        if (mode == DeploymentMode.Portable) return exeDir;
+
         // An existing pawse.json decides first: the writability probe depends on the
         // process token, so an elevated relaunch from e.g. Program Files would
         // otherwise resolve a DIFFERENT directory than the run that launched it -
@@ -126,32 +164,19 @@ public static class Log
         // token cannot write is copied to %APPDATA% once and used from there (or every
         // later normal run would load it and never manage to save), and when both
         // places have one, %APPDATA% wins because every token can write it.
-        var exeDir = ExeDir();
-        var appDataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Pawse");
-        var exeConfig = Path.Combine(exeDir, "pawse.json");
-        var appDataConfig = Path.Combine(appDataDir, "pawse.json");
         try
         {
-            if (File.Exists(appDataConfig)) return appDataDir;
-            if (File.Exists(exeConfig))
+            if (fileExists(Path.Combine(appDataDir, "pawse.json"))) return appDataDir;
+            if (fileExists(Path.Combine(exeDir, "pawse.json")))
             {
-                if (CanWrite(exeDir)) return exeDir;
-                try
-                {
-                    Directory.CreateDirectory(appDataDir);
-                    File.Copy(exeConfig, appDataConfig);
-                    Warn($"pawse.json next to the exe is read-only for this account - copied it to {appDataDir}");
-                }
-                catch { /* best effort; defaults will be written there below */ }
+                if (canWrite(exeDir)) return exeDir;
+                adoptExeConfig = true;
                 return appDataDir;
             }
         }
         catch { /* fall through to the probe */ }
 
-        if (CanWrite(exeDir)) return exeDir;
-        try { Directory.CreateDirectory(appDataDir); } catch { /* ignore */ }
-        return appDataDir;
+        return canWrite(exeDir) ? exeDir : appDataDir;
     }
 
     private static bool CanWrite(string dir)

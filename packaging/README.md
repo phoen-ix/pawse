@@ -66,6 +66,22 @@ every token into per-user mode): an HKLM entry naming its own folder switches it
 so an unelevated launch from "Installed apps" hands off to an elevated copy and an elevated
 one removes the common Start Menu shortcut and the HKLM entry.
 
+**Uninstalling leaves nothing of Pawse behind.** Before deleting the program, the uninstaller
+runs `Pawse.exe --uninstall-cleanup` (`src/Pawse/Core/UninstallCleanup.cs`, `--all-users` for
+a machine-wide install). That reuses the app's own code to undo the Win+L value and the
+Keyboard Filter rules, and to remove the keys it created. It also deletes, per account:
+`HKCU\Software\Pawse`, the Run value, `%APPDATA%\Pawse`, `%TEMP%\.net\Pawse` (the unpack
+cache of the self-contained build) and `%TEMP%\Pawse-update-*`.
+
+A machine-wide uninstall does that for **every account** on the PC. It loads a signed-out
+account's `NTUSER.DAT` for the moment it takes. The section then repeats the steps for the
+account running it, which also covers an exe that can't start (the minimal build without its
+runtime).
+
+The one thing deliberately kept is a Keyboard Filter marker, when a revert is still owed but
+couldn't be done: a per-user uninstall without admin rights, where the user declined the
+prompt.
+
 ## Closing a running Pawse
 
 Pawse is a tray app with no window, so nothing can send it a `WM_CLOSE`: plain `taskkill`
@@ -99,7 +115,8 @@ release version, and attaches all three installers to the GitHub Release next to
 - nothing here has to be built or uploaded by hand. `ci.yml` guards it from two sides on
 every push: a Linux job compiles all three variants with `-WX`, and a Windows job builds a
 real installer and runs the round trip (silent per-user install → start the installed app
-→ silent uninstall → assert nothing is left in the registry or on disk).
+→ silent uninstall → assert nothing is left in the registry or on disk, traces seeded
+beforehand included), and checks that a portable copy writes nothing outside its folder.
 
 The steps below are for building one locally - to try a change to `pawse.nsi` without
 cutting a release.

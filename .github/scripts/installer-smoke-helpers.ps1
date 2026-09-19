@@ -64,3 +64,40 @@ function Wait-WinLockPolicy($expected, [int]$seconds) {
     }
     throw "DisableLockWorkstation is '$(Get-WinLockPolicy)', expected '$expected' after $seconds s"
 }
+
+# Leave behind what a Pawse killed while locked would (the Win+L value, its markers, the policy
+# keys it had to create), plus settings in %APPDATA% and a download in %TEMP% - so an uninstall
+# has real traces to remove. %TEMP%\.net\Pawse is there already from the runs before.
+# Returns what the policy-key marker says was created (0 = the key was there before).
+function Set-PawseTraces {
+    $policies = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies'
+    $system = "$policies\System"
+    $created = if (Test-Path $system) { 0 } elseif (Test-Path $policies) { 1 } else { 2 }
+    New-Item 'HKCU:\Software\Pawse' -Force | Out-Null
+    if ($created) { New-ItemProperty 'HKCU:\Software\Pawse' -Name PolicyKeysCreated -Value $created -PropertyType DWord -Force | Out-Null }
+    New-ItemProperty 'HKCU:\Software\Pawse' -Name PrevDisableLockWorkstation -Value 2 -PropertyType DWord -Force | Out-Null
+    New-Item $system -Force | Out-Null
+    New-ItemProperty $system -Name DisableLockWorkstation -Value 1 -PropertyType DWord -Force | Out-Null
+    New-Item -ItemType Directory "$env:APPDATA\Pawse" -Force | Out-Null
+    Set-Content "$env:APPDATA\Pawse\pawse.json" '{}'
+    New-Item -ItemType Directory "$env:TEMP\Pawse-update-smoke" -Force | Out-Null
+    Set-Content "$env:TEMP\Pawse-update-smoke\leftover.txt" 'x'
+    $created
+}
+
+# Everything Pawse can leave in an account, checked from outside it. $policyKeysCreated is what
+# Set-PawseTraces returned: keys that exist only because Pawse (or the seeding) created them.
+function Assert-NoPawseTraces([int]$policyKeysCreated = 0) {
+    $policies = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies'
+    $left = @()
+    if (Test-Path "$env:APPDATA\Pawse") { $left += '%APPDATA%\Pawse' }
+    if (Test-Path "$env:TEMP\.net\Pawse") { $left += '%TEMP%\.net\Pawse' }
+    if (Get-ChildItem $env:TEMP -Directory -Filter 'Pawse-update-*' -ErrorAction SilentlyContinue) { $left += '%TEMP%\Pawse-update-*' }
+    if (Test-Path 'HKCU:\Software\Pawse') { $left += 'HKCU\Software\Pawse' }
+    if ($null -ne (Get-WinLockPolicy)) { $left += 'the DisableLockWorkstation value' }
+    if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name Pawse -ErrorAction SilentlyContinue) { $left += 'the Run value' }
+    if ($policyKeysCreated -ge 1 -and (Test-Path "$policies\System")) { $left += 'the Policies\System key it created' }
+    if ($policyKeysCreated -ge 2 -and (Test-Path $policies)) { $left += 'the Policies key it created' }
+    if ($left) { throw "Pawse left behind: $($left -join ', ')" }
+    "nothing of Pawse left in this account"
+}

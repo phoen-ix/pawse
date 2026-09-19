@@ -157,6 +157,11 @@
                         <TextBlock Text="General" Style="{StaticResource PageTitle}" />
                         <CheckBox x:Name="ChkStartLocked" Content="Lock immediately when Pawse starts" />
                         <CheckBox x:Name="ChkAutostart" Content="Start Pawse when I sign in to Windows" />
+                        <!-- Shown by SettingsWindow.ApplyDeploymentMode for a portable copy, which
+                             writes nothing to the registry - and starting with Windows is a
+                             registry entry. -->
+                        <TextBlock x:Name="LblAutostartPortable" Style="{StaticResource Hint}" Visibility="Collapsed"
+                                   Text="Installed version only - this portable copy writes nothing to the registry, and starting with Windows needs an entry there." />
                         <CheckBox x:Name="ChkTrayDoubleClick" Content="Tray icon needs a double-click to unlock" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Guards against a stray click on the tray undoing the lock; a lone click then just shows a hint. Off = classic single-click toggle. Locking is always one click." />
@@ -195,6 +200,9 @@
                                    Text="Off: an on-screen or touch keyboard keeps working while the hardware keyboard is locked, and can unlock Pawse. Pawse only sees that a keystroke was simulated, never which program made it, so leaving this off also lets macro tools type while locked. (Blocking the mouse stops a mouse-driven on-screen keyboard, but not taps on a touchscreen.)" />
 
                         <TextBlock Text="System keys" Style="{StaticResource SubHeader}" />
+                        <TextBlock x:Name="LblSystemKeysPortable" Style="{StaticResource Hint}" Visibility="Collapsed"
+                                   Margin="0,0,0,4"
+                                   Text="Installed version only - both change Windows settings while locked, and a portable copy leaves Windows exactly as it found it." />
                         <CheckBox x:Name="ChkWinLock" Content="Block Win+L (lock-screen shortcut)" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Disables Win+L only while Pawse is locked; restored on unlock. Most PCs need no admin; managed/corporate PCs will prompt to restart Pawse as administrator." />
@@ -321,6 +329,8 @@
                                    Foreground="#FF2B2F36" />
                         <TextBlock Text="A cat-proof keyboard lock for Windows." Margin="0,6,0,0"
                                    Foreground="#FF7A808A" TextWrapping="Wrap" />
+                        <TextBlock x:Name="LblPortable" Style="{StaticResource Hint}" Margin="0,6,0,0" Visibility="Collapsed"
+                                   Text="Portable copy - settings are kept next to Pawse.exe and nothing is written to the registry, so deleting the folder removes it. Install Pawse for start with Windows and the system-key blocks." />
                         <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0">
                             <Hyperlink NavigateUri="https://www.pawse.at"
                                        RequestNavigate="OnOpenLink">pawse.at</Hyperlink>

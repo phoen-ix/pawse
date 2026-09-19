@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Pawse.Core;
@@ -46,8 +47,20 @@ public partial class App : Application
     /// <summary>Store build only (App.Store.cs): one line on how this copy is packaged.</summary>
     partial void LogPackageContext();
 
+    /// <summary>The uninstaller's headless mode, <c>--uninstall-cleanup</c> (App.Uninstall.cs;
+    /// not in the Store build, which has no uninstaller). Sets <paramref name="handled"/> when
+    /// the arguments asked for it - the process then does that and nothing else.</summary>
+    partial void RunUninstallCleanup(string[] args, ref bool handled);
+
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        // Before everything else, logging included: the uninstaller asking for a cleanup gets
+        // exactly that - no mutex, no tray, no hooks, and no log folder that it would have to
+        // delete again.
+        bool handled = false;
+        RunUninstallCleanup(e.Args, ref handled);
+        if (handled) return;
+
         // OnStartup runs on the dispatcher, so without this guard a throw below would be
         // swallowed by the DispatcherUnhandledException handler and - because ShutdownMode
         // is OnExplicitShutdown - leave a headless process with no tray icon, no hook and
@@ -161,9 +174,10 @@ public partial class App : Application
         _systemBlock.Apply(locked: false, background: true, notify: true);
         _systemBlock.WarnIfUnsweepableLeftovers();
 
-        // A moved/renamed portable folder leaves the Run entry pointing at nothing;
-        // re-point it at this exe (never resurrects an entry the user removed).
-        Autostart.Repair();
+        // Keep the Run entry honest: a portable copy takes back an entry an older version let it
+        // write; an installed one re-points an entry whose exe is gone (never resurrects one the
+        // user removed).
+        if (Autostart.Repair() is { } autostartNotice) _tray.Notify("Pawse", autostartNotice);
 
         if (config.Overlay.Enabled)
             CreateOverlays(config);
@@ -536,8 +550,12 @@ public partial class App : Application
             // Once per session: the settings apply now but will not survive a restart, and a
             // save that fails silently teaches the user that Pawse forgets things.
             _saveFailureNotified = true;
-            _tray?.Notify("Pawse",
-                $"Your settings could not be saved to {Config.PathOnDisk()}. They apply now but will be lost when Pawse quits.");
+            // A portable copy keeps its settings next to the exe and nowhere else (Log.ChooseBaseDir),
+            // so a read-only folder is something only moving Pawse fixes - say that.
+            _tray?.Notify("Pawse", Deployment.IsPortable
+                ? $"This portable copy can't save its settings in {Path.GetDirectoryName(Config.PathOnDisk())}. "
+                  + "They apply now but will be lost when Pawse quits - move Pawse to a folder you can write to."
+                : $"Your settings could not be saved to {Config.PathOnDisk()}. They apply now but will be lost when Pawse quits.");
         }
         Log.Enable(config.General.Logging);
         _controller.RebuildMatchers();
@@ -589,6 +607,7 @@ public partial class App : Application
     private bool RelaunchElevatedIfWinLockNeedsIt(Config config)
     {
         if (!config.SystemBlock.WinLock) return false;
+        if (!SystemBlock.Allowed) return false;               // portable: the block is never applied
         if (Elevation.IsElevated()) return false;            // already admin - restart is pointless
         if (!WorkstationLock.NeedsElevation()) return false; // works un-elevated on this PC
 

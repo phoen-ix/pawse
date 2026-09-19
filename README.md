@@ -13,12 +13,20 @@ Two ways to install, both from the [latest release](https://github.com/phoen-ix/
 (or via [pawse.at](https://www.pawse.at)):
 
 - **Installer** - run a `Pawse-Setup-<version>*.exe`. Installs per-user by default (no
-  admin), offers Start Menu/Desktop shortcuts, and uninstalls cleanly from Windows'
-  "Installed apps" - or machine-wide if you'd rather (it asks for administrator rights
-  only if that's what you pick). If Pawse is running, installing or uninstalling asks
-  before closing it and lets the app shut itself down properly, so its Win+L and
-  media-key blocks are always undone.
-- **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
+  admin), offers Start Menu/Desktop shortcuts, and uninstalls from Windows' "Installed apps"
+  - or machine-wide if you'd rather (it asks for administrator rights only if that's what you
+  pick). If Pawse is running, installing or uninstalling asks before closing it and lets the
+  app shut itself down properly, so its Win+L and media-key blocks are always undone.
+  **Uninstalling leaves nothing behind**: the program, its settings and log, its registry
+  entries and its temporary files - for every account on the PC, when it was installed
+  machine-wide.
+- **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed. A portable
+  copy **writes nothing outside its folder**: settings and log sit next to the exe and nothing
+  goes into the registry, so deleting the folder removes it. (The self-contained build's .NET
+  runtime unpacks a few DLLs to `%TEMP%\.net` on first start, before Pawse runs; Windows' own
+  temp cleanup removes those.) Three things need the installed version for that reason:
+  **starting with Windows**, **Block Win+L** and the **browser/media-key block** - Settings
+  shows them greyed out.
 
 A paw appears in the system tray either way.
 
@@ -102,11 +110,19 @@ Blocking **on-screen keyboards** is off by default as well - see
 
 ## Configuration & logs
 
-These live **next to `Pawse.exe`** (falling back to `%APPDATA%\Pawse` only if that
-folder isn't writable):
+Where these live depends on how Pawse got onto the PC:
+
+- **Portable** - next to `Pawse.exe`, always. A portable copy in a folder it can't write to
+  (Program Files, a read-only drive) runs with settings it can't save, and says so.
+- **Installed** - next to `Pawse.exe` as well, or in `%APPDATA%\Pawse` when that folder isn't
+  writable - which is the case for a machine-wide install in Program Files.
+- **Microsoft Store** - the app's own data folder, which Windows removes with it.
+
+Uninstalling removes them in every case.
 
 - `pawse.json` - settings (edit via the Settings window or by hand). Start-at-sign-in is the
-  one setting that is not in here: the Run key is the setting, and Settings reads it from there.
+  one setting that is not in here: the Run key is the setting, and Settings reads it from there
+  (installed copies only - a portable copy writes nothing to the registry).
 - `pawse.log` - a plain, timestamped log of what the app did. **Off by default** - switch on
   "Write a log file next to Pawse" in **Settings → General** when something needs explaining.
   It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck
@@ -128,7 +144,8 @@ program simulated it, so leaving this off also lets macro tools type while locke
 
 **`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
 so Pawse can optionally block it **only while locked** - off by default; turn it on
-under **Settings → Locking**. It sets the per-user `DisableLockWorkstation`
+under **Settings → Locking** (installed copies only: it is a registry value, and a portable
+copy writes nothing to the registry). It sets the per-user `DisableLockWorkstation`
 policy on lock and restores its previous state on unlock - a value that was
 already there before Pawse (e.g. set by an admin) is left exactly as found.
 Needs no admin on a normal PC, but on
@@ -140,7 +157,8 @@ The **browser / calculator / media / volume keys** are already swallowed by the 
 edition. The "Block browser / calculator / media keys" option (**Settings → Locking**)
 additionally engages the Windows **Keyboard Filter** to catch the few consumer keys that reach
 Windows as `WM_APPCOMMAND` and bypass the hook - that part needs **Windows Enterprise /
-Education / IoT** with the Keyboard Filter feature and Pawse running as administrator.
+Education / IoT** with the Keyboard Filter feature, Pawse running as administrator, and an
+installed copy (it changes a machine-wide Windows setting).
 
 **Touch is not the mouse**: even with mouse blocking on, native touch / pen input
 reaches pointer-aware apps (browsers, UWP, Office) through the `WM_POINTER`

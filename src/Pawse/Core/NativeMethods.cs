@@ -90,6 +90,34 @@ internal static class NativeMethods
     public static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass,
         out int tokenInformation, int tokenInformationLength, out int returnLength);
 
+    // ---- Loading another account's registry (the uninstall cleanup, Core/UninstallCleanup.cs) --
+    // RegLoadKey mounts a signed-out user's NTUSER.DAT under HKEY_USERS; it needs the backup
+    // and restore privileges enabled on the (elevated) token first.
+    public static readonly IntPtr HKEY_USERS = unchecked((IntPtr)(int)0x80000003);
+    public const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID { public uint LowPart; public int HighPart; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_PRIVILEGES { public uint PrivilegeCount; public LUID Luid; public uint Attributes; }
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LookupPrivilegeValueW(string? lpSystemName, string lpName, out LUID lpLuid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AdjustTokenPrivileges(IntPtr tokenHandle,
+        [MarshalAs(UnmanagedType.Bool)] bool disableAllPrivileges, ref TOKEN_PRIVILEGES newState,
+        uint bufferLength, IntPtr previousState, IntPtr returnLength);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    public static extern int RegLoadKeyW(IntPtr hKey, string lpSubKey, string lpFile);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    public static extern int RegUnLoadKeyW(IntPtr hKey, string lpSubKey);
+
     /// <summary>High bit set = key physically down right now. Only knows about events the
     /// system actually processed - a key-down a LL hook swallowed never registers - so
     /// <see cref="LockController"/> consults it only while unlocked.</summary>

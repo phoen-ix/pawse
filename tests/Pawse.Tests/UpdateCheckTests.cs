@@ -175,31 +175,6 @@ public class UpdateInstallKindTests
             @"C:\Users\me\Downloads\pawse", FullExe, () => null, () => "min"));
 }
 
-public class UpdateScopeTests
-{
-    private const string Dir = @"C:\Program Files\Pawse";
-
-    [Fact]
-    public void A_per_user_entry_wins_over_a_per_machine_one()
-        => Assert.Equal(InstallScope.PerUser, UpdateCheck.ScopeOf(Dir, Dir, Dir));
-
-    [Fact]
-    public void Only_a_machine_entry_reads_as_per_machine()
-        => Assert.Equal(InstallScope.PerMachine, UpdateCheck.ScopeOf(Dir, null, Dir));
-
-    [Fact]
-    public void An_entry_for_another_folder_does_not_count()
-        => Assert.Equal(InstallScope.None, UpdateCheck.ScopeOf(Dir, @"D:\Elsewhere", null));
-
-    [Fact]
-    public void No_entry_at_all_is_no_scope()
-        => Assert.Equal(InstallScope.None, UpdateCheck.ScopeOf(Dir, null, null));
-
-    [Fact]
-    public void The_comparison_tolerates_case_and_a_trailing_separator()
-        => Assert.Equal(InstallScope.PerUser, UpdateCheck.ScopeOf(Dir, @"c:\program files\pawse\", null));
-}
-
 public class UpdateScheduleTests
 {
     private static readonly DateTime Now = new(2026, 8, 6, 12, 0, 0, DateTimeKind.Utc);
