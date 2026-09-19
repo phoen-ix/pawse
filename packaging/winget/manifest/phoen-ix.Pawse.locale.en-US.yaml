@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: phoen-ix.Pawse
+PackageVersion: 0.15.2
+PackageLocale: en-US
+Publisher: phoen-ix
+PublisherUrl: https://github.com/phoen-ix
+PublisherSupportUrl: https://github.com/phoen-ix/pawse/issues
+PrivacyUrl: https://www.pawse.at/privacy.html
+Author: phoen-ix
+PackageName: Pawse
+PackageUrl: https://www.pawse.at/
+License: MIT
+LicenseUrl: https://github.com/phoen-ix/pawse/blob/main/LICENSE
+Copyright: Copyright (c) 2026 phoen-ix
+ShortDescription: A cat-proof keyboard lock for Windows.
+Description: |-
+  Pawse freezes the keyboard with one click or a hotkey, so a cat walking across it can't close your work, fire off shortcuts or leave a modifier key stuck. Unlock it deliberately: with a keyboard chord, a typed passphrase, a hold-to-unlock button or an automatic timer.
+  It lives in the system tray, can block the mouse as well, and makes no network connections unless you check for updates.
+Moniker: pawse
+Tags:
+- cat
+- keyboard
+- keyboard-lock
+- keyboard-locker
+- lock
+- system-tray
+ReleaseNotesUrl: https://github.com/phoen-ix/pawse/releases/tag/v0.15.2
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
