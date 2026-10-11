@@ -29,7 +29,7 @@ public class QuitSignalTests
         Assert.NotNull(listener);
 
         Assert.Equal(QuitRequest.Delivered, QuitSignal.Signal(name));
-        Assert.True(fired.Wait(Patience), "the listener was never invoked");
+        Assert.True(fired.Wait(Patience, TestContext.Current.CancellationToken), "the listener was never invoked");
     }
 
     /// <summary>Told apart from AccessDenied on purpose: a second Pawse offering to take over
@@ -53,7 +53,7 @@ public class QuitSignalTests
         listener?.Dispose();
 
         QuitSignal.Signal(name);
-        Assert.False(fired.Wait(TimeSpan.FromMilliseconds(500)), "a disposed listener still fired");
+        Assert.False(fired.Wait(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken), "a disposed listener still fired");
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class QuitSignalTests
         using var fired = new ManualResetEventSlim(false);
         using var listener = QuitSignal.Listen(fired.Set, name);
         Assert.NotNull(listener);
-        Assert.True(fired.Wait(Patience), "a signal sent before the listener armed was dropped");
+        Assert.True(fired.Wait(Patience, TestContext.Current.CancellationToken), "a signal sent before the listener armed was dropped");
     }
 
     [Fact]

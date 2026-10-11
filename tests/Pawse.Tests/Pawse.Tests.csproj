@@ -15,13 +15,20 @@
          project's closure is mostly Test.Sdk's. Without this, an advisory against something
          four levels down turns a green build red with no change of our own. -->
     <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
+    <!-- xunit.v3 test projects are executables on Microsoft.Testing.Platform; the opt-in
+         `dotnet test` needs for that is the "test" block in global.json. -->
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <!-- Not used by `dotnet test` (that is Microsoft.Testing.Platform, see global.json): these
+         two keep the suite visible to VSTest-based runners, as xunit recommends until every
+         IDE in use speaks MTP. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
