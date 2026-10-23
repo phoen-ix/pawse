@@ -21,8 +21,12 @@ namespace Pawse.Tests;
 /// (the PNGs to commit) and ci.yml's render check call.</para>
 /// </summary>
 [Trait("Category", "Docs")]
-public class DocsScreenshotTests
+public class DocsScreenshotTests : IDisposable
 {
+    /// <summary>Settings() forces Deployment's cached mode; let the next reader detect it again.</summary>
+    public void Dispose() =>
+        typeof(Deployment).GetField("_mode", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, null);
+
     private static readonly string? OutDir = Environment.GetEnvironmentVariable("DOCS_SCREENSHOT_DIR");
 
     /// <summary>Lockphrase on as well as the defaults, so the popup's hint names three ways out.</summary>
