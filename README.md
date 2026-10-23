@@ -234,10 +234,11 @@ dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64 --self-contained tru
 ```
 
 The project compiles on Linux too (for type-checking) via `EnableWindowsTargeting`;
-the runnable exe is produced on Windows, and so is a test run
-(`dotnet test tests/Pawse.Tests/Pawse.Tests.csproj`, on Windows only). The installers are built from the same
-`makensis` lines CI runs - see [`packaging/README.md`](packaging/README.md). The
-Microsoft Store package (MSIX, no built-in updater) has its own build script and notes in
+the runnable exe is produced on Windows, and the tests
+(`dotnet test tests/Pawse.Tests/Pawse.Tests.csproj`) run there only. The installers
+are built from the same `makensis` lines CI runs - see
+[`packaging/README.md`](packaging/README.md). The Microsoft Store package (MSIX, no
+built-in updater) has its own build script and notes in
 [`packaging/msix/README.md`](packaging/msix/README.md).
 
 Releases are cut by CI on every push to `main` that carries a release-worthy

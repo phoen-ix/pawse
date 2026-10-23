@@ -72,8 +72,8 @@ and its **Unlock** button is the way out with the mouse.
 
 ## Settings in a portable copy
 
-A portable copy writes nothing to the registry, so starting with Windows, Block Win+L and the
-media-key block are greyed out, with the reason beside them.
+A portable copy writes nothing to the registry, so starting with Windows is greyed out, with
+the reason beside it. The Locking page does the same for Block Win+L and the media-key block.
 
 <img src="app-settings-portable.png" alt="Settings, General page of a portable copy with start-with-Windows greyed out" width="784">
 
