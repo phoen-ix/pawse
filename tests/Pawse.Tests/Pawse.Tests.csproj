@@ -27,7 +27,7 @@
     <!-- Not used by `dotnet test` (that is Microsoft.Testing.Platform, see global.json): these
          two keep the suite visible to VSTest-based runners, as xunit recommends until every
          IDE in use speaks MTP. -->
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 
