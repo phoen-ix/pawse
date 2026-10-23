@@ -5,7 +5,8 @@ keyboard so a cat walking across it can't wreak havoc, close your work, or leave
 a modifier "stuck". Unlock it deliberately - a chord, a lockphrase, a
 hold-to-unlock button, or an auto-timer.
 
-This is a native Windows app (C# / .NET 10, WPF + a WinForms tray).
+This is a native Windows app (C# / .NET 10, WPF + a WinForms tray), released and maintained -
+the current version is on the [releases page](https://github.com/phoen-ix/pawse/releases/latest).
 
 ## Install
 
@@ -218,10 +219,18 @@ dotnet publish src/Pawse/Pawse.csproj -c Release -r win-x64 --self-contained tru
 ```
 
 The project compiles on Linux too (for type-checking) via `EnableWindowsTargeting`;
-the runnable exe is produced on Windows. The installers are built from the same
+the runnable exe is produced on Windows, and so is a test run
+(`dotnet test tests/Pawse.Tests/Pawse.Tests.csproj`, on Windows only). The installers are built from the same
 `makensis` lines CI runs - see [`packaging/README.md`](packaging/README.md). The
 Microsoft Store package (MSIX, no built-in updater) has its own build script and notes in
 [`packaging/msix/README.md`](packaging/msix/README.md).
+
+Releases are cut by CI on every push to `main` that carries a release-worthy
+[Conventional Commit](https://www.conventionalcommits.org/) subject: `fix:` makes a patch
+release, `feat:` a minor one, `feat!:` (or a `BREAKING CHANGE:` footer) a major one, and
+`docs:`, `chore:`, `ci:` and the rest none (`.github/workflows/release.yml`). The website,
+[pawse.at](https://www.pawse.at), is served from [`web/site/`](web/site/); its `latest.json`
+is the update feed, which the release workflow rewrites.
 
 ## License
 
