@@ -1,0 +1,51 @@
+name: docs-screenshots
+
+# Regenerates docs/screenshots/*.png through scripts/docs-screenshots.sh: the app's
+# windows (tests/Pawse.Tests/DocsScreenshotTests.cs, which needs Windows) and the
+# website (the Playwright tour in e2e/docs/). The PNGs come back as the
+# `docs-screenshots` artifact - this workflow never commits. Unzip it into
+# docs/screenshots/, optimise (docs/screenshots/README.md), look at the diff and
+# commit it yourself.
+#
+# Manual only: screenshots are regenerated on purpose, when a window worth showing
+# has changed. ci.yml runs the same tour as a render check on every push.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-screenshots
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install chromium
+
+      - name: Run the docs tour
+        shell: bash
+        run: bash scripts/docs-screenshots.sh "$RUNNER_TEMP/docs-screenshots"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-screenshots
+          path: ${{ runner.temp }}/docs-screenshots/
+          if-no-files-found: error
+          retention-days: 14
