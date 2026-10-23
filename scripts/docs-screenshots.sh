@@ -34,8 +34,10 @@ done
   npx playwright test -c playwright.docs.config.ts --output "$ARTIFACTS/test-results")
 
 if [ "${OS:-}" = Windows_NT ]; then
+  # Settings -> About shows the version: the newest release tag, not the dev build's 0.0.0.
+  VERSION="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || echo v0.0.0)"
   DOCS_SCREENSHOT_DIR="$OUT" dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release \
-    --filter-trait "Category=Docs"
+    -p:Version="${VERSION#v}" --filter-trait "Category=Docs"
 else
   echo "docs-screenshots: app-*.png need Windows - run .github/workflows/docs-screenshots.yml" >&2
 fi

@@ -25,7 +25,7 @@ test.afterEach(() => {
 
 /** The first screen only: the pages' backgrounds are position:fixed, so a
  * full-page shot ends the hero glow in a hard edge one viewport down.
- * `crop` narrows it to a column (x, width in CSS px) and cuts 24 px below the
+ * `crop` narrows it to a column (x, width in CSS px) and cuts 8 px below the
  * element `below` - the glow is dithered, and a whole 2x desktop screen of it
  * is over the 400 KB budget. */
 async function shoot(
@@ -43,7 +43,7 @@ async function shoot(
   if (crop) {
     const box = await page.locator(crop.below).first().boundingBox()
     if (!box) throw new Error(`[docs] ${crop.below} is not on the page`)
-    clip = { x: crop.x, y: 0, width: crop.width, height: Math.ceil(box.y + box.height) + 24 }
+    clip = { x: crop.x, y: 0, width: crop.width, height: Math.ceil(box.y + box.height) + 8 }
   }
   await page.screenshot({ path: path.join(OUT, `${name}.png`), animations: 'disabled', caret: 'hide', clip })
 }
