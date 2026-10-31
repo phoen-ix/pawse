@@ -117,7 +117,7 @@ public sealed class RecorderE2ETests
             });
         });
         Assert.Equal("That key can't be used", title);
-        Assert.Equal("Left can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, Enter, Esc "
+        Assert.Equal("Left can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, Enter "
                      + "or Backspace with the modifiers. The previous shortcut was kept.", hint);
         Assert.Null(chord);
         Assert.Null(controller.CaptureSink);

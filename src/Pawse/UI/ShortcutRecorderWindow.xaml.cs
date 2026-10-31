@@ -114,7 +114,7 @@ public partial class ShortcutRecorderWindow : Window
         _controller.CaptureSink = null;
         LblChord.Text = name;
         LblHint.Text = $"{name} can't be part of a shortcut - use letters, digits, F-keys, "
-                     + "Space, Tab, Enter, Esc or Backspace with the modifiers. "
+                     + "Space, Tab, Enter or Backspace with the modifiers. "
                      + "The previous shortcut was kept.";
         LblTitle.Text = "That key can't be used";
         BtnCancel.Content = "Close";

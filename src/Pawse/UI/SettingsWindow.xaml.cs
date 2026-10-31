@@ -485,7 +485,7 @@ public partial class SettingsWindow : Window
     private static void ShowRejected(System.Windows.Controls.TextBlock label, string key)
     {
         label.Text = $"{key} can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, " +
-                     "Enter, Esc or Backspace with the modifiers. The previous shortcut was kept.";
+                     "Enter or Backspace with the modifiers. The previous shortcut was kept.";
         label.Visibility = Visibility.Visible;
     }
 

@@ -313,7 +313,7 @@ public sealed class SettingsE2ETests : IDisposable
         FocusArrives(h.Window.TxtChord);
         Chord(h.Window.TxtChord, Key.LeftCtrl, Key.Left);
         Assert.True(Shows(h.Window.LblChordWarn,
-            "Left can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, Enter, Esc or "
+            "Left can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, Enter or "
             + "Backspace with the modifiers. The previous shortcut was kept."));
         Assert.Equal(new[] { "Ctrl", "L" }, h.Window.TxtChord.Chord);
         h.Window.Close();
