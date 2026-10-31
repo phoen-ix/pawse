@@ -244,9 +244,9 @@ internal static class Ui
 
 /// <summary>
 /// Message boxes shown on this thread while it is armed: each one is read (its text) and
-/// answered with its default button, so a test can assert what the user would have been told
-/// instead of hanging on a modal loop. The poll runs on a thread of its own: a DispatcherTimer
-/// on the UI thread never fired inside MessageBox's loop on the CI runner.
+/// answered with its first button, so a test can assert what the user would have been told
+/// instead of hanging on a modal loop. The poll runs on a thread of its own, so it does not
+/// depend on the UI thread's dispatcher running inside MessageBox's loop.
 /// </summary>
 internal sealed class DialogWatch : IDisposable
 {
@@ -276,10 +276,11 @@ internal sealed class DialogWatch : IDisposable
             var text = new StringBuilder(2048);
             GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);   // the message's static
             lock (_texts) _texts.Add(text.ToString());
-            // Its default button - the one Enter presses - by that button's own id.
-            int def = (int)SendMessage(hwnd, DM_GETDEFID, IntPtr.Zero, IntPtr.Zero);
-            int id = def >> 16 == DC_HASDEFID ? def & 0xFFFF : IDOK;
-            PostMessage(hwnd, WM_COMMAND, (IntPtr)id, GetDlgItem(hwnd, id));
+            // A click on its first button (OK on an OK-only box), by the button's own id: on an
+            // OK-only box that id is IDCANCEL, and a WM_COMMAND with IDOK is ignored - even
+            // though DM_GETDEFID reports IDOK.
+            IntPtr button = FindWindowEx(hwnd, IntPtr.Zero, "Button", null);
+            PostMessage(hwnd, WM_COMMAND, (IntPtr)GetDlgCtrlID(button), button);
             return true;
         }, IntPtr.Zero);
     }
@@ -306,9 +307,6 @@ internal sealed class DialogWatch : IDisposable
     }
 
     private const uint WM_COMMAND = 0x0111;
-    private const int IDOK = 1;
-    private const uint DM_GETDEFID = 0x0400;
-    private const int DC_HASDEFID = 0x534B;
     private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
@@ -317,6 +315,7 @@ internal sealed class DialogWatch : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? title);
+    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 }
