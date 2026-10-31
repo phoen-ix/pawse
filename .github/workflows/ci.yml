@@ -32,8 +32,9 @@ jobs:
       - name: Build (Release)
         run: dotnet build Pawse.sln -c Release --no-restore
 
+      # The UI suite (Category=E2E) runs in the e2e job below.
       - name: Test
-        run: dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --no-build
+        run: dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --no-build --filter-not-trait "Category=E2E"
 
       # The docs tour of the app's windows (DocsScreenshotTests, skipped by the step above
       # because DOCS_SCREENSHOT_DIR is unset) as a render check: the PNGs are thrown away.
@@ -68,6 +69,41 @@ jobs:
 
       - name: Docs screenshots of web/site (render check)
         run: bash scripts/docs-screenshots.sh "$RUNNER_TEMP/docs-screenshots"
+
+  # The e2e suite (e2e/COVERAGE.md) through its one entry point, scripts/e2e.sh: the website's
+  # Playwright specs, then the app's UI suite (tests/Pawse.Tests/E2E, Category=E2E), which
+  # drives the real windows and the tray icon - hence Windows.
+  e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install chromium
+
+      - name: Run the e2e suite
+        shell: bash
+        env:
+          ARTIFACTS: ${{ runner.temp }}/e2e
+        run: bash scripts/e2e.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: e2e-run
+          path: ${{ runner.temp }}/e2e/
+          retention-days: 14
 
   # Compile-only, and fast: catches a broken pawse.nsi (bad !insertmacro, unreferenced
   # function) within seconds of a push. The stub exes just satisfy the File directives;
