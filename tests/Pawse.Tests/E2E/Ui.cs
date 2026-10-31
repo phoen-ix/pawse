@@ -245,21 +245,24 @@ internal static class Ui
 /// <summary>
 /// Message boxes shown on this thread while it is armed: each one is read (its text) and
 /// answered with its default button, so a test can assert what the user would have been told
-/// instead of hanging on a modal loop. WPF's dispatcher keeps running inside MessageBox's own
-/// loop, which is where the poll fires.
+/// instead of hanging on a modal loop. The poll runs on a thread of its own: a DispatcherTimer
+/// on the UI thread never fired inside MessageBox's loop on the CI runner.
 /// </summary>
 internal sealed class DialogWatch : IDisposable
 {
-    private readonly DispatcherTimer _poll;
     private readonly uint _thread = GetCurrentThreadId();
     private readonly HashSet<IntPtr> _answered = new();
-    public List<string> Texts { get; } = new();
+    private readonly List<string> _texts = new();
+    private readonly ManualResetEventSlim _stop = new();
+
+    /// <summary>The messages read so far, in order.</summary>
+    public List<string> Texts { get { lock (_texts) return new List<string>(_texts); } }
 
     public DialogWatch()
     {
-        _poll = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Normal,
-            (_, _) => AnswerOpenDialogs(), Dispatcher.CurrentDispatcher);
-        _poll.Start();
+        // Not joined on Dispose: the UI thread must never wait on a poll that may be sending
+        // its windows a message.
+        new Thread(() => { while (!_stop.Wait(50)) AnswerOpenDialogs(); }) { IsBackground = true }.Start();
     }
 
     private void AnswerOpenDialogs()
@@ -272,9 +275,8 @@ internal sealed class DialogWatch : IDisposable
             if (cls.ToString() != "#32770" || !IsWindowVisible(hwnd) || !_answered.Add(hwnd)) return true;
             var text = new StringBuilder(2048);
             GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);   // the message's static
-            Texts.Add(text.ToString());
-            // Its default button, the one Enter presses, by that button's own id: a bare IDOK
-            // left the runner's message boxes open.
+            lock (_texts) _texts.Add(text.ToString());
+            // Its default button - the one Enter presses - by that button's own id.
             int def = (int)SendMessage(hwnd, DM_GETDEFID, IntPtr.Zero, IntPtr.Zero);
             int id = def >> 16 == DC_HASDEFID ? def & 0xFFFF : IDOK;
             PostMessage(hwnd, WM_COMMAND, (IntPtr)id, GetDlgItem(hwnd, id));
@@ -282,7 +284,7 @@ internal sealed class DialogWatch : IDisposable
         }, IntPtr.Zero);
     }
 
-    public void Dispose() => _poll.Stop();
+    public void Dispose() => _stop.Set();
 
     /// <summary>Class, title and message text of every visible window of a thread.</summary>
     public static List<string> OpenWindows(uint thread)
