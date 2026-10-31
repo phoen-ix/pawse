@@ -476,6 +476,25 @@ public sealed class SettingsE2ETests : IDisposable
                              + "It will follow any monitor you plug in or unplug from now on." }, dialogs.Texts);
     });
 
+    [Fact]
+    public void An_unrelated_save_says_nothing_about_displays() => OnSta(() =>
+    {
+        // Every attached display ticked - which is what a fresh config looks like on a PC with
+        // one monitor. Saving the lockphrase used to answer with "Every display was selected".
+        var cfg = new Config();
+        cfg.Overlay.AllDisplays = false;
+        cfg.Overlay.Displays = Enumerable.Range(0, System.Windows.Forms.Screen.AllScreens.Length).ToList();
+        var h = Open(cfg);
+        using var dialogs = new DialogWatch();
+        Page(h.Window, "Unlocking");
+        Check(Box(h.Window, "Unlock by typing a lockphrase"), true);
+        Save(h.Window);
+
+        Assert.Empty(dialogs.Texts);
+        Assert.True(cfg.Unlock.Lockphrase.Enabled);
+        Assert.True(cfg.Overlay.AllDisplays);                // still corrected, just not announced
+    });
+
     // ---- the lockout guard ----
 
     [Fact]

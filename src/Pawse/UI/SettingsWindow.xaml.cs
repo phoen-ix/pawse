@@ -22,6 +22,11 @@ public partial class SettingsWindow : Window
     /// OnSave unions the ticked set with the detached part of this.</summary>
     private List<int> _configuredDisplays = new();
 
+    /// <summary>The display mode and ticks as loaded, so Save can tell whether the user touched
+    /// the display selection at all (see <see cref="FixUpDisplaySelection"/>).</summary>
+    private int _displayModeAtLoad;
+    private List<int> _tickedAtLoad = new();
+
     /// <summary>The Run key as it stood on load. Start-at-sign-in is the one setting that lives
     /// in the registry rather than in pawse.json - the Run value IS the setting - and it is
     /// written back only when the user changed the checkbox: SetEnabled(true) points the value at
@@ -201,6 +206,8 @@ public partial class SettingsWindow : Window
         PnlDisplays.IsEnabled = !_cfg.Overlay.AllDisplays;
         foreach (var box in _displayBoxes)
             box.IsChecked = _configuredDisplays.Contains((int)box.Tag!);
+        _displayModeAtLoad = CmbDisplayMode.SelectedIndex;
+        _tickedAtLoad = TickedDisplays();
         SldOpacity.Value = Math.Clamp(_cfg.Overlay.Opacity, Config.OverlayCfg.MinOpacity, 1.0);
         SldVertical.Value = Math.Clamp(_cfg.Overlay.VerticalPercent, 0, 100);
         SldHorizontal.Value = Math.Clamp(_cfg.Overlay.HorizontalPercent, 0, 100);
@@ -315,6 +322,12 @@ public partial class SettingsWindow : Window
         if (everyOne)
         {
             _cfg.Overlay.AllDisplays = true;
+            // Said only when the user changed the selection here. A fresh config ticks the one
+            // display of a single-monitor PC, and an unrelated save - the lockphrase, say - must
+            // not answer with a dialog about displays.
+            bool touched = CmbDisplayMode.SelectedIndex != _displayModeAtLoad
+                           || !TickedDisplays().SequenceEqual(_tickedAtLoad);
+            if (!touched) return;
             MessageBox.Show(this,
                 "Every display was selected, so the lock popup is set to \"All displays\".\n\n"
                     + "It will follow any monitor you plug in or unplug from now on.",
