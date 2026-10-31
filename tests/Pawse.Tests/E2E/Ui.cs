@@ -273,7 +273,11 @@ internal sealed class DialogWatch : IDisposable
             var text = new StringBuilder(2048);
             GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);   // the message's static
             Texts.Add(text.ToString());
-            PostMessage(hwnd, WM_COMMAND, (IntPtr)IDOK, IntPtr.Zero);
+            // Its default button, the one Enter presses, by that button's own id: a bare IDOK
+            // left the runner's message boxes open.
+            int def = (int)SendMessage(hwnd, DM_GETDEFID, IntPtr.Zero, IntPtr.Zero);
+            int id = def >> 16 == DC_HASDEFID ? def & 0xFFFF : IDOK;
+            PostMessage(hwnd, WM_COMMAND, (IntPtr)id, GetDlgItem(hwnd, id));
             return true;
         }, IntPtr.Zero);
     }
@@ -301,6 +305,8 @@ internal sealed class DialogWatch : IDisposable
 
     private const uint WM_COMMAND = 0x0111;
     private const int IDOK = 1;
+    private const uint DM_GETDEFID = 0x0400;
+    private const int DC_HASDEFID = 0x534B;
     private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
@@ -309,5 +315,6 @@ internal sealed class DialogWatch : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 }
