@@ -246,6 +246,7 @@ internal sealed class DialogWatch : IDisposable
 {
     private readonly DispatcherTimer _poll;
     private readonly uint _thread = GetCurrentThreadId();
+    private readonly HashSet<IntPtr> _answered = new();
     public List<string> Texts { get; } = new();
 
     public DialogWatch()
@@ -261,7 +262,8 @@ internal sealed class DialogWatch : IDisposable
         {
             var cls = new StringBuilder(64);
             GetClassName(hwnd, cls, cls.Capacity);
-            if (cls.ToString() != "#32770" || !IsWindowVisible(hwnd)) return true;
+            // Answered once: the posted OK may not have closed it by the next poll.
+            if (cls.ToString() != "#32770" || !IsWindowVisible(hwnd) || !_answered.Add(hwnd)) return true;
             var text = new StringBuilder(2048);
             GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);   // the message's static
             Texts.Add(text.ToString());
