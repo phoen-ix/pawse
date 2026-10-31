@@ -92,9 +92,15 @@ public sealed class TrayE2ETests
 
         foreach (var text in new[] { "Settings…", "Open config file", "Quit" })
         {
-            h.Item(text).PerformClick();
-            Assert.Empty(raised);                               // posted, not raised inside the click
+            // Posted, not raised inside the click: a handler added after the tray's own runs
+            // right after it, before anything posted. (Not checked after PerformClick: on the
+            // CI runner the posted call had already run by then.)
+            int before = raised.Count, duringClick = -1;
+            var item = h.Item(text);
+            item.Click += (_, _) => duringClick = raised.Count;
+            item.PerformClick();
             Flush();
+            Assert.Equal(before, duringClick);
         }
         Assert.Equal(new[] { "settings", "config", "quit" }, raised);
 
