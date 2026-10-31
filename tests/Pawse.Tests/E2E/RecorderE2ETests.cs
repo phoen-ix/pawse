@@ -78,4 +78,48 @@ public sealed class RecorderE2ETests
         Assert.Null(chord);
         Assert.Null(controller.CaptureSink);
     });
+
+    [Fact]
+    public void Esc_cancels_instead_of_becoming_the_shortcut() => OnSta(() =>
+    {
+        // The hint says "Esc cancels", and Esc arrives through the hook like every other key:
+        // it used to be recorded as the shortcut "Esc".
+        var (chord, controller) = Record((_, sink) =>
+        {
+            Press(sink, Esc);
+            Release(sink, Esc);
+        });
+        Assert.Null(chord);
+        Assert.Null(controller.CaptureSink);
+    });
+
+    [Fact]
+    public void Esc_also_cancels_a_chord_half_pressed() => OnSta(() =>
+    {
+        var (chord, _) = Record((_, sink) => Press(sink, Ctrl, Esc));
+        Assert.Null(chord);
+    });
+
+    [Fact]
+    public void A_refused_key_is_explained_and_Close_closes() => OnSta(() =>
+    {
+        string? title = null, hint = null;
+        var (chord, controller) = Record((w, sink) =>
+        {
+            Press(sink, Ctrl, Left);   // an arrow: the config has no name for it
+            w.Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+            {
+                Release(sink, Left, Ctrl);                      // already queued ups commit nothing
+                title = w.LblTitle.Text;
+                hint = w.LblHint.Text;
+                // The borderless dialog's only way out: this button used to do nothing.
+                Click(ByText<Button>(w, "Close"));
+            });
+        });
+        Assert.Equal("That key can't be used", title);
+        Assert.Equal("Left can't be part of a shortcut - use letters, digits, F-keys, Space, Tab, Enter, Esc "
+                     + "or Backspace with the modifiers. The previous shortcut was kept.", hint);
+        Assert.Null(chord);
+        Assert.Null(controller.CaptureSink);
+    });
 }

@@ -25,6 +25,9 @@ public partial class ShortcutRecorderWindow : Window
     private readonly List<string> _captured = new();
     private readonly HashSet<int> _down = new();
     private bool _finished;
+    /// <summary>A key that cannot be part of a shortcut was pressed: the recording is over, but
+    /// the window stays open to say why until Close (or Esc) dismisses it.</summary>
+    private bool _rejected;
 
     /// <summary>The recorded chord, or null when cancelled. Only meaningful once
     /// <see cref="Window.ShowDialog"/> has returned true.</summary>
@@ -58,9 +61,16 @@ public partial class ShortcutRecorderWindow : Window
 
     private void HandleKey(int vk, bool isDown)
     {
-        if (_finished) return;
+        if (_finished || _rejected) return;
 
         int nv = Keys.Normalize(vk);
+        // Esc reaches the recorder through the hook, never as a WPF key, so this is where
+        // "Esc cancels" has to happen - otherwise it was recorded as the shortcut "Esc".
+        if (isDown && nv == Keys.VK_ESCAPE)
+        {
+            Finish(commit: false);
+            return;
+        }
         if (isDown)
         {
             _down.Add(nv);
@@ -69,8 +79,9 @@ public partial class ShortcutRecorderWindow : Window
             {
                 // The 0xNN fallback: arrows, Home/End, the keypad, OEM punctuation. The config
                 // cannot round-trip those, and silently dropping one used to leave a chord of
-                // nothing but its modifiers. Say so and abandon the recording.
-                Reject(name);
+                // nothing but its modifiers. Say so and abandon the recording - naming the key
+                // the way ChordBox does ("Left"), not by the "0x25" the config would store.
+                Reject(System.Windows.Input.KeyInterop.KeyFromVirtualKey(nv).ToString());
                 return;
             }
             if (!_captured.Contains(name)) _captured.Add(name);
@@ -84,8 +95,8 @@ public partial class ShortcutRecorderWindow : Window
         if (_down.Count == 0 && _captured.Count > 0) Finish(commit: true);
     }
 
-    /// <summary>Esc arrives through the hook like everything else, so this is only the
-    /// belt-and-braces path for a key that somehow reached WPF instead.</summary>
+    /// <summary>Esc arrives through the hook like everything else (see HandleKey), so this is
+    /// only the belt-and-braces path for a key that somehow reached WPF instead.</summary>
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
@@ -97,7 +108,9 @@ public partial class ShortcutRecorderWindow : Window
 
     private void Reject(string name)
     {
-        _finished = true;
+        // Not _finished: that would make Finish - and so the Close button - a no-op, leaving
+        // this borderless dialog with no way out but Alt+F4.
+        _rejected = true;
         _controller.CaptureSink = null;
         LblChord.Text = name;
         LblHint.Text = $"{name} can't be part of a shortcut - use letters, digits, F-keys, "
