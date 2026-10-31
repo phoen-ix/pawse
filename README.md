@@ -241,6 +241,11 @@ are built from the same `makensis` lines CI runs - see
 built-in updater) has its own build script and notes in
 [`packaging/msix/README.md`](packaging/msix/README.md).
 
+End-to-end tests: `scripts/e2e.sh` runs the website's Playwright suite (`e2e/tests/`) and,
+on Windows, the app's UI suite (`tests/Pawse.Tests/E2E/`, which drives the real windows and
+the tray icon). What each covers is mapped in [`e2e/COVERAGE.md`](e2e/COVERAGE.md); CI runs
+both in the `e2e` job.
+
 Releases are cut by CI on every push to `main` that carries a release-worthy
 [Conventional Commit](https://www.conventionalcommits.org/) subject: `fix:` makes a patch
 release, `feat:` a minor one, `feat!:` (or a `BREAKING CHANGE:` footer) a major one, and
