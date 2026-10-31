@@ -7,7 +7,7 @@
 #   scripts/e2e.sh [playwright args]
 #
 # PORT_BASE (default 25950): the site is served on 127.0.0.1:PORT_BASE+2.
-# ARTIFACTS: server log, Playwright results/traces/report, the app suite's log (default: a temp dir).
+# ARTIFACTS: server log, site.log, Playwright results/traces/report, app.log (default: a temp dir).
 # Needs Python for the static server, Node + `npm ci` in e2e/ with
 # `npx playwright install chromium`, and on Windows the .NET SDK from global.json.
 # CI: ci.yml job `e2e` (windows-latest) runs this whole script.
@@ -31,12 +31,17 @@ for _ in $(seq 1 50); do
   sleep 0.2
 done
 
+# Both halves always run - a site failure must not hide the app suite's result.
+site=0
 (cd e2e && E2E_BASE_URL="http://127.0.0.1:$PORT" PLAYWRIGHT_HTML_OUTPUT_DIR="$ARTIFACTS/playwright-report" \
-  npx playwright test --output "$ARTIFACTS/test-results" "$@")
+  npx playwright test --output "$ARTIFACTS/test-results" "$@") 2>&1 | tee "$ARTIFACTS/site.log" || site=$?
 
+app=0
 if [ "${OS:-}" = Windows_NT ]; then
   dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --filter-trait "Category=E2E" 2>&1 \
-    | tee "$ARTIFACTS/app.log"
+    | tee "$ARTIFACTS/app.log" || app=$?
 else
   echo "e2e: the app's UI suite (Category=E2E) needs Windows - ci.yml job e2e runs it" >&2
 fi
+
+[ "$site" -eq 0 ] && [ "$app" -eq 0 ] || { echo "e2e: failed (site=$site app=$app)" >&2; exit 1; }
