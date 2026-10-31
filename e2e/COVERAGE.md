@@ -22,7 +22,7 @@ hand from the code - warnings, guards, lock state, deployment mode, App-level fl
   ls web/site | grep -vE '\.(png|svg)$'; }
 ```
 
-Totals: **66 extracted items, all ✅. 53 state/flow rows: ✅ 39, ❌ 14** - (b) 1, (c) 7, (d) 3,
+Totals: **66 extracted items, all ✅. 54 state/flow rows: ✅ 39, ❌ 15** - (a) 1, (b) 1, (c) 7, (d) 3,
 (e) 3. Tests: app 54 methods / 82 cases, site 15.
 
 ## Extracted items
@@ -103,8 +103,9 @@ Totals: **66 extracted items, all ✅. 53 state/flow rows: ✅ 39, ❌ 14** - (b
 | Tray: right-click opens the menu | A `A_right_click_opens_the_menu` | ✅ |
 | Site: no scripts, no cookies, nothing from other sites (privacy page's promise) | S `privacy › the site keeps its own promise…` + every test's guard | ✅ |
 | Site: hero download/source, download rows, unlock defaults, footer nav, previews/icon/JSON-LD, privacy sections | S `home › …`, `privacy › covers the app…` | ✅ |
-| Locking/unlocking through the keyboard hook (hotkey, chord, lockphrase, on-screen keyboards, stuck modifiers) | ❌ (c) `LockControllerTests`, `MatchersTests`; the real hook only sees real devices - input the test injects is flagged injected | ❌ |
-| Mouse block, Win+L block, media-key block applied while locked | ❌ (c) ci.yml `store` (Win+L value outside the package, swept after a kill), `installer-smoke` portable step; `WorkstationLockTraceTests`. The Keyboard Filter needs the Windows feature (a) | ❌ |
+| Locking/unlocking through the keyboard hook (hotkey, chord, lockphrase, on-screen keyboards, stuck modifiers) | ❌ (c) `LockControllerTests` (incl. `The_unlock_chord_can_be_tapped_on_an_on_screen_keyboard`), `ChordMatcherTests`, `ChordMatcherExactTests`, `LockphraseMatcherTests` (`MatchersTests.cs`). A future e2e route: SendInput into a running App - the hook passes injected keys to the matchers on purpose | ❌ |
+| Mouse block, Win+L block, media-key block applied while locked | ❌ (c) ci.yml `store` (Win+L value outside the package, swept after a kill), `installer-smoke` portable step; `WorkstationLockTraceTests` | ❌ |
+| Keyboard Filter engaged while locked (Locking page, consumer keys that bypass the hook) | ❌ (a) needs Windows Enterprise/Education/IoT with the Keyboard Filter feature and an elevated Pawse; the runner has neither | ❌ |
 | Startup: StartLocked, single instance / take-over over the quit channel, installer quit | ❌ (c) ci.yml `installer-smoke` (upgrade while running, uninstall, portable StartLocked), `QuitSignalTests` | ❌ |
 | Startup: broken config gets a working unlock + balloon | ❌ (c) `EnsureUsableUnlockFallbackTests`, `HasUsableUnlockTests` | ❌ |
 | Autostart repair, portable writes nothing, uninstall leaves nothing | ❌ (c) ci.yml `installer-smoke`, `UninstallCleanupTests`, `DataFolderTests` | ❌ |
