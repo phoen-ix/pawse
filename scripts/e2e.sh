@@ -38,7 +38,7 @@ site=0
 
 app=0
 if [ "${OS:-}" = Windows_NT ]; then
-  dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --filter-trait "Category=E2E" 2>&1 \
+  dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --filter-trait "Category=E2E" --output Detailed 2>&1 \
     | tee "$ARTIFACTS/app.log" || app=$?
 else
   echo "e2e: the app's UI suite (Category=E2E) needs Windows - ci.yml job e2e runs it" >&2

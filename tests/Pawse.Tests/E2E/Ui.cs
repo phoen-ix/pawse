@@ -35,19 +35,25 @@ public sealed class E2ECollection { }
 /// </summary>
 internal static class Ui
 {
-    /// <summary>WPF needs an STA thread with its own dispatcher; xunit's are MTA.</summary>
+    /// <summary>WPF needs an STA thread with its own dispatcher; xunit's are MTA. A test still
+    /// running after a minute - stuck in a modal loop nobody answers - fails, naming the windows
+    /// it has open, instead of hanging the whole run.</summary>
     public static void OnSta(Action body)
     {
         Exception? failure = null;
+        uint nativeThread = 0;
         var thread = new Thread(() =>
         {
+            nativeThread = DialogWatch.GetCurrentThreadId();
             try { body(); }
             catch (Exception ex) { failure = ex; }
             finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
-        });
+        })
+        { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        thread.Join();
+        if (!thread.Join(TimeSpan.FromSeconds(60)))
+            Assert.Fail("still running after 60 s; open windows: " + string.Join(" | ", DialogWatch.OpenWindows(nativeThread)));
         if (failure is not null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
@@ -274,11 +280,30 @@ internal sealed class DialogWatch : IDisposable
 
     public void Dispose() => _poll.Stop();
 
+    /// <summary>Class, title and message text of every visible window of a thread.</summary>
+    public static List<string> OpenWindows(uint thread)
+    {
+        var found = new List<string>();
+        EnumThreadWindows(thread, (hwnd, _) =>
+        {
+            if (!IsWindowVisible(hwnd)) return true;
+            var cls = new StringBuilder(64);
+            var title = new StringBuilder(256);
+            var text = new StringBuilder(2048);
+            GetClassName(hwnd, cls, cls.Capacity);
+            GetWindowText(hwnd, title, title.Capacity);
+            GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);
+            found.Add($"{cls} \"{title}\" {text}".TrimEnd());
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
     private const uint WM_COMMAND = 0x0111;
     private const int IDOK = 1;
     private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
 
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint threadId, EnumProc proc, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);

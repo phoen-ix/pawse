@@ -94,6 +94,8 @@ jobs:
 
       - name: Run the e2e suite
         shell: bash
+        # A stuck UI test fails itself after 60 s (Ui.OnSta); this is the backstop.
+        timeout-minutes: 20
         env:
           ARTIFACTS: ${{ runner.temp }}/e2e
         run: bash scripts/e2e.sh
