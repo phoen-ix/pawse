@@ -1,35 +1,37 @@
 # Pawse 🐾
 
-<img src="docs/screenshots/app-lock-popup.png" alt="The Pawse lock popup: Keyboard locked, how to unlock, and a Hold to unlock button" width="460">
-
 A cat-proof keyboard lock for Windows. One click (or a hotkey) freezes the
 keyboard so a cat walking across it can't wreak havoc, close your work, or leave
 a modifier "stuck". Unlock it deliberately - a chord, a lockphrase, a
 hold-to-unlock button, or an auto-timer.
 
-This is a native Windows app (C# / .NET 10, WPF + a WinForms tray), released and maintained -
-the current version is on the [releases page](https://github.com/phoen-ix/pawse/releases/latest).
+<img src="docs/screenshots/app-lock-popup.png" alt="The Pawse lock popup: Keyboard locked, how to unlock, and a Hold to unlock button" width="460">
+
+**Status:** released and maintained - the current version is on the [releases page](https://github.com/phoen-ix/pawse/releases/latest).
+
+A native Windows app (C# / .NET 10, WPF + a WinForms tray).
 
 ## Install
 
 Two ways to install, both from the [latest release](https://github.com/phoen-ix/pawse/releases)
 (or via [pawse.at](https://www.pawse.at)):
 
-- **Installer** - run a `Pawse-Setup-<version>*.exe`. Installs per-user by default (no
-  admin), offers Start Menu/Desktop shortcuts, and uninstalls from Windows' "Installed apps"
-  - or machine-wide if you'd rather (it asks for administrator rights only if that's what you
-  pick). If Pawse is running, installing or uninstalling asks before closing it and lets the
-  app shut itself down properly, so its Win+L and media-key blocks are always undone.
-  **Uninstalling leaves nothing behind**: the program, its settings and log, its registry
-  entries and its temporary files - for every account on the PC, when it was installed
-  machine-wide.
-- **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed. A portable
-  copy **writes nothing outside its folder**: settings and log sit next to the exe and nothing
-  goes into the registry, so deleting the folder removes it. (The self-contained build's .NET
-  runtime unpacks a few DLLs to `%TEMP%\.net` on first start, before Pawse runs; Windows' own
-  temp cleanup removes those.) Three things need the installed version for that reason:
-  **starting with Windows**, **Block Win+L** and the **browser/media-key block** - Settings
-  shows them greyed out.
+- **Installer** - run a `Pawse-Setup-<version>*.exe`.
+  - Installs per-user by default (no admin), or machine-wide if you'd rather (it asks for
+    administrator rights only if that's what you pick).
+  - Offers Start Menu/Desktop shortcuts, and uninstalls from Windows' "Installed apps".
+  - If Pawse is running, installing or uninstalling asks before closing it and lets the app
+    shut itself down properly, so its Win+L and media-key blocks are always undone.
+  - **Uninstalling leaves nothing behind**: the program, its settings and log, its registry
+    entries and its temporary files - for every account on the PC, when it was installed
+    machine-wide.
+- **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
+  - A portable copy **writes nothing outside its folder**: settings and log sit next to the
+    exe and nothing goes into the registry, so deleting the folder removes it.
+  - The self-contained build's .NET runtime unpacks a few DLLs to `%TEMP%\.net` on first
+    start, before Pawse runs; Windows' own temp cleanup removes those.
+  - Three things need the installed version for that reason: **starting with Windows**,
+    **Block Win+L** and the **browser/media-key block**. Settings shows them greyed out.
 
 A paw appears in the system tray either way.
 
@@ -47,12 +49,13 @@ and asks you nothing about builds.
 | **`Pawse-<version>.zip`** → `Pawse.exe` | ~61 MB zipped (66 MB unzipped) | **No** - the runtime is bundled. Just run it. |
 | **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once. |
 
-Same app in every row. `Pawse.exe` is self-contained (bundled + compressed);
-`Pawse-min.exe` is a tiny launcher that reuses a runtime you install once. Every
-download is built and attached by CI, with `SHA256SUMS.txt` alongside them; the
-installers are built from [`packaging/`](packaging/).
-(Windows may flag a downloaded file - if an exe won't start, right-click it or the zip →
-**Properties → Unblock** first.)
+Same app in every row:
+- `Pawse.exe` is self-contained (bundled + compressed); `Pawse-min.exe` is a tiny launcher
+  that reuses a runtime you install once.
+- Every download is built and attached by CI, with `SHA256SUMS.txt` alongside them; the
+  installers are built from [`packaging/`](packaging/).
+- Windows may flag a downloaded file - if an exe won't start, right-click it or the zip →
+  **Properties → Unblock** first.
 
 ## Use
 
@@ -60,46 +63,29 @@ installers are built from [`packaging/`](packaging/).
   balloon hint - **double-click** to unlock, so a stray paw-click can't undo the
   lock. (Prefer the classic single-click toggle? Turn the double-click guard off
   in Settings.)
-- **Right-click** for the menu: Lock/Unlock, Settings…, Open config file, Quit
-  (Quit asks for confirmation while locked).
+- **Right-click** for the menu: Lock now / Unlock, Settings…, Open config file,
+  Restart as administrator (shown only when Pawse isn't elevated), Quit (Quit asks for
+  confirmation while locked).
 - **Starting a second copy** - a portable build you just unzipped, say - offers to close the
-  one already running and take over, rather than simply refusing. It asks first, and closing
-  a Pawse that currently has the keyboard locked hands the keyboard back, so the prompt says
-  so. Answer No and the running copy is left alone.
-- **Settings → About** is the only thing in Pawse that goes online, and it offers three
-  levels: **Only when I ask** (the default - nothing leaves the machine until you press
-  **Check now**), **Tell me when an update is ready**, and **Download and install updates
-  automatically**. An update is downloaded from GitHub Releases and its checksum
-  cross-checked against pawse.at before anything runs; an installed copy runs the matching
-  installer, a portable one replaces its own exe and restarts. Automatic installs decline
-  anything that would need administrator rights or a runtime download, and anything pawse.at
-  has not vouched for - those still ask. See [Privacy](#privacy).
-  **One manual step for portable copies on v0.8.0 through v0.11.0:** those builds refuse
-  their own self-update ("reports version X.Y.Z.0, not X.Y.Z" - a version-comparison bug
-  fixed in v0.11.1), so update them once by hand: download the new zip, quit Pawse, replace
-  the exe. From v0.11.1 on, Check now takes it from there. Installed copies were never
-  affected.
-  **One manual step for minimal copies updating from v0.11.1 or earlier:** the minimal
-  build now needs the **.NET 10** Desktop Runtime instead of .NET 8. Install it first
-  (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
-  [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update. An
-  installed minimal copy will decline the automatic update until the runtime is there and
-  tell you so. A **portable** minimal copy cannot check, and on *Download and install
-  updates automatically* it will not wait to be asked - so install the runtime now, or
-  switch to the full build, which needs nothing. If one has already replaced itself and
-  won't start, nothing is lost: the previous exe is still beside it as `Pawse.exe.old`
-  - install the runtime, or rename that file back over `Pawse.exe`. Full and
-  portable-full copies are unaffected and update as usual.
+  one already running and take over, rather than simply refusing.
+  - It asks first. Closing a Pawse that currently has the keyboard locked hands the keyboard
+    back, so the prompt says so.
+  - Answer No and the running copy is left alone.
 - Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
+- **Lock immediately when Pawse starts** is an option in **Settings → General**.
 
-While locked, a small floating popup shows on the displays you choose - one, several, or
-**All displays**, which picks up a monitor you plug in later without you touching anything.
-It comes in two styles: a **window** with the hold-to-unlock button, or a **paw icon** of
-whatever size you like, with an optional text box beneath naming what unlocks it - hold the
-paw to unlock, exactly like the button. Either one can be placed anywhere on the display,
-dimmed, or switched off; the desktop stays visible around it. The unlock hint prints the
-lockphrase itself by default - switch that off in **Settings → Lock popup** if someone else
-can see your screen.
+### Lock popup
+
+While locked, a small floating popup shows on the displays you choose; the desktop stays
+visible around it.
+- **Displays**: one, several, or **All displays**, which picks up a monitor you plug in later
+  without you touching anything.
+- **Window style**: a window with the hold-to-unlock button.
+- **Paw style**: a paw icon of whatever size you like, with an optional text box beneath
+  naming what unlocks it. Hold the paw to unlock, exactly like the button.
+- **Placement**: either one can be placed anywhere on the display, dimmed, or switched off.
+- **Lockphrase in the hint**: the unlock hint prints the lockphrase itself by default - switch
+  that off in **Settings → Lock popup** if someone else can see your screen.
 
 ### Unlock methods (each independently toggleable in Settings)
 
@@ -114,6 +100,39 @@ Mouse blocking is **off by default**; enable it in Settings if the cat uses the
 mouse too. (With it on, unlock with the keyboard - the hold button and the paw need the mouse.)
 Blocking **on-screen keyboards** is off by default as well - see
 [What it can and can't block](#what-it-can-and-cant-block).
+
+### Updates
+
+**Settings → About** is the only thing in Pawse that goes online. It offers three levels:
+
+| Level | What it does |
+| --- | --- |
+| **Only when I ask** (the default) | Nothing leaves the machine until you press **Check now**. |
+| **Tell me when an update is ready** | Checks once a day while Pawse runs, and says so in a tray balloon. |
+| **Download and install updates automatically** | Checks once a day and installs. It declines anything that would need administrator rights or a runtime download, and anything pawse.at has not vouched for - those still ask. |
+
+- An update is downloaded from GitHub Releases and its checksum cross-checked against
+  pawse.at before anything runs. See [Privacy](#privacy).
+- An installed copy runs the matching installer; a portable one replaces its own exe and restarts.
+
+One manual step for some older copies:
+- **Portable copies on v0.8.0 through v0.11.0** refuse their own self-update ("reports
+  version X.Y.Z.0, not X.Y.Z" - a version-comparison bug fixed in v0.11.1).
+  - Update them once by hand: download the new zip, quit Pawse, replace the exe.
+  - From v0.11.1 on, Check now takes it from there. Installed copies were never affected.
+- **Minimal copies updating from v0.11.1 or earlier**: the minimal build now needs the
+  **.NET 10** Desktop Runtime instead of .NET 8.
+  - Install it first (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
+    [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update.
+  - An installed minimal copy will decline the automatic update until the runtime is there
+    and tell you so.
+  - A **portable** minimal copy cannot check, and on *Download and install updates
+    automatically* it will not wait to be asked - so install the runtime now, or switch to
+    the full build, which needs nothing.
+  - If one has already replaced itself and won't start, nothing is lost: the previous exe is
+    still beside it as `Pawse.exe.old`. Install the runtime, or rename that file back over
+    `Pawse.exe`.
+  - Full and portable-full copies are unaffected and update as usual.
 
 ## Screenshots
 
@@ -140,14 +159,15 @@ Where these live depends on how Pawse got onto the PC:
 
 Uninstalling removes them in every case.
 
-- `pawse.json` - settings (edit via the Settings window or by hand). Start-at-sign-in is the
-  one setting that is not in here: the Run key is the setting, and Settings reads it from there
-  (installed copies only - a portable copy writes nothing to the registry).
+- `pawse.json` - settings (edit via the Settings window or by hand).
+  - Start-at-sign-in is the one setting that is not in here: the Run key is the setting, and
+    Settings reads it from there (installed copies only - a portable copy writes nothing to
+    the registry).
 - `pawse.log` - a plain, timestamped log of what the app did. **Off by default** - switch on
   "Write a log file next to Pawse" in **Settings → General** when something needs explaining.
-  It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck
-  key it records which keys were held when a lock engaged - so it is opt-in rather than
-  something to discover later.
+  - It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck
+    key it records which keys were held when a lock engaged - so it is opt-in rather than
+    something to discover later.
 
 ## What it can and can't block
 
@@ -155,44 +175,40 @@ The global low-level keyboard hook swallows **all physical keys while locked**,
 including the F-keys and normal typing, and it clears any stuck modifier on lock
 (fixing the "Ctrl seems held → the browser zooms when I scroll" problem).
 
-**On-screen keyboards keep working** - the lock is about the hardware keyboard, so
-`osk.exe`, the Windows touch keyboard and third-party ones type as usual while locked,
-and the unlock chord can be tapped on them. Turn on "Also block on-screen keyboards
-while locked" (**Settings → Locking**) if you want them frozen too. One caveat worth
-knowing: Windows only tells the hook that a keystroke was *simulated*, never which
-program simulated it, so leaving this off also lets macro tools type while locked.
-
-**`Win+L`** travels *around* that hook (winlogon locks the screen below the hook),
-so Pawse can optionally block it **only while locked** - off by default; turn it on
-under **Settings → Locking** (installed copies only: it is a registry value, and a portable
-copy writes nothing to the registry). It sets the per-user `DisableLockWorkstation`
-policy on lock and restores its previous state on unlock - a value that was
-already there before Pawse (e.g. set by an admin) is left exactly as found.
-Needs no admin on a normal PC, but on
-**managed / corporate** machines the policy key is ACL-locked and needs elevation -
-enabling it prompts to **Restart as administrator** (also available in the tray menu,
-shown only when Pawse isn't already elevated).
-
-The **browser / calculator / media / volume keys** are already swallowed by the lock on any
-edition. The "Block browser / calculator / media keys" option (**Settings → Locking**)
-additionally engages the Windows **Keyboard Filter** to catch the few consumer keys that reach
-Windows as `WM_APPCOMMAND` and bypass the hook - that part needs **Windows Enterprise /
-Education / IoT** with the Keyboard Filter feature, Pawse running as administrator, and an
-installed copy (it changes a machine-wide Windows setting).
-
-**Touch is not the mouse**: even with mouse blocking on, native touch / pen input
-reaches pointer-aware apps (browsers, UWP, Office) through the `WM_POINTER`
-pipeline, which the low-level mouse hook never sees - on a touchscreen, screen
-taps still land.
-
-Still out of reach: input to windows running **as administrator** (unless Pawse
-itself runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would
-need a signed kernel driver (out of scope). If Pawse is killed while locked, it
-sweeps its own leftover `DisableLockWorkstation` state on next start (the
-uninstaller does the same), so nothing Pawse blocked stays blocked - while a
-block it didn't set is never touched. That sweep is the safety net, not the normal
-path: the installer and uninstaller ask Pawse to quit and let it undo its own
-blocks, and only force it if you tell them to.
+- **On-screen keyboards keep working** - the lock is about the hardware keyboard.
+  - `osk.exe`, the Windows touch keyboard and third-party ones type as usual while locked,
+    and the unlock chord can be tapped on them.
+  - Turn on "Also block on-screen keyboards while locked" (**Settings → Locking**) if you
+    want them frozen too.
+  - One caveat worth knowing: Windows only tells the hook that a keystroke was *simulated*,
+    never which program simulated it, so leaving this off also lets macro tools type while locked.
+- **`Win+L`** travels *around* that hook (winlogon locks the screen below the hook), so Pawse
+  can optionally block it **only while locked**.
+  - Off by default; turn it on under **Settings → Locking** (installed copies only: it is a
+    registry value, and a portable copy writes nothing to the registry).
+  - It sets the per-user `DisableLockWorkstation` policy on lock and restores its previous
+    state on unlock. A value that was already there before Pawse (e.g. set by an admin) is
+    left exactly as found.
+  - Needs no admin on a normal PC. On **managed / corporate** machines the policy key is
+    ACL-locked and needs elevation: enabling it prompts to **Restart as administrator** (also
+    available in the tray menu, shown only when Pawse isn't already elevated).
+- The **browser / calculator / media / volume keys** are already swallowed by the lock on any edition.
+  - The "Block browser / calculator / media keys" option (**Settings → Locking**) additionally
+    engages the Windows **Keyboard Filter** to catch the few consumer keys that reach Windows
+    as `WM_APPCOMMAND` and bypass the hook.
+  - That part needs **Windows Enterprise / Education / IoT** with the Keyboard Filter feature,
+    Pawse running as administrator, and an installed copy (it changes a machine-wide Windows setting).
+- **Touch is not the mouse**: even with mouse blocking on, native touch / pen input reaches
+  pointer-aware apps (browsers, UWP, Office) through the `WM_POINTER` pipeline, which the
+  low-level mouse hook never sees. On a touchscreen, screen taps still land.
+- **Still out of reach**: input to windows running **as administrator** (unless Pawse itself
+  runs elevated), and `Ctrl+Alt+Del` and vendor-driver hotkeys, which would need a signed
+  kernel driver (out of scope).
+- **Killed while locked?** Pawse sweeps its own leftover `DisableLockWorkstation` state on
+  next start (the uninstaller does the same), so nothing Pawse blocked stays blocked - while
+  a block it didn't set is never touched.
+  - That sweep is the safety net, not the normal path: the installer and uninstaller ask
+    Pawse to quit and let it undo its own blocks, and only force it if you tell them to.
 
 ## Privacy
 
@@ -201,20 +217,26 @@ check, no phone-home. The update setting starts at **Only when I ask**, so nothi
 machine until you press **Check now** or move it up a level. Whatever Pawse sends is a
 `Pawse/<version>` user agent and nothing else.
 
-A check asks `https://github.com/phoen-ix/pawse/releases/latest` which release is newest -
-just the redirect, no API - and reads `https://pawse.at/latest.json` for the checksum. That
-request to pawse.at is logged like any other visit to the site (IP address, time, the
-`Pawse/<version>` user agent) and kept for two weeks; GitHub, being GitHub, logs what it
-likes. The full picture is on the [privacy page](https://www.pawse.at/privacy.html).
+What a check touches:
+- **GitHub**: `https://github.com/phoen-ix/pawse/releases/latest`, to learn which release is
+  newest - just the redirect, no API. When nothing is newer, that is the only request.
+- **pawse.at**: when GitHub names a newer release (or doesn't answer), Pawse also reads
+  `https://pawse.at/latest.json` for the checksum.
+- **Logs**: that request to pawse.at is logged like any other visit to the site (IP address,
+  time, the `Pawse/<version>` user agent) and kept for two weeks; GitHub, being GitHub, logs
+  what it likes.
+
+The full picture is on the [privacy page](https://www.pawse.at/privacy.html).
 
 If there's something newer and you agree, Pawse downloads it from GitHub Releases, checks it
-against the SHA-256 pawse.at published, and only then runs it. Two hosts is the point: a
-hash served alongside the binary only tells you the transfer wasn't corrupted. Be clear-eyed
-about how far that goes, though - this repository serves both the release and the feed, so
-the split protects against a compromised CDN edge or a MITM, not against a compromised
-source. (Signed binaries would; Pawse doesn't have them yet.) When pawse.at can't vouch for
-a release, Pawse falls back to the release's own `SHA256SUMS.txt`, says so before installing,
-and refuses to do it unattended.
+against the SHA-256 pawse.at published, and only then runs it.
+- **Two hosts is the point**: a hash served alongside the binary only tells you the transfer
+  wasn't corrupted.
+- **How far that goes**: this repository serves both the release and the feed, so the split
+  protects against a compromised CDN edge or a MITM, not against a compromised source.
+  (Signed binaries would; Pawse doesn't have them yet.)
+- **Fallback**: when pawse.at can't vouch for a release, Pawse falls back to the release's own
+  `SHA256SUMS.txt`, says so before installing, and refuses to do it unattended.
 
 Decline, or leave the setting alone, and Pawse never touches the network at all. Your
 settings and keystrokes stay on the machine either way.
@@ -241,17 +263,22 @@ are built from the same `makensis` lines CI runs - see
 built-in updater) has its own build script and notes in
 [`packaging/msix/README.md`](packaging/msix/README.md).
 
-End-to-end tests: `scripts/e2e.sh` runs the website's Playwright suite (`e2e/tests/`) and,
+### E2E
+
+`scripts/e2e.sh` runs the website's Playwright suite (`e2e/tests/`) and,
 on Windows, the app's UI suite (`tests/Pawse.Tests/E2E/`, which drives the real windows and
 the tray icon). What each covers is mapped in [`e2e/COVERAGE.md`](e2e/COVERAGE.md); CI runs
 both in the `e2e` job.
 
-Releases are cut by CI on every push to `main` that carries a release-worthy
-[Conventional Commit](https://www.conventionalcommits.org/) subject: `fix:` makes a patch
-release, `feat:` a minor one, `feat!:` (or a `BREAKING CHANGE:` footer) a major one, and
-`docs:`, `chore:`, `ci:` and the rest none (`.github/workflows/release.yml`). The website,
-[pawse.at](https://www.pawse.at), is served from [`web/site/`](web/site/); its `latest.json`
-is the update feed, which the release workflow rewrites.
+### Releases
+
+CI cuts a release on every push to `main` that carries a release-worthy
+[Conventional Commit](https://www.conventionalcommits.org/) subject (`.github/workflows/release.yml`):
+- `fix:` makes a patch release, `feat:` a minor one, `feat!:` (or a `BREAKING CHANGE:` footer) a major one;
+- `docs:`, `chore:`, `ci:` and the rest make none.
+
+The website, [pawse.at](https://www.pawse.at), is served from [`web/site/`](web/site/); its
+`latest.json` is the update feed, which the release workflow rewrites.
 
 ## License
 
