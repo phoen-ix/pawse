@@ -43,9 +43,15 @@ install machine-wide. `.onInit` works around that by recording the real account 
 `$RealPrivileges` and then telling MultiUser it is `Admin` purely so the choice renders.
 
 If all-users is actually picked, `ElevateForAllUsers` (the page's leave hook) re-launches
-with `ExecShell "runas" "$EXEPATH" "/AllUsers"` and quits — that is the only UAC prompt in
-the whole flow. The elevated copy holds a genuine admin token, so it never re-enters that
-path. Declining UAC falls back to a per-user install and says so.
+with `ExecShell "runas" "$EXEPATH" "/AllUsers /RESUME"` and quits — that is the only UAC
+prompt in the whole flow. The elevated copy holds a genuine admin token, so it never
+re-enters that path. Declining UAC falls back to a per-user install and says so.
+
+`/RESUME` is internal: it tells the elevated copy that Welcome, the licence and the scope
+page were already shown, so those three skip themselves (`SkipIfResumed`) and the copy
+opens on the next step — the build choice, or Components in a single-build installer —
+with Back disabled (`FirstPageAfterResume`). Without it the user started over after the
+UAC prompt.
 
 The uninstaller is `asInvoker` for the same reason, so a machine-wide uninstall — where
 even an administrator arrives unelevated — re-launches `$INSTDIR\uninstall.exe` through
