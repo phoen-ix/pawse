@@ -97,7 +97,7 @@
 <main class="wrap">
   <h1>Privacy</h1>
   <p class="lede">Pawse is a keyboard lock for Windows. It has no accounts, no ads, no analytics and no telemetry. This page covers exactly what the app and this website do with information about you.</p>
-  <p class="date">Last updated 19 September 2026</p>
+  <p class="date">Last updated 1 November 2026</p>
 
   <h2>The app</h2>
 
@@ -114,14 +114,14 @@
   <h3>When it goes online</h3>
   <ul>
     <li><b>Microsoft Store build: never.</b> The Store installs and updates it.</li>
-    <li><b>Installer and portable builds: only to check for updates.</b> Out of the box that happens only when you press <b>Check now</b> in Settings → About, and you can choose a daily check instead. A check asks github.com which release is newest and fetches a small checksum file from pawse.at. If you then install the update, Pawse downloads it from GitHub. Like every web request, these carry your IP address. They also identify themselves as Pawse and its version, for example <code>Pawse/0.13.0</code>. Nothing else is sent: no ID, no settings, no usage data.</li>
+    <li><b>Installer and portable builds: only to check for updates.</b> Out of the box that happens only when you press <b>Check now</b> in Settings → About, and you can choose a daily check instead. A check asks github.com which release is newest. Only when that release is newer than yours, or github.com doesn't answer, does Pawse also fetch a small checksum file from pawse.at; if that file can't vouch for the new version, Pawse reads the release's checksum list from GitHub instead. If you then install the update, Pawse downloads it from GitHub. Like every web request, these carry your IP address. They also identify themselves as Pawse and its version, for example <code>Pawse/0.13.0</code>. Nothing else is sent: no ID, no settings, no usage data.</li>
     <li>If the .NET Desktop Runtime is missing, the <b>minimal installer</b> can install it through winget once you agree. That download comes from Microsoft.</li>
   </ul>
 
   <h2>This website</h2>
   <ul>
     <li>No cookies, no JavaScript, no analytics, and nothing is loaded from other sites.</li>
-    <li>Like most web servers, the servers behind pawse.at log every request: IP address, time, the page or file requested, browser user agent and referring page. Pawse's update checks are logged too.</li>
+    <li>Like most web servers, the servers behind pawse.at log every request: IP address, time, the page or file requested, browser user agent and referring page. Pawse's requests for the checksum file are logged too.</li>
     <li>How long entries are kept depends on the server. The front server deletes its logs after two weeks. The web server behind it caps its log by size, not age, so at this site's traffic an entry can stay there for several months. Update checks are only in the front server's log.</li>
     <li>The logs are used to keep the site running and to block attacks. They aren't shared, and aren't used to track anyone.</li>
   </ul>
