@@ -82,7 +82,7 @@
   <ItemGroup>
     <!-- WMI, used only for the Keyboard Filter block (browser/calculator/media keys) in
          Core/KeyboardFilterGuard.cs. Windows-only at runtime; restores fine on Linux. -->
-    <PackageReference Include="System.Management" Version="10.0.13" />
+    <PackageReference Include="System.Management" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
