@@ -34,6 +34,8 @@ bash scripts/e2e.sh [playwright args]                        # e2e: site everywh
 - `web/site/` is pawse.at, served straight from this repo; `latest.json` there is the update
   feed the app trusts for checksums. Never hand-edit it except to set `"auto": false` on a
   bad release. Deployment files for the site live on the server (`web/.gitignore`).
+  www.pawse.at is the canonical host: Traefik 301s the apex there, except `/latest.json`, which
+  installed copies fetch from the apex directly. Keep such routing notes out of the public HTML.
 - Names hard-coded in both `packaging/pawse.nsi` and the app - change together or not at all:
   the mutex `Local\Pawse-single-instance-2b8f9c`, the quit event `Local\Pawse-quit-2b8f9c`
   (`src/Pawse/Core/QuitSignal.cs`), and the uninstall key `Software\...\Uninstall\Pawse`
