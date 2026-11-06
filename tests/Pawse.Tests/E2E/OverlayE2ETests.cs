@@ -42,6 +42,7 @@ public sealed class OverlayE2ETests
         { "lockphrase hidden", "To unlock: press Ctrl+L, or type your lockphrase, or hold the button below." },
         { "untypeable lockphrase", "To unlock: press Ctrl+L, or hold the button below." },
         { "mouse blocked", "To unlock: press Ctrl+L." },
+        { "unparseable chord", "To unlock: hold the button below." },
         { "timer only", "Unlocks automatically." },
         { "nothing", "To unlock: use the tray icon." },
     };
@@ -65,6 +66,9 @@ public sealed class OverlayE2ETests
                 break;
             case "mouse blocked":
                 c.General.BlockMouse = true;
+                break;
+            case "unparseable chord":
+                c.Unlock.Chord.Keys = new() { "NotAKey" };
                 break;
             case "timer only":
                 c.Unlock.Chord.Enabled = false;

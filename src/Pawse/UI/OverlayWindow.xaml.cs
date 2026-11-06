@@ -132,7 +132,7 @@ public partial class OverlayWindow : Window
         // pointing at a dead unlock path is worse than none (the user trusts it and
         // concludes Pawse is broken, or worse, feels locked out).
         var parts = new List<string>();
-        if (cfg.Unlock.Chord.Enabled && cfg.Unlock.Chord.Keys.Count > 0)
+        if (cfg.Unlock.Chord.Enabled && Keys.ParseChord(cfg.Unlock.Chord.Keys).Count > 0)
             parts.Add($"press {Keys.ChordToText(cfg.Unlock.Chord.Keys)}");
         // Only advertise the lockphrase if every character can register through the hook
         // (a-z, 0-9, space). Whether to print the phrase itself is the user's call
