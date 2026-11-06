@@ -9,6 +9,8 @@ hold-to-unlock button, or an auto-timer.
 
 **Status:** released and maintained - the current version is on the [releases page](https://github.com/phoen-ix/pawse/releases/latest).
 
+Step by step: [user guide](docs/manual.md) · every window in the [screenshot gallery](docs/screenshots/README.md).
+
 A native Windows app (C# / .NET 10, WPF + a WinForms tray).
 
 ## Install
@@ -59,80 +61,29 @@ Same app in every row:
 
 ## Use
 
-- **Left-click** the tray paw to lock. While locked a single click only shows a
-  balloon hint - **double-click** to unlock, so a stray paw-click can't undo the
-  lock. (Prefer the classic single-click toggle? Turn the double-click guard off
-  in Settings.)
-- **Right-click** for the menu: Lock now / Unlock, Settings…, Open config file,
-  Restart as administrator (shown only when Pawse isn't elevated), Quit (Quit asks for
-  confirmation while locked).
-- **Starting a second copy** - a portable build you just unzipped, say - offers to close the
-  one already running and take over, rather than simply refusing.
-  - It asks first. Closing a Pawse that currently has the keyboard locked hands the keyboard
-    back, so the prompt says so.
-  - Answer No and the running copy is left alone.
-- Default **lock hotkey**: `Ctrl+L`. Default **unlock chord**: `Ctrl+L` (the same chord toggles lock / unlock).
-- **Lock immediately when Pawse starts** is an option in **Settings → General**.
+- **Left-click** the tray paw to lock, or press the lock hotkey (`Ctrl+L`). While locked,
+  **double-click** the paw to unlock - a single click only shows a hint. **Right-click** for
+  the menu.
+- Unlock deliberately, each method switched on or off in Settings: the unlock chord (`Ctrl+L`),
+  a lockphrase, holding the popup's button or paw (~1.2 s), or an auto timer.
+- While locked, a small popup - a window or a paw icon - names what unlocks it, on the displays
+  you choose.
+- Blocking the mouse and on-screen keyboards is off by default - see
+  [What it can and can't block](#what-it-can-and-cant-block).
 
-### Lock popup
-
-While locked, a small floating popup shows on the displays you choose; the desktop stays
-visible around it.
-- **Displays**: one, several, or **All displays**, which picks up a monitor you plug in later
-  without you touching anything.
-- **Window style**: a window with the hold-to-unlock button.
-- **Paw style**: a paw icon of whatever size you like, with an optional text box beneath
-  naming what unlocks it. Hold the paw to unlock, exactly like the button.
-- **Placement**: either one can be placed anywhere on the display, dimmed, or switched off.
-- **Lockphrase in the hint**: the unlock hint prints the lockphrase itself by default - switch
-  that off in **Settings → Lock popup** if someone else can see your screen.
-
-### Unlock methods (each independently toggleable in Settings)
-
-| Method | Default | Notes |
-| --- | --- | --- |
-| Keyboard chord | on (`Ctrl+L`) | Any combination you like. |
-| Lockphrase | off | Type a word; a wrong key restarts it. |
-| Mouse hold | on | Hold the popup button or the paw icon (~1.2 s). |
-| Auto timer | off | Unlock automatically after N seconds. |
-
-Mouse blocking is **off by default**; enable it in Settings if the cat uses the
-mouse too. (With it on, unlock with the keyboard - the hold button and the paw need the mouse.)
-Blocking **on-screen keyboards** is off by default as well - see
-[What it can and can't block](#what-it-can-and-cant-block).
+Step by step, with every setting: [user guide](docs/manual.md) - the
+[tray menu](docs/manual.md#the-tray-icon-and-its-menu),
+[unlocking](docs/manual.md#unlocking-the-keyboard),
+[the lock popup](docs/manual.md#the-lock-popup) and
+[each Settings page](docs/manual.md#changing-settings).
 
 ### Updates
 
-**Settings → About** is the only thing in Pawse that goes online. It offers three levels:
-
-| Level | What it does |
-| --- | --- |
-| **Only when I ask** (the default) | Nothing leaves the machine until you press **Check now**. |
-| **Tell me when an update is ready** | Checks once a day while Pawse runs, and says so in a tray balloon. |
-| **Download and install updates automatically** | Checks once a day and installs. It declines anything that would need administrator rights or a runtime download, and anything pawse.at has not vouched for - those still ask. |
-
-- An update is downloaded from GitHub Releases and its checksum cross-checked against
-  pawse.at before anything runs. See [Privacy](#privacy).
-- An installed copy runs the matching installer; a portable one replaces its own exe and restarts.
-
-One manual step for some older copies:
-- **Portable copies on v0.8.0 through v0.11.0** refuse their own self-update ("reports
-  version X.Y.Z.0, not X.Y.Z" - a version-comparison bug fixed in v0.11.1).
-  - Update them once by hand: download the new zip, quit Pawse, replace the exe.
-  - From v0.11.1 on, Check now takes it from there. Installed copies were never affected.
-- **Minimal copies updating from v0.11.1 or earlier**: the minimal build now needs the
-  **.NET 10** Desktop Runtime instead of .NET 8.
-  - Install it first (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
-    [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update.
-  - An installed minimal copy will decline the automatic update until the runtime is there
-    and tell you so.
-  - A **portable** minimal copy cannot check, and on *Download and install updates
-    automatically* it will not wait to be asked - so install the runtime now, or switch to
-    the full build, which needs nothing.
-  - If one has already replaced itself and won't start, nothing is lost: the previous exe is
-    still beside it as `Pawse.exe.old`. Install the runtime, or rename that file back over
-    `Pawse.exe`.
-  - Full and portable-full copies are unaffected and update as usual.
+**Settings → About** is the only thing in Pawse that goes online, and by default only when you
+press **Check now**; it can also look once a day and tell you, or install updates itself. An
+update is downloaded from GitHub Releases and its checksum cross-checked against pawse.at before
+anything runs - see [Privacy](#privacy). The three levels, when an automatic install holds back,
+and the one manual step some older copies need: [Updating Pawse](docs/manual.md#updating-pawse).
 
 ## Screenshots
 
@@ -149,25 +100,10 @@ the manual **docs-screenshots** workflow; see the gallery for how.
 
 ## Configuration & logs
 
-Where these live depends on how Pawse got onto the PC:
-
-- **Portable** - next to `Pawse.exe`, always. A portable copy in a folder it can't write to
-  (Program Files, a read-only drive) runs with settings it can't save, and says so.
-- **Installed** - next to `Pawse.exe` as well, or in `%APPDATA%\Pawse` when that folder isn't
-  writable - which is the case for a machine-wide install in Program Files.
-- **Microsoft Store** - the app's own data folder, which Windows removes with it.
-
-Uninstalling removes them in every case.
-
-- `pawse.json` - settings (edit via the Settings window or by hand).
-  - Start-at-sign-in is the one setting that is not in here: the Run key is the setting, and
-    Settings reads it from there (installed copies only - a portable copy writes nothing to
-    the registry).
-- `pawse.log` - a plain, timestamped log of what the app did. **Off by default** - switch on
-  "Write a log file next to Pawse" in **Settings → General** when something needs explaining.
-  - It never leaves the machine, but it is a plain file on disk, and while diagnosing a stuck
-    key it records which keys were held when a lock engaged - so it is opt-in rather than
-    something to discover later.
+Settings live in `pawse.json` and the optional log (off by default) in `pawse.log`: next to
+`Pawse.exe`, or in `%APPDATA%\Pawse` for an install in Program Files. A portable copy keeps both
+in its own folder, and uninstalling removes them. Details, and editing the file by hand:
+[Where settings and the log live](docs/manual.md#where-settings-and-the-log-live).
 
 ## What it can and can't block
 

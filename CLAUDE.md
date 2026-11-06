@@ -1,7 +1,7 @@
 # Pawse
 
 Cat-proof keyboard lock for Windows: C# / .NET 10, WPF windows + a WinForms tray icon.
-User docs: README.md. Installer: packaging/README.md. Store build: packaging/msix/README.md.
+User docs: README.md, docs/manual.md (user guide). Installer: packaging/README.md. Store build: packaging/msix/README.md.
 
 ## Commands
 
