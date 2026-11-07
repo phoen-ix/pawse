@@ -23,11 +23,7 @@ updates:
     commit-message:
       prefix: chore
     groups:
-      # The three test packages move together; a lone runner bump is rarely useful. xunit.v3
-      # majors are ordinary updates (the v2 -> v3 package switch was the migration), and xunit
-      # releases xunit.v3 and xunit.runner.visualstudio together, so one PR carries both.
+      # xunit.v3 majors are ordinary updates (the v2 -> v3 package switch was the migration).
       test-stack:
         patterns:
-          - Microsoft.NET.Test.Sdk
           - xunit.v3
-          - xunit.runner.visualstudio
