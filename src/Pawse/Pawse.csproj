@@ -5,9 +5,6 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>latest</LangVersion>
     <RootNamespace>Pawse</RootNamespace>
     <AssemblyName>Pawse</AssemblyName>
     <Product>Pawse</Product>
@@ -18,12 +15,7 @@
     <!-- Embed the same paw icon the installer uses, so Pawse.exe (and its WPF
          windows / taskbar) show it instead of a generic exe icon. -->
     <ApplicationIcon>../../packaging/pawse.ico</ApplicationIcon>
-
-    <!-- Lets this Windows-desktop (WPF/WinForms) project compile on Linux CI/dev
-         boxes for type-checking. The runnable exe is still built on Windows. -->
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- The code parses/formats with invariant culture throughout; dropping the ICU
          bundle takes a chunk out of the self-contained single-file build. -->
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -47,14 +39,8 @@
          Both IDs on purpose: the analyzer ships in the Microsoft.WindowsDesktop.App.Ref
          targeting pack, so the ID is versioned by the TFM - WFAC010 up to net8.0, renamed
          to WFO0003 from net9.0 on. Dropping either one breaks a build on that TFM, and
-         TreatWarningsAsErrors below turns the miss into an error rather than a warning. -->
+         TreatWarningsAsErrors (Directory.Build.props) makes the miss an error. -->
     <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
-
-    <!-- net10.0 flips NuGetAuditMode from "direct" to "all", so restore starts reporting
-         advisories against the whole transitive closure. With TreatWarningsAsErrors that
-         would turn an advisory published by a third party into a red build on a day nobody
-         touched this repo. Keep the audit (it is worth seeing) but as a warning. -->
-    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
   </PropertyGroup>
 
   <!-- The Microsoft Store build: dotnet publish -p:PawseStore=true, packed into an MSIX by

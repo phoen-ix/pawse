@@ -2,19 +2,11 @@
 
   <PropertyGroup>
     <!-- Must match Pawse.csproj's TFM to reference it. Compiles anywhere via
-         EnableWindowsTargeting; the WindowsDesktop runtime only exists on Windows,
-         so the tests EXECUTE on the Windows CI job (ci.yml). -->
+         EnableWindowsTargeting (Directory.Build.props); the WindowsDesktop runtime only exists
+         on Windows, so the tests EXECUTE on the Windows CI job (ci.yml). -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- net10.0 audits the whole transitive closure, not just direct references, and this
-         project's closure is mostly Test.Sdk's. Without this, an advisory against something
-         four levels down turns a green build red with no change of our own. -->
-    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;$(WarningsNotAsErrors)</WarningsNotAsErrors>
     <!-- xunit.v3 test projects are executables on Microsoft.Testing.Platform; the opt-in
          `dotnet test` needs for that is the "test" block in global.json. -->
     <OutputType>Exe</OutputType>
