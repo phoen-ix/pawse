@@ -129,12 +129,10 @@ cutting a release.
 
 1. Install **NSIS** (provides `makensis`) - https://nsis.sourceforge.io (or
    `winget install NSIS.NSIS`). On Linux: `apt install nsis`.
-2. From the matching GitHub Release, download **both** zips and extract them into
-   this folder so it contains `Pawse.exe` **and** `Pawse-min.exe`:
-   - `Pawse-<version>.zip`      -> `Pawse.exe`
-   - `Pawse-<version>-min.zip`  -> `Pawse-min.exe`
-3. Build **all three** installers from this folder (each script just runs `makensis`
-   three times: the standard build, `-DFULL_ONLY` and `-DMINIMAL_ONLY`):
+2. Build **all three** installers from this folder. Each script publishes both builds
+   (`Pawse.exe` self-contained, `Pawse-min.exe` framework-dependent) the way
+   `release.yml` does, then runs `makensis -WX -V2` three times: the standard build,
+   `-DFULL_ONLY` and `-DMINIMAL_ONLY`. Needs the .NET 10 SDK.
 
    ```
    build.bat <version>       (Windows)      e.g.  build.bat 0.1.4
@@ -142,10 +140,11 @@ cutting a release.
    ```
 
    -> produces `Pawse-Setup-<version>.exe`, `Pawse-Setup-<version>-full.exe` and
-   `Pawse-Setup-<version>-min.exe` here. (Or run the three `makensis` lines by hand -
-   see the top of `pawse.nsi`.) A single-build installer only needs its own exe present:
-   `-DFULL_ONLY` wants `Pawse.exe`, `-DMINIMAL_ONLY` wants `Pawse-min.exe`.
-4. Nothing to upload - the release workflow builds and attaches these itself. Do this
+   `Pawse-Setup-<version>-min.exe` here. (Or place the two exes here and run the three
+   `makensis` lines by hand - see the top of `pawse.nsi`.) A single-build installer only
+   needs its own exe present: `-DFULL_ONLY` wants `Pawse.exe`, `-DMINIMAL_ONLY` wants
+   `Pawse-min.exe`.
+3. Nothing to upload - the release workflow builds and attaches these itself. Do this
    only to try a `pawse.nsi` change locally.
 
 `Pawse.exe`, `Pawse-min.exe`, and `Pawse-Setup-*.exe` are git-ignored - only the
