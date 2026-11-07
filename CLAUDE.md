@@ -6,9 +6,9 @@ User docs: README.md, docs/manual.md (user guide). Installer: packaging/README.m
 ## Commands
 
 ```bash
-dotnet restore Pawse.sln -p:EnableWindowsTargeting=true      # Linux: compile-only
-dotnet build Pawse.sln -c Release --no-restore -p:EnableWindowsTargeting=true
-dotnet format Pawse.sln --verify-no-changes --severity warn  # the CI format gate
+dotnet restore Pawse.slnx -p:EnableWindowsTargeting=true     # Linux: compile-only
+dotnet build Pawse.slnx -c Release --no-restore -p:EnableWindowsTargeting=true
+dotnet format Pawse.slnx --verify-no-changes --severity warn # the CI format gate
 dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release  # Windows only
 fleet check pawse                                            # build, NSIS compile, format, audit
 bash scripts/docs-screenshots.sh [outdir]                    # docs tour, see docs/screenshots/README.md

@@ -6,10 +6,6 @@
 # on Windows only, with a tree nobody touched. Pin it here and the two agree everywhere.
 * text=auto eol=lf
 
-# Visual Studio rewrites the solution with CRLF and a UTF-8 BOM every time it touches it.
-# It is stored that way; leave it exactly as-is rather than fight it on every checkout.
-*.sln -text
-
 # Batch is CRLF's native habitat - a label or goto can misbehave with bare LF.
 *.bat text eol=crlf
 

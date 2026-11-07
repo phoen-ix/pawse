@@ -27,10 +27,10 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore Pawse.sln
+        run: dotnet restore Pawse.slnx
 
       - name: Build (Release)
-        run: dotnet build Pawse.sln -c Release --no-restore
+        run: dotnet build Pawse.slnx -c Release --no-restore
 
       # The UI suite (Category=E2E) runs in the e2e job below.
       - name: Test
@@ -45,13 +45,13 @@ jobs:
         run: dotnet test tests/Pawse.Tests/Pawse.Tests.csproj -c Release --no-build --filter-trait "Category=Docs"
 
       - name: Format check
-        run: dotnet format Pawse.sln --verify-no-changes --severity warn
+        run: dotnet format Pawse.slnx --verify-no-changes --severity warn
 
       # Require the positive message: a failed restore must not read as "no vulnerabilities".
       - name: Audit NuGet packages (fail on any known vulnerability)
         shell: bash
         run: |
-          out=$(dotnet list Pawse.sln package --vulnerable --include-transitive)
+          out=$(dotnet list Pawse.slnx package --vulnerable --include-transitive)
           echo "$out"
           if grep -q "has the following vulnerable packages" <<< "$out"; then exit 1; fi
           [ "$(grep -c "has no vulnerable packages" <<< "$out")" -ge 2 ]
