@@ -22,6 +22,9 @@ bash scripts/e2e.sh [playwright args]                        # e2e: site everywh
   the `windows-latest` CI jobs. `fleet check` reports the test step as skipped.
 - **Format gate:** CI fails on `dotnet format --verify-no-changes --severity warn`. Run it
   before committing. `TreatWarningsAsErrors` is on in both projects.
+- **Build settings** come from `Directory.Build.Common.props`, a `fleet-copy` of WinLogRotate's:
+  change it there and port it (`fleet copies pawse` flags drift); repo-only settings go in
+  `Directory.Build.props`.
 - **Every push to main can cut a release** (`.github/workflows/release.yml`). It reads the
   commit SUBJECTS since the newest `vX.Y.Z` tag: `fix:` -> patch, `feat:` -> minor, `type!:` or
   a `BREAKING CHANGE:` footer -> major, anything else (`docs:`, `chore:`, `ci:`, `test:`) ->

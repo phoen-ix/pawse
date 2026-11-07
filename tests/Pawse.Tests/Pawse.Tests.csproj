@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- Must match Pawse.csproj's TFM to reference it. Compiles anywhere via
-         EnableWindowsTargeting (Directory.Build.props); the WindowsDesktop runtime only exists
+         EnableWindowsTargeting (Directory.Build.Common.props); the WindowsDesktop runtime only exists
          on Windows, so the tests EXECUTE on the Windows CI job (ci.yml). -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>

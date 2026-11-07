@@ -39,7 +39,7 @@
          Both IDs on purpose: the analyzer ships in the Microsoft.WindowsDesktop.App.Ref
          targeting pack, so the ID is versioned by the TFM - WFAC010 up to net8.0, renamed
          to WFO0003 from net9.0 on. Dropping either one breaks a build on that TFM, and
-         TreatWarningsAsErrors (Directory.Build.props) makes the miss an error. -->
+         TreatWarningsAsErrors (Directory.Build.Common.props) makes the miss an error. -->
     <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
   </PropertyGroup>
 
