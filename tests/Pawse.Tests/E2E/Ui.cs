@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
@@ -269,13 +268,10 @@ internal sealed class DialogWatch : IDisposable
     {
         EnumThreadWindows(_thread, (hwnd, _) =>
         {
-            var cls = new StringBuilder(64);
-            GetClassName(hwnd, cls, cls.Capacity);
             // Answered once: the posted OK may not have closed it by the next poll.
-            if (cls.ToString() != "#32770" || !IsWindowVisible(hwnd) || !_answered.Add(hwnd)) return true;
-            var text = new StringBuilder(2048);
-            GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);   // the message's static
-            lock (_texts) _texts.Add(text.ToString());
+            if (ClassOf(hwnd) != "#32770" || !IsWindowVisible(hwnd) || !_answered.Add(hwnd)) return true;
+            var text = TextOf(GetDlgItem(hwnd, 0xFFFF), 2048);   // the message's static
+            lock (_texts) _texts.Add(text);
             // A click on its first button (OK on an OK-only box), by the button's own id: on an
             // OK-only box that id is IDCANCEL, and a WM_COMMAND with IDOK is ignored - even
             // though DM_GETDEFID reports IDOK.
@@ -294,16 +290,22 @@ internal sealed class DialogWatch : IDisposable
         EnumThreadWindows(thread, (hwnd, _) =>
         {
             if (!IsWindowVisible(hwnd)) return true;
-            var cls = new StringBuilder(64);
-            var title = new StringBuilder(256);
-            var text = new StringBuilder(2048);
-            GetClassName(hwnd, cls, cls.Capacity);
-            GetWindowText(hwnd, title, title.Capacity);
-            GetWindowText(GetDlgItem(hwnd, 0xFFFF), text, text.Capacity);
-            found.Add($"{cls} \"{title}\" {text}".TrimEnd());
+            found.Add($"{ClassOf(hwnd)} \"{TextOf(hwnd, 256)}\" {TextOf(GetDlgItem(hwnd, 0xFFFF), 2048)}".TrimEnd());
             return true;
         }, IntPtr.Zero);
         return found;
+    }
+
+    private static string ClassOf(IntPtr hwnd)
+    {
+        var buf = new char[64];
+        return new string(buf, 0, GetClassName(hwnd, buf, buf.Length));
+    }
+
+    private static string TextOf(IntPtr hwnd, int max)
+    {
+        var buf = new char[max];
+        return new string(buf, 0, GetWindowText(hwnd, buf, buf.Length));
     }
 
     private const uint WM_COMMAND = 0x0111;
@@ -311,8 +313,8 @@ internal sealed class DialogWatch : IDisposable
 
     [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint threadId, EnumProc proc, IntPtr lParam);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, [Out] char[] name, int max);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, [Out] char[] text, int max);
     [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? title);

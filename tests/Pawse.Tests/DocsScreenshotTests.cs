@@ -21,7 +21,7 @@ namespace Pawse.Tests;
 /// (the PNGs to commit) and ci.yml's render check call.</para>
 /// </summary>
 [Trait("Category", "Docs")]
-public class DocsScreenshotTests : IDisposable
+public sealed class DocsScreenshotTests : IDisposable
 {
     /// <summary>Settings() forces Deployment's cached mode; let the next reader detect it again.</summary>
     public void Dispose() =>

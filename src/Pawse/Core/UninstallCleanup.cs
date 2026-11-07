@@ -175,7 +175,7 @@ internal static class UninstallCleanup
             var key = Registry.Users.OpenSubKey(name, writable: true);
             if (key is null)
             {
-                NativeMethods.RegUnLoadKeyW(NativeMethods.HKEY_USERS, name);
+                _ = NativeMethods.RegUnLoadKeyW(NativeMethods.HKEY_USERS, name);
                 return null;
             }
             return new UserHive(key, name);
@@ -184,7 +184,7 @@ internal static class UninstallCleanup
         public void Dispose()
         {
             Key.Dispose();
-            if (_mountedAs is not null) NativeMethods.RegUnLoadKeyW(NativeMethods.HKEY_USERS, _mountedAs);
+            if (_mountedAs is not null) _ = NativeMethods.RegUnLoadKeyW(NativeMethods.HKEY_USERS, _mountedAs);
         }
 
         private static bool _privileged;

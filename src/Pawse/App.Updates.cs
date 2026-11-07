@@ -147,7 +147,7 @@ public partial class App
             })
             : null;
 
-        var plan = await UpdateCheck.CheckAsync(current, kind, _shutdown.Token, progress);
+        var plan = await UpdateCheck.CheckAsync(current, kind, progress, _shutdown.Token);
         StampCheckedNow();
         Log.Info("update check: " + plan);
 

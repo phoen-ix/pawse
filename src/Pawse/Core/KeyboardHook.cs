@@ -58,7 +58,7 @@ public sealed class KeyboardHook : IDisposable
     {
         if (nCode >= 0)
         {
-            int msg = (int)wParam;
+            nint msg = wParam;
             bool isDown = msg is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN;
             bool isUp = msg is NativeMethods.WM_KEYUP or NativeMethods.WM_SYSKEYUP;
             if (isDown || isUp)

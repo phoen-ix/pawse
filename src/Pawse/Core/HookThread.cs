@@ -25,7 +25,7 @@ namespace Pawse.Core;
 /// screen, UAC prompt), where key-ups happen out of our sight - see
 /// <see cref="CheckInputDesktop"/>.</para>
 /// </summary>
-public sealed class HookThread
+public sealed class HookThread : IDisposable
 {
     private const uint RehookMs = 5000;
 
@@ -66,8 +66,9 @@ public sealed class HookThread
     }
 
     /// <summary>Unhook and stop the thread. Safe to call once at shutdown.</summary>
-    public void Stop()
+    public void Dispose()
     {
+        _ready.Dispose();
         if (_thread == null) return;
         NativeMethods.PostThreadMessageW(_threadId, NativeMethods.WM_QUIT, 0, 0);
         if (!_thread.Join(TimeSpan.FromSeconds(2)))

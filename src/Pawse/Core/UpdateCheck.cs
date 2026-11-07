@@ -509,8 +509,8 @@ public static class UpdateCheck
     /// <param name="onAttempt">Called with the attempt number as each one starts, so the caller
     /// can say so on screen - a 20 s wait with no sign of life reads as a hang.</param>
     public static async Task<UpdatePlan> CheckAsync(string current, InstallKind kind,
-                                                    CancellationToken ct = default,
-                                                    IProgress<int>? onAttempt = null)
+                                                    IProgress<int>? onAttempt = null,
+                                                    CancellationToken ct = default)
     {
         var started = System.Diagnostics.Stopwatch.StartNew();
         UpdatePlan plan;

@@ -6,6 +6,7 @@ using Pawse.UI;
 
 namespace Pawse;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "WPF owns the lifetime; OnExit disposes the fields.")]
 public partial class App : Application
 {
     private Mutex? _singleton;
@@ -227,7 +228,7 @@ public partial class App : Application
             ex.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
-            Log.Error("domain exception", ex.ExceptionObject as Exception ?? new Exception($"{ex.ExceptionObject}"));
+            Log.Error("domain exception", ex.ExceptionObject as Exception ?? new InvalidOperationException($"{ex.ExceptionObject}"));
         TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
             Log.Error("task exception", ex.Exception);
@@ -688,7 +689,7 @@ public partial class App : Application
         // Disengage's UI-thread dispatch may not run before we exit, so revert the
         // OS-level guards synchronously here (delete the policy value, disable WEKF).
         try { _systemBlock?.Apply(locked: false, background: false); } catch { /* ignore */ }
-        try { _hooks?.Stop(); } catch { /* ignore */ }
+        try { _hooks?.Dispose(); } catch { /* ignore */ }
         try { DestroyOverlays(); } catch { /* ignore */ }
         _tray?.Dispose();
         _singleton?.Dispose();
