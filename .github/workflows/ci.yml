@@ -46,6 +46,15 @@ jobs:
 
       - name: Format check
         run: dotnet format Pawse.sln --verify-no-changes --severity warn
+
+      # Require the positive message: a failed restore must not read as "no vulnerabilities".
+      - name: Audit NuGet packages (fail on any known vulnerability)
+        shell: bash
+        run: |
+          out=$(dotnet list Pawse.sln package --vulnerable --include-transitive)
+          echo "$out"
+          if grep -q "has the following vulnerable packages" <<< "$out"; then exit 1; fi
+          [ "$(grep -c "has no vulnerable packages" <<< "$out")" -ge 2 ]
       # No publish here: installer-smoke below runs the exact publishes release.yml runs
       # (minus the version) and installs what they produce, so a publish-only break still
       # fails the push - once, instead of on two runners.
