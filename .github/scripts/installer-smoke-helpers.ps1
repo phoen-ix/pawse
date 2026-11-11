@@ -15,6 +15,11 @@ function Wait-PawseStarted([string]$log, [int]$expectedStarts) {
         Start-Sleep -Milliseconds 500
     }
     if (Test-Path $log) { Get-Content $log } else { "no pawse.log was written at $log" }
+    # A crash before the log opens (hostfxr, a type load, an unhandled exception) only
+    # leaves its reason in the Application event log.
+    Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $deadline.AddSeconds(-95) } -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProviderName -in '.NET Runtime', 'Application Error', 'Windows Error Reporting' } |
+        Format-List TimeCreated, ProviderName, Id, Message | Out-String -Width 400
     throw "Pawse did not reach 'startup complete' (start #$expectedStarts)"
 }
 
