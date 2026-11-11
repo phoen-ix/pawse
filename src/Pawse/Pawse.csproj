@@ -32,6 +32,16 @@
          CultureInfo.InvariantCulture explicitly, so behaviour does not change. -->
     <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
 
+    <!-- The self-contained single-file build unpacks everything, not only the native DLLs.
+         .NET 11's DirectWriteForwarder.dll (WPF) carries a native entry point, and an image
+         like that cannot be loaded from inside the bundle: v0.17.0's full build died with
+         BadImageFormatException in App's constructor before Pawse logged a line. .NET 10's
+         copy (CorFlags ILLibrary) loaded from the bundle. The bundler still files it as an
+         assembly, so IncludeNativeLibrariesForSelfExtract does not take it out. Cost: the first
+         start of each version unpacks ~143 MB to %TEMP%\.net\Pawse instead of ~8 MB. SDK 11
+         warns NETSDK1244 (a legacy mode); expected until the bundle can load that DLL again. -->
+    <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true' and '$(SelfContained)' == 'true'">true</IncludeAllContentForSelfExtract>
+
     <!-- We set PerMonitorV2 DPI awareness in app.manifest (WPF needs process-level
          awareness for the overlay's physical-pixel placement). The WinForms analyzer
          flags the manifest DPI settings, but since we boot through WPF and never call
