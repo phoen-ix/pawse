@@ -330,7 +330,7 @@ public partial class App
         bool silent = unattended && UpdateCheck.DetectScope() != InstallScope.PerMachine;
         // /RESTART because a silent install never reaches the finish page, so nothing would
         // bring the tray paw back. /NORUNTIME because EnsureDotnet's prompt defaults to Yes
-        // under /S, and an update must not pull ~57 MB of runtime machine-wide on that default
+        // under /S, and an update must not pull ~59 MB of runtime machine-wide on that default
         // - the wizard asks that question properly, so the interactive path doesn't need it.
         string args = silent ? "/S /RESTART /NORUNTIME" : "";
         try

@@ -11,7 +11,7 @@
 ; The standard installer bundles both builds and asks which to deploy (the chosen exe
 ; installs as Pawse.exe). The two single-build installers skip that page: FULL_ONLY carries
 ; the self-contained exe and depends on nothing; MINIMAL_ONLY carries the launcher and
-; ensures the .NET 10 Desktop Runtime (via winget, else points to the download page).
+; ensures the .NET 11 Desktop Runtime (via winget, else points to the download page).
 
 Unicode true
 
@@ -23,7 +23,7 @@ Unicode true
 !define EXE "Pawse.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
-!define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/10.0"
+!define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/11.0"
 ; Both names are hard-coded in the app too - change them here and in
 ; src/Pawse/App.xaml.cs (mutex) / src/Pawse/Core/QuitSignal.cs (event) together.
 !define MUTEX_NAME "Local\Pawse-single-instance-2b8f9c"
@@ -161,11 +161,11 @@ Function BuildPageCreate
   !insertmacro MUI_HEADER_TEXT "Choose build" "Pick which Pawse build to install."
   nsDialogs::Create 1018
   Pop $0
-  ${NSD_CreateLabel} 0 0 100% 34u "Pawse ships as two builds. The full build bundles the .NET runtime and needs nothing installed. The minimal build is tiny but requires the .NET 10 Desktop Runtime (x64)."
+  ${NSD_CreateLabel} 0 0 100% 34u "Pawse ships as two builds. The full build bundles the .NET runtime and needs nothing installed. The minimal build is tiny but requires the .NET 11 Desktop Runtime (x64)."
   Pop $0
   ${NSD_CreateRadioButton} 0 40u 100% 12u "Full - runtime bundled (~66 MB). Just works, nothing to install."
   Pop $RbFull
-  ${NSD_CreateRadioButton} 0 56u 100% 12u "Minimal - tiny (~0.7 MB). Needs .NET 10 Desktop Runtime (installed via winget if missing)."
+  ${NSD_CreateRadioButton} 0 56u 100% 12u "Minimal - tiny (~0.7 MB). Needs .NET 11 Desktop Runtime (installed via winget if missing)."
   Pop $RbMin
   ${If} $BuildChoice == "min"
     ${NSD_Check} $RbMin
@@ -243,7 +243,7 @@ Function LaunchApp
   Exec '"$WINDIR\explorer.exe" "$INSTDIR\${EXE}"'
 FunctionEnd
 
-; ---- ensure .NET 10 Desktop Runtime for the minimal build ----
+; ---- ensure .NET 11 Desktop Runtime for the minimal build ----
 ; Skipped entirely in a FULL_ONLY build: nothing there can call these, and makensis -WX
 ; treats an unreferenced function as an error.
 !ifndef FULL_ONLY
@@ -268,14 +268,14 @@ Function ${UN}DotnetPresent
     StrCpy $0 "$PROGRAMFILES64\dotnet"   ; nothing recorded - fall back to the usual spot
   ${EndIf}
 
-  ; Exactly 10.*, not "10 or later": the app targets net10.0 and the default roll-forward
-  ; policy is Minor, which moves within a major but never across one. An 11.x runtime alone
+  ; Exactly 11.*, not "11 or later": the app targets net11.0 and the default roll-forward
+  ; policy is Minor, which moves within a major but never across one. A 12.x runtime alone
   ; would satisfy this glob if it were loosened, and the app still would not start.
-  FindFirst $1 $2 "$0\shared\Microsoft.WindowsDesktop.App\10.*"
+  FindFirst $1 $2 "$0\shared\Microsoft.WindowsDesktop.App\11.*"
   FindClose $1
   ${If} $2 != ""
     StrCpy $DotnetFound "1"
-    DetailPrint ".NET 10 Desktop Runtime found ($2 in $0)."
+    DetailPrint ".NET 11 Desktop Runtime found ($2 in $0)."
   ${EndIf}
 
   Pop $2
@@ -291,21 +291,21 @@ Function EnsureDotnet
   ${If} $DotnetFound == "1"
     Return
   ${EndIf}
-  DetailPrint ".NET 10 Desktop Runtime (x64) not found."
+  DetailPrint ".NET 11 Desktop Runtime (x64) not found."
 
   ; An automatic update passes /NORUNTIME. The prompt below defaults to Yes under /S so a
   ; scripted deploy provisions the runtime unattended, but an update the user never watched
-  ; start must not pull ~57 MB and install it machine-wide on that same default.
+  ; start must not pull ~59 MB and install it machine-wide on that same default.
   ${If} $NoRuntime == "1"
     DetailPrint "Skipping the runtime download (/NORUNTIME)."
     Call DotnetManual
     Return
   ${EndIf}
 
-  ; Ask first. This pulls roughly 57 MB down and installs it machine-wide; doing that
+  ; Ask first. This pulls roughly 59 MB down and installs it machine-wide; doing that
   ; unannounced because someone picked the small build is not a decision Setup gets to make.
   ; /SD IDYES so a scripted /S deploy still provisions the runtime without a prompt.
-  MessageBox MB_YESNO|MB_ICONQUESTION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 10 Desktop Runtime (x64), which isn't installed on this PC.$\n$\nDownload and install it now? That's about 57 MB, fetched and installed machine-wide by winget.$\n$\nChoose No to handle it yourself - the minimal build won't start until the runtime is present." /SD IDYES IDNO dn_manual
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 11 Desktop Runtime (x64), which isn't installed on this PC.$\n$\nDownload and install it now? That's about 59 MB, fetched and installed machine-wide by winget.$\n$\nChoose No to handle it yourself - the minimal build won't start until the runtime is present." /SD IDYES IDNO dn_manual
 
   ; Resolve winget's real path via System32's where.exe - both fully qualified so a
   ; planted where.exe / winget.exe in the (possibly elevated) installer's folder can't run.
@@ -324,8 +324,8 @@ Function EnsureDotnet
     Return
   ${EndIf}
 
-  DetailPrint "Installing .NET 10 Desktop Runtime via winget..."
-  nsExec::ExecToLog '"$3" install --id Microsoft.DotNet.DesktopRuntime.10 -e --silent --accept-package-agreements --accept-source-agreements'
+  DetailPrint "Installing .NET 11 Desktop Runtime via winget..."
+  nsExec::ExecToLog '"$3" install --id Microsoft.DotNet.DesktopRuntime.11 -e --silent --accept-package-agreements --accept-source-agreements'
   Pop $0
   ${If} $0 != 0
     Call DotnetManual
@@ -335,7 +335,7 @@ Function EnsureDotnet
   ; being on disk afterwards.
   Call DotnetPresent
   ${If} $DotnetFound != "1"
-    DetailPrint "winget reported success but no .NET 10 Desktop Runtime is present."
+    DetailPrint "winget reported success but no .NET 11 Desktop Runtime is present."
     Call DotnetManual
   ${EndIf}
   Return
@@ -373,7 +373,7 @@ Function DotnetManual
   ; /SD IDNO: NSIS does NOT suppress message boxes in silent mode, so without a silent
   ; default a /S install on a machine with no winget would block here forever on a dialog
   ; nobody can see.
-  MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 10 Desktop Runtime (x64), and it isn't installed on this PC.$\n$\nOpen the download page now? Pawse will finish installing either way, but the minimal build won't start until the runtime is there." /SD IDNO IDNO +2
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST|MB_SETFOREGROUND "Pawse (minimal build) needs the .NET 11 Desktop Runtime (x64), and it isn't installed on this PC.$\n$\nOpen the download page now? Pawse will finish installing either way, but the minimal build won't start until the runtime is there." /SD IDNO IDNO +2
   ExecShell "open" "${DOTNET_URL}"
 FunctionEnd
 !endif ; FULL_ONLY
@@ -757,7 +757,7 @@ Function .onInit
   ; finish page, and both firing would trip the single-instance guard.
   ;
   ; /NORUNTIME - never provision the .NET runtime. EnsureDotnet's prompt defaults to Yes under
-  ; /S so a scripted deploy works unattended, but an automatic UPDATE must not pull ~57 MB
+  ; /S so a scripted deploy works unattended, but an automatic UPDATE must not pull ~59 MB
   ; machine-wide without anyone agreeing to it. Pawse passes this on every silent update.
   StrCpy $RestartApp "0"
   ClearErrors
@@ -803,7 +803,7 @@ Function .onInit
   ; So refuse HERE, before Section -Core asks the running Pawse to quit or writes a byte - the
   ; copy already installed keeps working. That lights up machinery that already exists:
   ; WatchSilentInstaller sees the non-zero exit and shows NotInstalledNotice, and the user's
-  ; interactive retry runs the wizard with $NoRuntime="0", where EnsureDotnet asks the ~57 MB
+  ; interactive retry runs the wizard with $NoRuntime="0", where EnsureDotnet asks the ~59 MB
   ; question properly. Same shape as the AllUsers guard above.
   ;
   ; Only in MINIMAL_ONLY: the standard installer defaults $BuildChoice to "full" under /S
@@ -876,7 +876,7 @@ Function un.RunAppCleanup
   StrCpy $KeepMarkers "0"
   IfFileExists "$INSTDIR\${EXE}" 0 cleanup_done
 !ifndef FULL_ONLY
-  ; The minimal build needs the .NET 10 Desktop Runtime to start at all - and a missing runtime
+  ; The minimal build needs the .NET 11 Desktop Runtime to start at all - and a missing runtime
   ; answers with a dialog, which a silent uninstall must never block on.
   ReadRegStr $0 SHCTX "${UNINST_KEY}" "BuildVariant"
   ${If} $0 == "min"

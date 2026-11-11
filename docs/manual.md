@@ -25,7 +25,7 @@ Which file to download, and what each build needs, is in the README:
      administrator rights once you click on; if you decline, Pawse is installed for you only and
      the installer says so.
 3. Only `Pawse-Setup-<version>.exe` (the one without `-full` or `-min`) asks which build to
-   install next: **Full** (runtime bundled) or **Minimal** (needs the .NET 10 Desktop Runtime,
+   install next: **Full** (runtime bundled) or **Minimal** (needs the .NET 11 Desktop Runtime,
    which the installer offers to fetch with winget).
 4. Choose the **Start Menu shortcut** and **Desktop shortcut** you want, and the folder.
 5. Leave **Launch Pawse now** ticked on the last page to start it straight away.
@@ -324,15 +324,16 @@ An automatic install that comes up while the keyboard is locked waits until you 
   version X.Y.Z.0, not X.Y.Z" - a version-comparison bug fixed in v0.11.1).
   - Update them once by hand: download the new zip, quit Pawse, replace the exe.
   - From v0.11.1 on, **Check now** takes it from there. Installed copies were never affected.
-- **Minimal copies updating from v0.11.1 or earlier**: the minimal build now needs the
-  **.NET 10** Desktop Runtime instead of .NET 8.
-  - Install it first (`winget install Microsoft.DotNet.DesktopRuntime.10`, or from the
-    [download page](https://dotnet.microsoft.com/download/dotnet/10.0)), then update.
+- **Minimal copies updating from v0.16.6 or earlier**: the minimal build now needs the
+  **.NET 11** Desktop Runtime (v0.12.0 to v0.16.6 ran on .NET 10, earlier versions on .NET 8).
+  - Install it first (`winget install Microsoft.DotNet.DesktopRuntime.11`, or from the
+    [download page](https://dotnet.microsoft.com/download/dotnet/11.0)), then update.
   - An installed minimal copy declines the automatic update until the runtime is there and
     tells you so.
-  - A **portable** minimal copy cannot check, and on **Download and install updates
-    automatically** it will not wait to be asked - so install the runtime now, or switch to the
-    full build, which needs nothing.
+  - A **portable** minimal copy from v0.12.1 on checks that the new exe starts and goes back to
+    the old one if it doesn't. Earlier ones cannot check, and on **Download and install updates
+    automatically** they will not wait to be asked - so install the runtime now, or switch to
+    the full build, which needs nothing.
   - If one has already replaced itself and won't start, nothing is lost: the previous exe is
     still beside it as `Pawse.exe.old`. Install the runtime, or rename that file back over
     `Pawse.exe`.
@@ -429,7 +430,7 @@ a folder you can write to.
 
 **A downloaded exe won't start.**
 Unblock it (right-click → **Properties** → **Unblock**). The minimal build also needs the
-.NET 10 Desktop Runtime (x64).
+.NET 11 Desktop Runtime (x64).
 
 **Still stuck?**
 Switch on **Write a log file next to Pawse**, reproduce the problem, and look at `pawse.log`.

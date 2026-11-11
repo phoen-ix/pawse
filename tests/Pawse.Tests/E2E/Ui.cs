@@ -255,7 +255,7 @@ internal sealed class DialogWatch : IDisposable
     private readonly ManualResetEventSlim _stop = new();
 
     /// <summary>The messages read so far, in order.</summary>
-    public List<string> Texts { get { lock (_texts) return new List<string>(_texts); } }
+    public List<string> Texts() { lock (_texts) return new List<string>(_texts); }
 
     public DialogWatch()
     {

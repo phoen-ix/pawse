@@ -146,7 +146,7 @@ public sealed class SettingsE2ETests : IDisposable
         Assert.Equal(!before, Boxes[label](cfg));
         Assert.Equal(1, h.Applied);
         Assert.False(h.Window.IsVisible);
-        Assert.Empty(dialogs.Texts);
+        Assert.Empty(dialogs.Texts());
     });
 
     [Fact]
@@ -437,7 +437,7 @@ public sealed class SettingsE2ETests : IDisposable
         Save(h.Window);
         Assert.Equal(new[] { 7 }, cfg.Overlay.Displays);
         Assert.False(cfg.Overlay.AllDisplays);
-        Assert.Empty(dialogs.Texts);
+        Assert.Empty(dialogs.Texts());
     });
 
     [Fact]
@@ -455,7 +455,7 @@ public sealed class SettingsE2ETests : IDisposable
 
         Assert.False(cfg.Overlay.Enabled);
         Assert.Equal(new[] { "No display is selected for the lock popup, so it was switched off.\n\n"
-                             + "Pick at least one display to show it again." }, dialogs.Texts);
+                             + "Pick at least one display to show it again." }, dialogs.Texts());
     });
 
     [Fact]
@@ -473,7 +473,7 @@ public sealed class SettingsE2ETests : IDisposable
 
         Assert.True(cfg.Overlay.AllDisplays);
         Assert.Equal(new[] { "Every display was selected, so the lock popup is set to \"All displays\".\n\n"
-                             + "It will follow any monitor you plug in or unplug from now on." }, dialogs.Texts);
+                             + "It will follow any monitor you plug in or unplug from now on." }, dialogs.Texts());
     });
 
     [Fact]
@@ -490,7 +490,7 @@ public sealed class SettingsE2ETests : IDisposable
         Check(Box(h.Window, "Unlock by typing a lockphrase"), true);
         Save(h.Window);
 
-        Assert.Empty(dialogs.Texts);
+        Assert.Empty(dialogs.Texts());
         Assert.True(cfg.Unlock.Lockphrase.Enabled);
         Assert.True(cfg.Overlay.AllDisplays);                // still corrected, just not announced
     });
@@ -511,7 +511,7 @@ public sealed class SettingsE2ETests : IDisposable
         Assert.True(cfg.Unlock.Chord.Enabled);
         Assert.Equal(new[] { "Ctrl", "L" }, cfg.Unlock.Chord.Keys);
         Assert.Equal(new[] { "At least one working unlock method is required, so the keyboard chord was enabled." },
-                     dialogs.Texts);
+                     dialogs.Texts());
     });
 
     [Fact]
@@ -528,7 +528,7 @@ public sealed class SettingsE2ETests : IDisposable
         Assert.True(cfg.Unlock.Chord.Enabled);
         Assert.Equal(new[] { "Ctrl", "L" }, cfg.Unlock.Chord.Keys);
         Assert.Equal(new[] { "At least one working unlock method is required, so the keyboard chord was enabled"
-                             + " and set to Ctrl+L." }, dialogs.Texts);
+                             + " and set to Ctrl+L." }, dialogs.Texts());
     });
 
     // ---- while locked ----

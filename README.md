@@ -11,7 +11,7 @@ hold-to-unlock button, or an auto-timer.
 
 Step by step: [user guide](docs/manual.md) · every window in the [screenshot gallery](docs/screenshots/README.md).
 
-A native Windows app (C# / .NET 10, WPF + a WinForms tray).
+A native Windows app (C# / .NET 11, WPF + a WinForms tray).
 
 ## Install
 
@@ -43,13 +43,13 @@ and asks you nothing about builds.
 | Installer | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-Setup-<version>-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. |
-| **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched via `winget` if it's missing. |
+| **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64), fetched via `winget` if it's missing. |
 | **`Pawse-Setup-<version>.exe`** | ~61 MB | It asks which of the two builds above to install. |
 
 | Portable | Size | Needs anything installed? |
 | --- | --- | --- |
 | **`Pawse-<version>.zip`** → `Pawse.exe` | ~61 MB zipped (66 MB unzipped) | **No** - the runtime is bundled. Just run it. |
-| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once. |
+| **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64), installed once. |
 
 Same app in every row:
 - `Pawse.exe` is self-contained (bundled + compressed); `Pawse-min.exe` is a tiny launcher

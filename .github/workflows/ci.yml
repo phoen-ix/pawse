@@ -191,7 +191,7 @@ jobs:
           # to "full" in .onInit), so the minimal exe only rides along for the File directive
           # there. The MINIMAL_ONLY build below is what actually unpacks and boots it - see the
           # per-machine minimal smoke step, which passes /NORUNTIME rather than have winget pull
-          # the ~57 MB runtime onto the runner.
+          # the ~59 MB runtime onto the runner.
           # From inside packaging/, so OutFile lands next to the script.
           Push-Location packaging
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /WX /V2 /DVERSION=0.0.0 pawse.nsi

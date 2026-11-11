@@ -168,7 +168,7 @@ jobs:
           -o publish-full
 
       # Minimal build: a tiny launcher (~0.7 MB) that uses an already-installed
-      # .NET 10 Desktop Runtime.
+      # .NET 11 Desktop Runtime.
       - name: Publish minimal (needs .NET Desktop Runtime)
         shell: pwsh
         run: >
@@ -254,7 +254,7 @@ jobs:
             | Installer | Download size | Needs anything installed? |
             | --- | --- | --- |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. Installs straight away. |
-            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), fetched for you if missing. |
+            | **`Pawse-Setup-${{ needs.version.outputs.new_version }}-min.exe`** | ~0.5 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64), fetched for you if missing. |
             | **`Pawse-Setup-${{ needs.version.outputs.new_version }}.exe`** | ~61 MB | It asks you which of the two builds above to install. |
 
             **Or stay portable** - unzip and run the exe inside. A portable copy writes nothing outside
@@ -264,7 +264,7 @@ jobs:
             | Portable | Download size | Needs anything installed? |
             | --- | --- | --- |
             | **`Pawse-${{ needs.version.outputs.new_version }}.zip`** | ~61 MB (66 MB unzipped) | **No** - the runtime is bundled. Just unzip and run. |
-            | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.3 MB | Yes - the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64). |
+            | **`Pawse-${{ needs.version.outputs.new_version }}-min.zip`** | ~0.3 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64). |
 
             Every download is the same app; the full build bundles the runtime, the
             `-min` build reuses one you install once. Windows may mark a downloaded file

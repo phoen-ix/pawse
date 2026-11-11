@@ -26,9 +26,9 @@ public sealed class ChordBox : TextBox
     private const string PlaceholderEmpty = "(not set)";
     private const string PlaceholderCapturing = "Press keys…";
 
-    private List<string> _chord = new();          // committed, canonical names
+    private IReadOnlyList<string> _chord = [];    // committed, canonical names; replaced, never mutated
     private readonly List<string> _captured = new(); // built during the current capture
-    private List<string> _snapshot = new();        // value at capture start (for Esc/empty)
+    private IReadOnlyList<string> _snapshot = []; // value at capture start (for Esc/empty)
     private bool _capturing;
     private string? _rejected;                     // a key this capture could not represent
 
@@ -56,11 +56,12 @@ public sealed class ChordBox : TextBox
         Text = PlaceholderEmpty;
     }
 
-    /// <summary>The committed chord as canonical key names. Getter returns a copy so the
-    /// control never shares a mutable list with the config.</summary>
+    /// <summary>The committed chord as canonical key names. Every value is a read-only list
+    /// of its own, so the getter can hand it out: the control never shares a mutable list with
+    /// the config.</summary>
     public IReadOnlyList<string> Chord
     {
-        get => new List<string>(_chord);
+        get => _chord;
         set => SetChord(value);
     }
 
@@ -73,7 +74,7 @@ public sealed class ChordBox : TextBox
     {
         // Canonicalize aliases ("Control"->"Ctrl", "Super"->"Win") and drop unknowns so the
         // stored list and display always round-trip through the runtime matcher.
-        _chord = Keys.ParseChordText(Keys.ChordToText(value));
+        _chord = Keys.ParseChordText(Keys.ChordToText(value)).AsReadOnly();
         ShowChord();
     }
 
@@ -183,7 +184,7 @@ public sealed class ChordBox : TextBox
                 MoveFocus(new TraversalRequest(FocusNavigationDirection.Next))));
             return;
         }
-        _snapshot = new List<string>(_chord);
+        _snapshot = _chord;
         _captured.Clear();
         _rejected = null;
         _capturing = true;
@@ -193,7 +194,7 @@ public sealed class ChordBox : TextBox
     private void CommitCapture()
     {
         _capturing = false;
-        _chord = new List<string>(_captured);
+        _chord = _captured.ToList().AsReadOnly();
         ShowChord();
         ChordChanged?.Invoke(this, EventArgs.Empty);
     }

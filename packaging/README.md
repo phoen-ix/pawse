@@ -11,9 +11,9 @@ script - the `FULL_ONLY` / `MINIMAL_ONLY` defines pick which:
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
   - **Full** - self-contained `Pawse.exe` (~66 MB, runtime bundled, needs nothing).
-  - **Minimal** - `Pawse-min.exe` (~0.7 MB); needs the **.NET 10 Desktop Runtime (x64)**.
+  - **Minimal** - `Pawse-min.exe` (~0.7 MB); needs the **.NET 11 Desktop Runtime (x64)**.
 
-Wherever the minimal build is deployed, the installer ensures the .NET 10 Desktop Runtime
+Wherever the minimal build is deployed, the installer ensures the .NET 11 Desktop Runtime
 via `winget` (else points to the download page); the all-in-one build skips that code
 entirely. All three offer per-user vs per-machine install, optional
 Start Menu / Desktop shortcuts, and a "launch now" finish option; the installed exe is
@@ -132,7 +132,7 @@ cutting a release.
 2. Build **all three** installers from this folder. Each script publishes both builds
    (`Pawse.exe` self-contained, `Pawse-min.exe` framework-dependent) the way
    `release.yml` does, then runs `makensis -WX -V2` three times: the standard build,
-   `-DFULL_ONLY` and `-DMINIMAL_ONLY`. Needs the .NET 10 SDK.
+   `-DFULL_ONLY` and `-DMINIMAL_ONLY`. Needs the .NET 11 SDK.
 
    ```
    build.bat <version>       (Windows)      e.g.  build.bat 0.1.4
