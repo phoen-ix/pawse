@@ -163,7 +163,7 @@ Function BuildPageCreate
   Pop $0
   ${NSD_CreateLabel} 0 0 100% 34u "Pawse ships as two builds. The full build bundles the .NET runtime and needs nothing installed. The minimal build is tiny but requires the .NET 11 Desktop Runtime (x64)."
   Pop $0
-  ${NSD_CreateRadioButton} 0 40u 100% 12u "Full - runtime bundled (~66 MB). Just works, nothing to install."
+  ${NSD_CreateRadioButton} 0 40u 100% 12u "Full - runtime bundled (~69 MB). Just works, nothing to install."
   Pop $RbFull
   ${NSD_CreateRadioButton} 0 56u 100% 12u "Minimal - tiny (~0.7 MB). Needs .NET 11 Desktop Runtime (installed via winget if missing)."
   Pop $RbMin

@@ -23,7 +23,7 @@ public partial class App
     private UpdatePlan? _pendingUpdate;
 
     /// <summary>Cancels anything still in flight when Pawse quits - notably a part-finished
-    /// 61 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
+    /// 63 MB download, which would otherwise carry on and resume onto a dead dispatcher.</summary>
     private readonly CancellationTokenSource _shutdown = new();
 
     /// <summary>Clean up after a portable self-replace. Windows is still unmapping the exe we

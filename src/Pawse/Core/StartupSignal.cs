@@ -45,7 +45,7 @@ public static class StartupSignal
 
     /// <summary>How long the predecessor waits for that proof. Generous on purpose: the
     /// successor has to be created, and the self-contained build is a compressed single-file
-    /// exe that unpacks ~66 MB to %TEMP% on the first run of a new version - through whatever
+    /// exe that unpacks ~143 MB to %TEMP% on the first run of a new version - through whatever
     /// the machine's antivirus does to it. A slow disk here must not be mistaken for a broken
     /// runtime, because the cost of getting that wrong is rolling back a perfectly good
     /// update. The success path does not pay this: the signal lands as soon as the CLR is

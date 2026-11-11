@@ -163,7 +163,7 @@ public class StartupSignalTests
     }
 
     /// <summary>The timeout has to cover the first run of a compressed single-file build,
-    /// which unpacks ~66 MB before managed code exists. Too short and a good update on a slow
+    /// which unpacks ~143 MB before managed code exists. Too short and a good update on a slow
     /// disk is rolled back for no reason.</summary>
     [Fact]
     public void The_proof_timeout_leaves_room_for_a_cold_start()

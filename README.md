@@ -30,8 +30,8 @@ Two ways to install, both from the [latest release](https://github.com/phoen-ix/
 - **Portable** - grab one zip, unzip it, and run the exe inside; no admin needed.
   - A portable copy **writes nothing outside its folder**: settings and log sit next to the
     exe and nothing goes into the registry, so deleting the folder removes it.
-  - The self-contained build's .NET runtime unpacks a few DLLs to `%TEMP%\.net` on first
-    start, before Pawse runs; Windows' own temp cleanup removes those.
+  - The self-contained build unpacks itself (~143 MB) to `%TEMP%\.net` on the first start of
+    each version, before Pawse runs; Windows' own temp cleanup removes that.
   - Three things need the installed version for that reason: **starting with Windows**,
     **Block Win+L** and the **browser/media-key block**. Settings shows them greyed out.
 
@@ -42,13 +42,13 @@ and asks you nothing about builds.
 
 | Installer | Size | Needs anything installed? |
 | --- | --- | --- |
-| **`Pawse-Setup-<version>-full.exe`** | ~61 MB | **No** - all-in-one, the runtime is inside. |
+| **`Pawse-Setup-<version>-full.exe`** | ~63 MB | **No** - all-in-one, the runtime is inside. |
 | **`Pawse-Setup-<version>-min.exe`** | ~0.5 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64), fetched via `winget` if it's missing. |
-| **`Pawse-Setup-<version>.exe`** | ~61 MB | It asks which of the two builds above to install. |
+| **`Pawse-Setup-<version>.exe`** | ~63 MB | It asks which of the two builds above to install. |
 
 | Portable | Size | Needs anything installed? |
 | --- | --- | --- |
-| **`Pawse-<version>.zip`** → `Pawse.exe` | ~61 MB zipped (66 MB unzipped) | **No** - the runtime is bundled. Just run it. |
+| **`Pawse-<version>.zip`** → `Pawse.exe` | ~63 MB zipped (69 MB unzipped) | **No** - the runtime is bundled. Just run it. |
 | **`Pawse-<version>-min.zip`** → `Pawse-min.exe` | ~0.3 MB | Yes - the [.NET 11 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) (x64), installed once. |
 
 Same app in every row:

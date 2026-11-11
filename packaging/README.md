@@ -3,14 +3,14 @@
 `build.bat <version>` (or `./build.sh <version>`) builds **three** installers from the one
 script - the `FULL_ONLY` / `MINIMAL_ONLY` defines pick which:
 
-- **`Pawse-Setup-<version>-full.exe`** (all-in-one, ~61 MB) - carries only the
+- **`Pawse-Setup-<version>-full.exe`** (all-in-one, ~63 MB) - carries only the
   self-contained `Pawse.exe`, no build-choice page and nothing to install alongside it.
   The one to hand someone who just wants Pawse.
 - **`Pawse-Setup-<version>-min.exe`** (true minimal, ~0.5 MB) - carries only
   `Pawse-min.exe`, no build-choice page. For people who know they want the small build.
 - **`Pawse-Setup-<version>.exe`** (standard) - bundles both release builds and **asks**
   which to deploy:
-  - **Full** - self-contained `Pawse.exe` (~66 MB, runtime bundled, needs nothing).
+  - **Full** - self-contained `Pawse.exe` (~69 MB, runtime bundled, needs nothing).
   - **Minimal** - `Pawse-min.exe` (~0.7 MB); needs the **.NET 11 Desktop Runtime (x64)**.
 
 Wherever the minimal build is deployed, the installer ensures the .NET 11 Desktop Runtime
